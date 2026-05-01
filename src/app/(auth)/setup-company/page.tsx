@@ -4,22 +4,14 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Briefcase, Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-  FieldLabel,
-} from '@/components/ui/field';
-import {
+  Button,
+  Input,
+  Label,
+  ListBox,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  TextField,
+} from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -63,7 +55,7 @@ export default function SetupCompanyPage() {
       return;
     }
 
-    if (teamMembers.some(m => m.email.toLowerCase() === inviteEmail.toLowerCase())) {
+    if (teamMembers.some((m) => m.email.toLowerCase() === inviteEmail.toLowerCase())) {
       toast.error('Bu e-posta zaten eklendi');
       return;
     }
@@ -74,7 +66,7 @@ export default function SetupCompanyPage() {
   };
 
   const handleRemoveMember = (email: string) => {
-    setTeamMembers(teamMembers.filter(m => m.email !== email));
+    setTeamMembers(teamMembers.filter((m) => m.email !== email));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,11 +80,9 @@ export default function SetupCompanyPage() {
     setIsLoading(true);
 
     try {
-      // Create company
       const companyResponse = await api.post('/company', { name: companyName });
       const company = companyResponse.data;
 
-      // Send invites
       let inviteCount = 0;
       for (const member of teamMembers) {
         try {
@@ -106,12 +96,13 @@ export default function SetupCompanyPage() {
         }
       }
 
-      // Update user with current company
       if (user) {
         setUser({ ...user, currentCompanyId: company.id } as any);
       }
 
-      toast.success(`Şirket oluşturuldu${inviteCount > 0 ? ` ve ${inviteCount} davetiye gönderildi` : ''}`);
+      toast.success(
+        `Şirket oluşturuldu${inviteCount > 0 ? ` ve ${inviteCount} davetiye gönderildi` : ''}`
+      );
       router.push('/dashboard');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Bir hata oluştu');
@@ -121,145 +112,153 @@ export default function SetupCompanyPage() {
   };
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-muted/30 p-6 md:p-10">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-background p-6 md:p-10">
       <div className="w-full max-w-md">
-        <div className={cn('flex flex-col gap-6')}>
-          <FieldGroup>
-            {/* Header */}
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                <Briefcase className="h-7 w-7 text-primary-foreground" />
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <Briefcase className="h-7 w-7" />
+            </div>
+            <h1 className="text-xl font-bold">Şirket Bilgileri ve Takım</h1>
+            <p className="text-sm text-muted">
+              Şirketinizi oluşturun ve takım arkadaşlarınızı ekleyin.
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <TextField
+              name="companyName"
+              value={companyName}
+              onChange={setCompanyName}
+              isRequired
+              isDisabled={isLoading}
+            >
+              <Label>
+                Şirket Adı <span className="text-danger">*</span>
+              </Label>
+              <Input placeholder="Şirket adınızı girin" />
+            </TextField>
+
+            <div className="flex flex-col gap-2">
+              <Label>Takım Üyesi Ekle</Label>
+              <div className="flex gap-2">
+                <TextField
+                  name="inviteEmail"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={setInviteEmail}
+                  isDisabled={isLoading}
+                  className="flex-1"
+                >
+                  <Input placeholder="E-posta adresi..." />
+                </TextField>
+                <Select
+                  selectedKey={inviteRole}
+                  onSelectionChange={(key) =>
+                    setInviteRole(key as 'ADMIN' | 'MEMBER')
+                  }
+                  isDisabled={isLoading}
+                  aria-label="Rol seç"
+                  className="w-[120px]"
+                >
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="MEMBER" textValue="Kullanıcı">
+                        Kullanıcı
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                      <ListBox.Item id="ADMIN" textValue="Admin">
+                        Admin
+                        <ListBox.ItemIndicator />
+                      </ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onPress={handleAddMember}
+                  isDisabled={isLoading || !inviteEmail}
+                >
+                  Ekle
+                </Button>
               </div>
-              <h1 className="text-xl font-bold">Şirket Bilgileri ve Takım</h1>
-              <FieldDescription>
-                Şirketinizi oluşturun ve takım arkadaşlarınızı ekleyin.
-              </FieldDescription>
             </div>
 
-            {/* Form */}
-            <form onSubmit={handleSubmit}>
-              <FieldGroup>
-                <Field>
-                  <FieldLabel htmlFor="companyName">
-                    Şirket Adı <span className="text-destructive">*</span>
-                  </FieldLabel>
-                  <Input
-                    id="companyName"
-                    type="text"
-                    placeholder="Şirket adınızı girin"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    disabled={isLoading}
-                  />
-                </Field>
-
-                <Field>
-                  <FieldLabel>Takım Üyesi Ekle</FieldLabel>
-                  <div className="flex gap-2">
-                    <Input
-                      type="email"
-                      placeholder="E-posta adresi..."
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      disabled={isLoading}
-                      className="flex-1"
-                    />
-                    <Select
-                      value={inviteRole}
-                      onValueChange={(value) => setInviteRole(value as 'ADMIN' | 'MEMBER')}
-                      disabled={isLoading}
-                    >
-                      <SelectTrigger className="w-[120px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="MEMBER">Kullanıcı</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddMember}
-                      disabled={isLoading || !inviteEmail}
-                    >
-                      Ekle
-                    </Button>
-                  </div>
-                </Field>
-
-                <Field>
-                  <FieldLabel>Erişimi olan üyeler</FieldLabel>
-                  <div className="space-y-2">
-                    {/* Current user (owner) */}
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
-                          {getInitials(user?.name, user?.email || '')}
-                        </div>
-                        <div>
-                          <p className="font-medium">
-                            {user?.name || user?.email} <span className="text-muted-foreground">(Siz)</span>
-                          </p>
-                          <p className="text-sm text-muted-foreground">{user?.email}</p>
-                        </div>
-                      </div>
-                      <span className="text-sm font-medium text-green-600">Admin</span>
+            <div className="flex flex-col gap-2">
+              <Label>Erişimi olan üyeler</Label>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-sm font-medium text-accent">
+                      {getInitials(user?.name, user?.email || '')}
                     </div>
-
-                    {/* Invited members */}
-                    {teamMembers.map((member) => (
-                      <div
-                        key={member.email}
-                        className="flex items-center justify-between rounded-lg border p-3"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted text-sm font-medium">
-                            {member.email.substring(0, 2).toUpperCase()}
-                          </div>
-                          <div>
-                            <p className="font-medium">{member.email}</p>
-                            <p className="text-sm text-muted-foreground">Davet bekliyor</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground">
-                            {member.role === 'ADMIN' ? 'Admin' : 'Kullanıcı'}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRemoveMember(member.email)}
-                            disabled={isLoading}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                    <div>
+                      <p className="font-medium">
+                        {user?.name || user?.email}{' '}
+                        <span className="text-muted">(Siz)</span>
+                      </p>
+                      <p className="text-sm text-muted">{user?.email}</p>
+                    </div>
                   </div>
-                </Field>
+                  <span className="text-sm font-medium text-success">Admin</span>
+                </div>
 
-                <Field>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isLoading || !companyName.trim()}
+                {teamMembers.map((member) => (
+                  <div
+                    key={member.email}
+                    className="flex items-center justify-between rounded-lg border border-border p-3"
                   >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Oluşturuluyor...
-                      </>
-                    ) : (
-                      'Tamamla ve Başla'
-                    )}
-                  </Button>
-                </Field>
-              </FieldGroup>
-            </form>
-          </FieldGroup>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-default text-sm font-medium">
+                        {member.email.substring(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="font-medium">{member.email}</p>
+                        <p className="text-sm text-muted">Davet bekliyor</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted">
+                        {member.role === 'ADMIN' ? 'Admin' : 'Kullanıcı'}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        isIconOnly
+                        aria-label="Üyeyi kaldır"
+                        onPress={() => handleRemoveMember(member.email)}
+                        isDisabled={isLoading}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              fullWidth
+              isPending={isLoading}
+              isDisabled={isLoading || !companyName.trim()}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Oluşturuluyor...
+                </>
+              ) : (
+                'Tamamla ve Başla'
+              )}
+            </Button>
+          </form>
         </div>
       </div>
     </div>

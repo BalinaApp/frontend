@@ -4,20 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { BarChart3, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-  InputOTPSeparator,
-} from '@/components/ui/input-otp';
-import {
-  Field,
-  FieldDescription,
-  FieldGroup,
-} from '@/components/ui/field';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button, InputOTP, Skeleton } from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -32,7 +19,6 @@ export default function VerifyEmailPage() {
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Check for email on mount
   useEffect(() => {
     const storedData = sessionStorage.getItem('verifyEmail');
     if (storedData) {
@@ -40,7 +26,7 @@ export default function VerifyEmailPage() {
         const { email: storedEmail, timestamp } = JSON.parse(storedData);
         const fifteenMinutes = 15 * 60 * 1000;
 
-        if (storedEmail && timestamp && (Date.now() - timestamp) < fifteenMinutes) {
+        if (storedEmail && timestamp && Date.now() - timestamp < fifteenMinutes) {
           setEmail(storedEmail);
           setIsChecking(false);
         } else {
@@ -63,49 +49,47 @@ export default function VerifyEmailPage() {
     }
   }, [resendCooldown]);
 
-  const handleSubmit = useCallback(async (e?: React.FormEvent) => {
-    e?.preventDefault();
+  const handleSubmit = useCallback(
+    async (e?: React.FormEvent) => {
+      e?.preventDefault();
 
-    if (code.length !== 6 || !email) {
-      if (code.length !== 6) {
-        toast.error('Lütfen 6 haneli kodu girin');
+      if (code.length !== 6 || !email) {
+        if (code.length !== 6) {
+          toast.error('Lütfen 6 haneli kodu girin');
+        }
+        return;
       }
-      return;
-    }
 
-    setIsLoading(true);
+      setIsLoading(true);
 
-    try {
-      const response = await api.post('/auth/verify-email', {
-        email,
-        code,
-      });
+      try {
+        const response = await api.post('/auth/verify-email', { email, code });
+        const { user, accessToken, refreshToken } = response.data;
+        sessionStorage.removeItem('verifyEmail');
+        setUser(user);
+        setTokens(accessToken, refreshToken);
 
-      const { user, accessToken, refreshToken } = response.data;
-      sessionStorage.removeItem('verifyEmail');
-      setUser(user);
-      setTokens(accessToken, refreshToken);
+        toast.success('E-posta başarıyla doğrulandı!');
 
-      toast.success('E-posta başarıyla doğrulandı!');
-
-      if (!user.currentCompanyId) {
-        router.push('/setup-company');
-      } else {
-        router.push('/dashboard');
+        if (!user.currentCompanyId) {
+          router.push('/setup-company');
+        } else {
+          router.push('/dashboard');
+        }
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Doğrulama başarısız');
+        setCode('');
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Doğrulama başarısız');
-      setCode('');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [code, email, router, setUser, setTokens]);
+    },
+    [code, email, router, setUser, setTokens]
+  );
 
   const handleResend = async () => {
     if (resendCooldown > 0 || !email) return;
 
     setIsResending(true);
-
     try {
       await api.post('/auth/resend-verification', { email });
       setResendCooldown(60);
@@ -117,22 +101,20 @@ export default function VerifyEmailPage() {
     }
   };
 
-  // Auto-submit when code is complete
   useEffect(() => {
     if (code.length === 6 && email && !isLoading) {
       handleSubmit();
     }
   }, [code, email, isLoading, handleSubmit]);
 
-  // Loading skeleton
   if (isChecking || !email) {
     return (
-      <div className="flex min-h-svh flex-col items-center justify-center bg-muted/30 p-6 md:p-10">
+      <div className="flex min-h-svh flex-col items-center justify-center bg-background p-6 md:p-10">
         <div className="w-full max-w-sm">
           <div className="flex flex-col gap-6">
             <div className="flex flex-col items-center gap-2">
               <Skeleton className="h-12 w-12 rounded-lg" />
-              <Skeleton className="h-7 w-48 mt-2" />
+              <Skeleton className="h-7 w-48" />
               <Skeleton className="h-4 w-56" />
             </div>
             <div className="flex justify-center gap-2">
@@ -152,86 +134,79 @@ export default function VerifyEmailPage() {
   }
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-muted/30 p-6 md:p-10">
+    <div className="flex min-h-svh flex-col items-center justify-center bg-background p-6 md:p-10">
       <div className="w-full max-w-sm">
-        <div className={cn('flex flex-col gap-6')}>
-          <FieldGroup>
-            {/* Header */}
-            <div className="flex flex-col items-center gap-2 text-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-                <BarChart3 className="h-7 w-7 text-primary-foreground" />
-              </div>
-              <h1 className="text-xl font-bold">E-posta Doğrulama</h1>
-              <FieldDescription className="flex items-center justify-center gap-2">
-                <Mail className="h-4 w-4" />
-                <span className="font-medium text-foreground">{email}</span>
-              </FieldDescription>
-              <p className="text-sm text-muted-foreground">
-                E-posta adresinize gönderilen 6 haneli kodu girin
-              </p>
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col items-center gap-2 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              <BarChart3 className="h-7 w-7" />
+            </div>
+            <h1 className="text-xl font-bold">E-posta Doğrulama</h1>
+            <p className="flex items-center justify-center gap-2 text-sm text-muted">
+              <Mail className="h-4 w-4" />
+              <span className="font-medium text-foreground">{email}</span>
+            </p>
+            <p className="text-sm text-muted">
+              E-posta adresinize gönderilen 6 haneli kodu girin
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex justify-center">
+              <InputOTP
+                maxLength={6}
+                value={code}
+                onChange={setCode}
+                isDisabled={isLoading}
+              >
+                <InputOTP.Group>
+                  <InputOTP.Slot index={0} />
+                  <InputOTP.Slot index={1} />
+                  <InputOTP.Slot index={2} />
+                </InputOTP.Group>
+                <InputOTP.Separator />
+                <InputOTP.Group>
+                  <InputOTP.Slot index={3} />
+                  <InputOTP.Slot index={4} />
+                  <InputOTP.Slot index={5} />
+                </InputOTP.Group>
+              </InputOTP>
             </div>
 
-            {/* OTP Form */}
-            <form onSubmit={handleSubmit}>
-              <FieldGroup>
-                <Field>
-                  <div className="flex justify-center">
-                    <InputOTP
-                      maxLength={6}
-                      value={code}
-                      onChange={setCode}
-                      disabled={isLoading}
-                    >
-                      <InputOTPGroup>
-                        <InputOTPSlot index={0} />
-                        <InputOTPSlot index={1} />
-                        <InputOTPSlot index={2} />
-                      </InputOTPGroup>
-                      <InputOTPSeparator />
-                      <InputOTPGroup>
-                        <InputOTPSlot index={3} />
-                        <InputOTPSlot index={4} />
-                        <InputOTPSlot index={5} />
-                      </InputOTPGroup>
-                    </InputOTP>
-                  </div>
-                </Field>
+            <Button
+              type="submit"
+              fullWidth
+              isPending={isLoading}
+              isDisabled={isLoading || code.length !== 6}
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Doğrulanıyor...
+                </>
+              ) : (
+                'Doğrula'
+              )}
+            </Button>
 
-                <Field>
-                  <Button type="submit" className="w-full" disabled={isLoading || code.length !== 6}>
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Doğrulanıyor...
-                      </>
-                    ) : (
-                      'Doğrula'
-                    )}
-                  </Button>
-                </Field>
-
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Kod almadınız mı?{' '}
-                    <button
-                      type="button"
-                      onClick={handleResend}
-                      disabled={isResending || resendCooldown > 0}
-                      className="text-primary hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isResending ? (
-                        'Gönderiliyor...'
-                      ) : resendCooldown > 0 ? (
-                        `Tekrar gönder (${resendCooldown}s)`
-                      ) : (
-                        'Tekrar gönder'
-                      )}
-                    </button>
-                  </p>
-                </div>
-              </FieldGroup>
-            </form>
-          </FieldGroup>
+            <div className="text-center">
+              <p className="text-sm text-muted">
+                Kod almadınız mı?{' '}
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={isResending || resendCooldown > 0}
+                  className="text-foreground underline disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isResending
+                    ? 'Gönderiliyor...'
+                    : resendCooldown > 0
+                      ? `Tekrar gönder (${resendCooldown}s)`
+                      : 'Tekrar gönder'}
+                </button>
+              </p>
+            </div>
+          </form>
         </div>
       </div>
     </div>

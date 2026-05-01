@@ -4,10 +4,13 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { BarChart3, Loader2, ArrowLeft, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  TextField,
+} from '@heroui/react';
 import { api } from '@/services/api';
 
 export default function ForgotPasswordPage() {
@@ -32,62 +35,66 @@ export default function ForgotPasswordPage() {
 
   if (isSuccess) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle className="h-7 w-7 text-green-600" />
+          <Card.Header className="items-center text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+              <CheckCircle className="h-7 w-7" />
             </div>
-            <CardTitle className="text-2xl">E-posta Gönderildi</CardTitle>
-            <CardDescription>
+            <Card.Title className="text-2xl">E-posta Gönderildi</Card.Title>
+            <Card.Description>
               Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.
               Lütfen gelen kutunuzu kontrol edin.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/login">
-              <Button variant="outline" className="w-full">
-                <ArrowLeft className="mr-2 h-4 w-4" />
+            </Card.Description>
+          </Card.Header>
+          <Card.Footer>
+            <Link href="/login" className="block">
+              <Button variant="outline" fullWidth>
+                <ArrowLeft className="h-4 w-4" />
                 Giriş sayfasına dön
               </Button>
             </Link>
-          </CardContent>
+          </Card.Footer>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-            <BarChart3 className="h-7 w-7 text-primary-foreground" />
+        <Card.Header className="items-center text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <BarChart3 className="h-7 w-7" />
           </div>
-          <CardTitle className="text-2xl">Şifremi Unuttum</CardTitle>
-          <CardDescription>
+          <Card.Title className="text-2xl">Şifremi Unuttum</Card.Title>
+          <Card.Description>
             E-posta adresinizi girin, şifre sıfırlama bağlantısı göndereceğiz
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">E-posta</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="ornek@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <TextField
+              name="email"
+              type="email"
+              value={email}
+              onChange={setEmail}
+              isRequired
+              isDisabled={isLoading}
+            >
+              <Label>E-posta</Label>
+              <Input placeholder="ornek@email.com" />
+            </TextField>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              fullWidth
+              isPending={isLoading}
+              isDisabled={isLoading}
+            >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Gönderiliyor...
                 </>
               ) : (
@@ -99,13 +106,13 @@ export default function ForgotPasswordPage() {
           <div className="mt-6 text-center">
             <Link
               href="/login"
-              className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground"
+              className="inline-flex items-center gap-2 text-sm text-muted hover:text-foreground"
             >
-              <ArrowLeft className="mr-2 h-4 w-4" />
+              <ArrowLeft className="h-4 w-4" />
               Giriş sayfasına dön
             </Link>
           </div>
-        </CardContent>
+        </Card.Content>
       </Card>
     </div>
   );

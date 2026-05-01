@@ -5,10 +5,14 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BarChart3, Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Button,
+  Card,
+  Description,
+  Input,
+  Label,
+  TextField,
+} from '@heroui/react';
 import { api } from '@/services/api';
 
 export default function ResetPasswordPage() {
@@ -29,18 +33,10 @@ export default function ResetPasswordPage() {
   }, [token, router]);
 
   const validatePassword = (pwd: string) => {
-    if (pwd.length < 8) {
-      return 'Şifre en az 8 karakter olmalıdır';
-    }
-    if (!/[A-Z]/.test(pwd)) {
-      return 'Şifre en az bir büyük harf içermelidir';
-    }
-    if (!/[a-z]/.test(pwd)) {
-      return 'Şifre en az bir küçük harf içermelidir';
-    }
-    if (!/\d/.test(pwd)) {
-      return 'Şifre en az bir rakam içermelidir';
-    }
+    if (pwd.length < 8) return 'Şifre en az 8 karakter olmalıdır';
+    if (!/[A-Z]/.test(pwd)) return 'Şifre en az bir büyük harf içermelidir';
+    if (!/[a-z]/.test(pwd)) return 'Şifre en az bir küçük harf içermelidir';
+    if (!/\d/.test(pwd)) return 'Şifre en az bir rakam içermelidir';
     return '';
   };
 
@@ -61,10 +57,7 @@ export default function ResetPasswordPage() {
     setIsLoading(true);
 
     try {
-      await api.post('/auth/reset-password', {
-        token,
-        password,
-      });
+      await api.post('/auth/reset-password', { token, password });
       setIsSuccess(true);
       toast.success('Şifreniz başarıyla güncellendi');
     } catch (err: any) {
@@ -74,95 +67,98 @@ export default function ResetPasswordPage() {
     }
   };
 
-  if (!token) {
-    return null;
-  }
+  if (!token) return null;
 
   if (isSuccess) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-              <CheckCircle className="h-7 w-7 text-green-600" />
+          <Card.Header className="items-center text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+              <CheckCircle className="h-7 w-7" />
             </div>
-            <CardTitle className="text-2xl">Şifre Güncellendi</CardTitle>
-            <CardDescription>
+            <Card.Title className="text-2xl">Şifre Güncellendi</Card.Title>
+            <Card.Description>
               Şifreniz başarıyla güncellendi. Şimdi yeni şifrenizle giriş yapabilirsiniz.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link href="/login">
-              <Button className="w-full">Giriş Yap</Button>
+            </Card.Description>
+          </Card.Header>
+          <Card.Footer>
+            <Link href="/login" className="block">
+              <Button fullWidth>Giriş Yap</Button>
             </Link>
-          </CardContent>
+          </Card.Footer>
         </Card>
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-            <BarChart3 className="h-7 w-7 text-primary-foreground" />
+        <Card.Header className="items-center text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+            <BarChart3 className="h-7 w-7" />
           </div>
-          <CardTitle className="text-2xl">Yeni Şifre Belirle</CardTitle>
-          <CardDescription>
+          <Card.Title className="text-2xl">Yeni Şifre Belirle</Card.Title>
+          <Card.Description>
             Hesabınız için yeni bir şifre oluşturun
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="password">Yeni Şifre</Label>
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <TextField
+              name="password"
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={setPassword}
+              isRequired
+              isDisabled={isLoading}
+            >
+              <Label>Yeni Şifre</Label>
               <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  disabled={isLoading}
-                />
+                <Input placeholder="••••••••" />
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
+                  size="sm"
+                  isIconOnly
+                  aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                  className="absolute right-1 top-1/2 -translate-y-1/2"
+                  onPress={() => setShowPassword((v) => !v)}
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    <EyeOff className="h-4 w-4 text-muted" />
                   ) : (
-                    <Eye className="h-4 w-4 text-muted-foreground" />
+                    <Eye className="h-4 w-4 text-muted" />
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">
+              <Description>
                 En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam
-              </p>
-            </div>
+              </Description>
+            </TextField>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Şifre Tekrar</Label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                disabled={isLoading}
-              />
-            </div>
+            <TextField
+              name="confirmPassword"
+              type={showPassword ? 'text' : 'password'}
+              value={confirmPassword}
+              onChange={setConfirmPassword}
+              isRequired
+              isDisabled={isLoading}
+            >
+              <Label>Şifre Tekrar</Label>
+              <Input placeholder="••••••••" />
+            </TextField>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button
+              type="submit"
+              fullWidth
+              isPending={isLoading}
+              isDisabled={isLoading}
+            >
               {isLoading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Güncelleniyor...
                 </>
               ) : (
@@ -170,7 +166,7 @@ export default function ResetPasswordPage() {
               )}
             </Button>
           </form>
-        </CardContent>
+        </Card.Content>
       </Card>
     </div>
   );

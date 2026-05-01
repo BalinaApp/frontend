@@ -18,18 +18,9 @@ import {
   Calendar,
   CalendarDays,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Button, ListBox, Select, Skeleton } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useNotificationStore, NotificationType } from '@/stores/notificationStore';
-import { cn } from '@/lib/utils';
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
   NEW_ORDER: ShoppingCart,
@@ -43,16 +34,16 @@ const notificationIcons: Record<NotificationType, React.ElementType> = {
   WEEKLY_REPORT: CalendarDays,
 };
 
-const notificationColors: Record<NotificationType, string> = {
-  NEW_ORDER: 'text-blue-500 bg-blue-50',
-  CRITICAL_STOCK: 'text-orange-500 bg-orange-50',
-  HIGH_VALUE_ORDER: 'text-green-500 bg-green-50',
-  REFUND_RECEIVED: 'text-purple-500 bg-purple-50',
-  SYNC_ERROR: 'text-red-500 bg-red-50',
-  SYNC_SUCCESS: 'text-green-500 bg-green-50',
-  LOW_PROFIT_MARGIN: 'text-yellow-500 bg-yellow-50',
-  DAILY_REPORT: 'text-indigo-500 bg-indigo-50',
-  WEEKLY_REPORT: 'text-indigo-500 bg-indigo-50',
+const notificationTone: Record<NotificationType, string> = {
+  NEW_ORDER: 'text-accent bg-accent/10',
+  CRITICAL_STOCK: 'text-warning bg-warning/10',
+  HIGH_VALUE_ORDER: 'text-success bg-success/10',
+  REFUND_RECEIVED: 'text-accent bg-accent/10',
+  SYNC_ERROR: 'text-danger bg-danger/10',
+  SYNC_SUCCESS: 'text-success bg-success/10',
+  LOW_PROFIT_MARGIN: 'text-warning bg-warning/10',
+  DAILY_REPORT: 'text-muted bg-default',
+  WEEKLY_REPORT: 'text-muted bg-default',
 };
 
 const notificationTypeLabels: Record<NotificationType, string> = {
@@ -111,28 +102,31 @@ export default function NotificationsPage() {
   }, [currentCompany?.id, filter, fetchNotifications, fetchUnreadCount]);
 
   const handleMarkAllAsRead = async () => {
-    if (currentCompany?.id) {
-      await markAllAsRead(currentCompany.id);
-    }
+    if (currentCompany?.id) await markAllAsRead(currentCompany.id);
   };
 
   const handleDeleteAll = async () => {
-    if (currentCompany?.id && window.confirm('Tüm bildirimleri silmek istediğinize emin misiniz?')) {
+    if (
+      currentCompany?.id &&
+      window.confirm('Tüm bildirimleri silmek istediğinize emin misiniz?')
+    ) {
       await deleteAllNotifications(currentCompany.id);
     }
   };
 
   const handlePageChange = (newPage: number) => {
     if (currentCompany?.id) {
-      fetchNotifications(currentCompany.id, { page: newPage, unreadOnly: filter === 'unread' });
+      fetchNotifications(currentCompany.id, {
+        page: newPage,
+        unreadOnly: filter === 'unread',
+      });
     }
   };
 
-  const filteredNotifications = typeFilter === 'all'
-    ? notifications
-    : notifications.filter(n => n.type === typeFilter);
+  const filteredNotifications =
+    typeFilter === 'all' ? notifications : notifications.filter((n) => n.type === typeFilter);
 
-  const todayCount = notifications.filter(n => {
+  const todayCount = notifications.filter((n) => {
     const today = new Date();
     const notifDate = new Date(n.createdAt);
     return notifDate.toDateString() === today.toDateString();
@@ -140,127 +134,116 @@ export default function NotificationsPage() {
 
   return (
     <>
-      {/* Header with Filters */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Bell className="h-5 w-5 text-muted-foreground" />
+          <Bell className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">Bildirimler</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={filter} onValueChange={(v) => setFilter(v as 'all' | 'unread')}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue placeholder="Durum" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tümü</SelectItem>
-              <SelectItem value="unread">Okunmamış</SelectItem>
-            </SelectContent>
+          <Select
+            selectedKey={filter}
+            onSelectionChange={(key) => setFilter(key as 'all' | 'unread')}
+            aria-label="Durum"
+            className="w-[140px]"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tümü">
+                  Tümü
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="unread" textValue="Okunmamış">
+                  Okunmamış
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
-          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as 'all' | NotificationType)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Bildirim Türü" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm Türler</SelectItem>
-              {Object.entries(notificationTypeLabels).map(([type, label]) => (
-                <SelectItem key={type} value={type}>{label}</SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={typeFilter}
+            onSelectionChange={(key) => setTypeFilter(key as 'all' | NotificationType)}
+            aria-label="Bildirim Türü"
+            className="w-[180px]"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tüm Türler">
+                  Tüm Türler
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {Object.entries(notificationTypeLabels).map(([type, label]) => (
+                  <ListBox.Item key={type} id={type} textValue={label}>
+                    {label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 border-b">
-        {/* Total */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Toplam</span>
-            <Bell className="h-5 w-5 text-blue-500" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
-            <span className="text-2xl font-bold">{total}</span>
-          )}
-        </div>
-
-        {/* Unread */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Okunmamış</span>
-            <AlertTriangle className="h-5 w-5 text-orange-500" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
-            <span className={cn(
-              'text-2xl font-bold',
-              unreadCount > 0 ? 'text-orange-600' : ''
-            )}>
-              {unreadCount}
-            </span>
-          )}
-        </div>
-
-        {/* Read */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Okunmuş</span>
-            <CheckCircle2 className="h-5 w-5 text-green-500" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
-            <span className="text-2xl font-bold text-green-600">{total - unreadCount}</span>
-          )}
-        </div>
-
-        {/* Today */}
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Bugün</span>
-            <Clock className="h-5 w-5 text-purple-500" />
-          </div>
-          {isLoading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
-            <span className="text-2xl font-bold">{todayCount}</span>
-          )}
-        </div>
+      <div className="grid grid-cols-2 border-b border-border lg:grid-cols-4">
+        <KpiCell label="Toplam" icon={Bell} tone="text-accent" loading={isLoading}>
+          <span className="text-2xl font-bold">{total}</span>
+        </KpiCell>
+        <KpiCell
+          label="Okunmamış"
+          icon={AlertTriangle}
+          tone="text-warning"
+          loading={isLoading}
+        >
+          <span
+            className={`text-2xl font-bold ${unreadCount > 0 ? 'text-warning-foreground' : ''}`}
+          >
+            {unreadCount}
+          </span>
+        </KpiCell>
+        <KpiCell label="Okunmuş" icon={CheckCircle2} tone="text-success" loading={isLoading}>
+          <span className="text-2xl font-bold text-success">{total - unreadCount}</span>
+        </KpiCell>
+        <KpiCell label="Bugün" icon={Clock} tone="text-muted" loading={isLoading} last>
+          <span className="text-2xl font-bold">{todayCount}</span>
+        </KpiCell>
       </div>
 
-      {/* Action Buttons */}
       {(unreadCount > 0 || notifications.length > 0) && (
-        <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/30">
+        <div className="flex items-center gap-2 border-b border-border bg-surface-secondary/30 px-4 py-3">
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onClick={handleMarkAllAsRead}>
-              <Check className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onPress={handleMarkAllAsRead}>
+              <Check className="h-4 w-4" />
               Tümünü Okundu İşaretle
             </Button>
           )}
           {notifications.length > 0 && (
-            <Button variant="outline" size="sm" onClick={handleDeleteAll}>
-              <Trash2 className="h-4 w-4 mr-2" />
+            <Button variant="outline" size="sm" onPress={handleDeleteAll}>
+              <Trash2 className="h-4 w-4" />
               Tümünü Temizle
             </Button>
           )}
         </div>
       )}
 
-      {/* Notifications List */}
       <div>
         {isLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="flex flex-col gap-2 p-4">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-16 w-full" />
             ))}
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Bell className="h-12 w-12 text-muted-foreground mb-4" />
+            <Bell className="mb-4 h-12 w-12 text-muted" />
             <h3 className="text-lg font-medium text-foreground">Bildirim yok</h3>
-            <p className="text-muted-foreground text-center mt-1">
+            <p className="mt-1 text-center text-muted">
               {filter === 'unread'
                 ? 'Tüm bildirimlerinizi okudunuz!'
                 : 'Henüz bildiriminiz bulunmuyor.'}
@@ -271,67 +254,66 @@ export default function NotificationsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground w-10"></th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Başlık</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tür</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tarih</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Durum</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground w-10"></th>
+                  <tr className="border-b border-border bg-surface-secondary">
+                    <th className="w-10 px-4 py-2 text-left text-xs font-medium text-muted"></th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Başlık</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Tür</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Tarih</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Durum</th>
+                    <th className="w-10 px-4 py-2 text-right text-xs font-medium text-muted"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredNotifications.map((notification, index) => {
                     const Icon = notificationIcons[notification.type];
-                    const colorClass = notificationColors[notification.type];
+                    const tone = notificationTone[notification.type];
 
                     return (
                       <tr
                         key={notification.id}
-                        className={cn(
-                          'cursor-pointer transition-colors hover:bg-muted/50',
-                          index % 2 === 0 ? '' : 'bg-muted/30',
-                          !notification.isRead && 'bg-primary/5'
-                        )}
+                        className={`cursor-pointer border-b border-border transition-colors hover:bg-surface-secondary/50 ${
+                          index % 2 === 1 ? 'bg-surface-secondary/30' : ''
+                        } ${!notification.isRead ? 'bg-accent/5' : ''}`}
                         onClick={() => markAsRead(notification.id)}
                       >
                         <td className="px-4 py-3">
-                          <div className={cn('p-2 rounded-full', colorClass)}>
+                          <div className={`rounded-full p-2 ${tone}`}>
                             <Icon className="h-4 w-4" />
                           </div>
                         </td>
                         <td className="px-4 py-3">
                           <div>
-                            <p className={cn(
-                              'text-sm',
-                              !notification.isRead ? 'font-semibold' : 'font-medium'
-                            )}>
+                            <p
+                              className={`text-sm ${
+                                !notification.isRead ? 'font-semibold' : 'font-medium'
+                              }`}
+                            >
                               {notification.title}
                             </p>
                             {notification.message && (
-                              <p className="text-xs text-muted-foreground mt-0.5 max-w-md truncate">
+                              <p className="mt-0.5 max-w-md truncate text-xs text-muted">
                                 {notification.message}
                               </p>
                             )}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-muted">
                             {notificationTypeLabels[notification.type]}
                           </span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-sm text-muted-foreground">
+                          <span className="text-sm text-muted">
                             {formatRelativeTime(notification.createdAt)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
                           {notification.isRead ? (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                            <span className="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
                               Okundu
                             </span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-orange-100 text-orange-700 rounded-full">
+                            <span className="inline-flex items-center rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning-foreground">
                               Yeni
                             </span>
                           )}
@@ -339,14 +321,12 @@ export default function NotificationsPage() {
                         <td className="px-4 py-3 text-right">
                           <Button
                             variant="ghost"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteNotification(notification.id);
-                            }}
+                            size="sm"
+                            isIconOnly
+                            aria-label="Bildirimi sil"
+                            onPress={() => deleteNotification(notification.id)}
                           >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                            <Trash2 className="h-4 w-4 text-muted" />
                           </Button>
                         </td>
                       </tr>
@@ -356,26 +336,29 @@ export default function NotificationsPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                <span className="text-sm text-muted">
                   Sayfa {page} / {totalPages}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePageChange(page - 1)}
-                    disabled={page <= 1}
+                    isIconOnly
+                    aria-label="Önceki sayfa"
+                    onPress={() => handlePageChange(page - 1)}
+                    isDisabled={page <= 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePageChange(page + 1)}
-                    disabled={page >= totalPages}
+                    isIconOnly
+                    aria-label="Sonraki sayfa"
+                    onPress={() => handlePageChange(page + 1)}
+                    isDisabled={page >= totalPages}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -386,5 +369,31 @@ export default function NotificationsPage() {
         )}
       </div>
     </>
+  );
+}
+
+function KpiCell({
+  label,
+  icon: Icon,
+  tone,
+  loading,
+  last,
+  children,
+}: {
+  label: string;
+  icon: React.ElementType;
+  tone: string;
+  loading: boolean;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`p-4 ${!last ? 'border-r border-border' : ''}`}>
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-medium text-muted">{label}</span>
+        <Icon className={`h-5 w-5 ${tone}`} />
+      </div>
+      {loading ? <Skeleton className="h-8 w-16" /> : children}
+    </div>
   );
 }

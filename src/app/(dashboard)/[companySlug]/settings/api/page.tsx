@@ -17,39 +17,23 @@ import {
   Activity,
   Loader2,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
-import {
+  Alert,
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Skeleton } from '@/components/ui/skeleton';
+  Button,
+  Chip,
+  Input,
+  Label,
+  Modal,
+  Skeleton,
+  Switch,
+  TextField,
+} from '@heroui/react';
 import { useApiKeyStore, ApiKey } from '@/stores/apiKeyStore';
 import { usePricingStore } from '@/stores/pricingStore';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { formatDistanceToNow } from 'date-fns';
 import { tr } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 
 export default function ApiSettingsPage() {
   const router = useRouter();
@@ -76,7 +60,6 @@ export default function ApiSettingsPage() {
   const [showSecret, setShowSecret] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
 
-  // Check for Enterprise access
   const hasApiAccess = hasFeature('apiAccess');
 
   useEffect(() => {
@@ -84,7 +67,6 @@ export default function ApiSettingsPage() {
   }, [fetchMyPlan]);
 
   useEffect(() => {
-    // Only fetch API keys if pricing is disabled or user has access
     if (!isPricingEnabled || hasApiAccess) {
       fetchApiKeys();
     }
@@ -121,45 +103,37 @@ export default function ApiSettingsPage() {
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
-    return formatDistanceToNow(new Date(dateStr), {
-      addSuffix: true,
-      locale: tr,
-    });
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: true, locale: tr });
   };
 
-  // Enterprise plan required screen
   if (!hasApiAccess && isPricingEnabled) {
     return (
       <>
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => router.push(`/${company?.slug}/settings`)}
+              size="sm"
+              isIconOnly
+              aria-label="Geri"
+              onPress={() => router.push(`/${company?.slug}/settings`)}
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <Key className="h-5 w-5 text-muted-foreground" />
+            <Key className="h-5 w-5 text-muted" />
             <h1 className="text-lg font-semibold">API Erişimi</h1>
           </div>
         </div>
 
         <div className="flex flex-col items-center justify-center py-16">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-            <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-default">
+            <AlertTriangle className="h-8 w-8 text-muted" />
           </div>
           <h3 className="mt-4 text-lg font-semibold">Enterprise Plan Gerekli</h3>
-          <p className="mt-2 text-center text-muted-foreground max-w-md px-4">
-            Harici API erişimi ve API anahtarı yönetimi Enterprise plan ile
-            kullanılabilir.
+          <p className="mt-2 max-w-md px-4 text-center text-muted">
+            Harici API erişimi ve API anahtarı yönetimi Enterprise plan ile kullanılabilir.
           </p>
-          <Button
-            className="mt-6"
-            onClick={() => router.push(`/${company?.slug}/pricing`)}
-          >
+          <Button className="mt-6" onPress={() => router.push(`/${company?.slug}/pricing`)}>
             Planları Görüntüle
           </Button>
         </div>
@@ -169,156 +143,179 @@ export default function ApiSettingsPage() {
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push(`/${company?.slug}/settings`)}
+            size="sm"
+            isIconOnly
+            aria-label="Geri"
+            onPress={() => router.push(`/${company?.slug}/settings`)}
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <Key className="h-5 w-5 text-muted-foreground" />
+          <Key className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">API Erişimi</h1>
         </div>
-        <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              Yeni API Anahtarı
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px]">
-            <DialogHeader>
-              <DialogTitle>
-                {newKeySecret ? 'API Anahtarı Oluşturuldu' : 'Yeni API Anahtarı'}
-              </DialogTitle>
-              <DialogDescription>
-                {newKeySecret
-                  ? 'API anahtarınız oluşturuldu. Bu anahtarı güvenli bir yerde saklayın, tekrar gösterilmeyecektir.'
-                  : 'Harici API erişimi için yeni bir API anahtarı oluşturun.'}
-              </DialogDescription>
-            </DialogHeader>
 
-            {newKeySecret ? (
-              <div className="space-y-4">
-                <Alert variant="destructive">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Dikkat!</AlertTitle>
-                  <AlertDescription>
-                    Bu API anahtarı sadece bir kez gösterilecektir. Lütfen
-                    güvenli bir yerde saklayın.
-                  </AlertDescription>
-                </Alert>
+        <Modal
+          isOpen={isCreateOpen}
+          onOpenChange={(open) => {
+            if (!open) handleCloseCreateDialog();
+            else setIsCreateOpen(true);
+          }}
+        >
+          <Button size="sm" onPress={() => setIsCreateOpen(true)}>
+            Yeni API Anahtarı
+          </Button>
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog className="sm:max-w-[500px]">
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>
+                    {newKeySecret ? 'API Anahtarı Oluşturuldu' : 'Yeni API Anahtarı'}
+                  </Modal.Heading>
+                </Modal.Header>
+                <Modal.Body className="flex flex-col gap-4">
+                  <p className="text-sm text-muted">
+                    {newKeySecret
+                      ? 'API anahtarınız oluşturuldu. Bu anahtarı güvenli bir yerde saklayın, tekrar gösterilmeyecektir.'
+                      : 'Harici API erişimi için yeni bir API anahtarı oluşturun.'}
+                  </p>
 
-                <div className="space-y-2">
-                  <Label>API Anahtarı</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type={showSecret ? 'text' : 'password'}
-                      value={newKeySecret}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowSecret(!showSecret)}
-                    >
-                      {showSecret ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleCopyKey}
-                    >
-                      {copiedKey ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                  {newKeySecret ? (
+                    <>
+                      <Alert status="danger">
+                        <Alert.Indicator />
+                        <Alert.Content>
+                          <Alert.Title>Dikkat!</Alert.Title>
+                          <Alert.Description>
+                            Bu API anahtarı sadece bir kez gösterilecektir. Lütfen güvenli bir yerde saklayın.
+                          </Alert.Description>
+                        </Alert.Content>
+                      </Alert>
 
-                <DialogFooter>
-                  <Button onClick={handleCloseCreateDialog}>Tamam</Button>
-                </DialogFooter>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Anahtar Adı</Label>
-                  <Input
-                    id="name"
-                    placeholder="Örn: Production API Key"
-                    value={newKeyName}
-                    onChange={(e) => setNewKeyName(e.target.value)}
-                  />
-                </div>
+                      <div className="flex flex-col gap-2">
+                        <Label>API Anahtarı</Label>
+                        <div className="flex gap-2">
+                          <TextField
+                            value={newKeySecret}
+                            type={showSecret ? 'text' : 'password'}
+                            isReadOnly
+                            className="flex-1"
+                          >
+                            <Input className="font-mono text-sm" />
+                          </TextField>
+                          <Button
+                            variant="outline"
+                            size="md"
+                            isIconOnly
+                            aria-label={showSecret ? 'Gizle' : 'Göster'}
+                            onPress={() => setShowSecret(!showSecret)}
+                          >
+                            {showSecret ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="md"
+                            isIconOnly
+                            aria-label="Kopyala"
+                            onPress={handleCopyKey}
+                          >
+                            {copiedKey ? (
+                              <CheckCircle2 className="h-4 w-4 text-success" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <TextField
+                        name="name"
+                        value={newKeyName}
+                        onChange={setNewKeyName}
+                      >
+                        <Label>Anahtar Adı</Label>
+                        <Input placeholder="Örn: Production API Key" />
+                      </TextField>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label>Yazma İzni</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Bu anahtar veri değişikliği yapabilsin mi?
-                    </p>
-                  </div>
-                  <Switch
-                    checked={writePermission}
-                    onCheckedChange={setWritePermission}
-                  />
-                </div>
-
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
-                  >
-                    İptal
-                  </Button>
-                  <Button
-                    onClick={handleCreateKey}
-                    disabled={!newKeyName.trim() || isCreating}
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Oluşturuluyor...
-                      </>
-                    ) : (
-                      'Oluştur'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <Label>Yazma İzni</Label>
+                          <p className="text-sm text-muted">
+                            Bu anahtar veri değişikliği yapabilsin mi?
+                          </p>
+                        </div>
+                        <Switch
+                          isSelected={writePermission}
+                          onChange={setWritePermission}
+                          aria-label="Yazma izni"
+                        >
+                          <Switch.Control>
+                            <Switch.Thumb />
+                          </Switch.Control>
+                        </Switch>
+                      </div>
+                    </>
+                  )}
+                </Modal.Body>
+                <Modal.Footer>
+                  {newKeySecret ? (
+                    <Button onPress={handleCloseCreateDialog}>Tamam</Button>
+                  ) : (
+                    <>
+                      <Button variant="tertiary" slot="close">
+                        İptal
+                      </Button>
+                      <Button
+                        onPress={handleCreateKey}
+                        isDisabled={!newKeyName.trim() || isCreating}
+                        isPending={isCreating}
+                      >
+                        {isCreating ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Oluşturuluyor...
+                          </>
+                        ) : (
+                          'Oluştur'
+                        )}
+                      </Button>
+                    </>
+                  )}
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
       </div>
 
       {error && (
-        <div className="px-4 py-3 border-b">
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+        <div className="border-b border-border px-4 py-3">
+          <Alert status="danger">
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Description>{error}</Alert.Description>
+            </Alert.Content>
           </Alert>
         </div>
       )}
 
-      {/* API Documentation */}
-      <div className="border-b">
+      <div className="border-b border-border">
         <div className="grid grid-cols-12 items-center px-4 py-4">
           <div className="col-span-3">
             <p className="text-sm font-medium">Base URL</p>
           </div>
           <div className="col-span-6">
-            <code className="bg-muted px-2 py-1 rounded text-sm">
+            <code className="rounded bg-default px-2 py-1 text-sm">
               {process.env.NEXT_PUBLIC_API_URL}/api/v1
             </code>
           </div>
@@ -326,11 +323,8 @@ export default function ApiSettingsPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() =>
-                window.open(
-                  `${process.env.NEXT_PUBLIC_API_URL}/api/docs`,
-                  '_blank'
-                )
+              onPress={() =>
+                window.open(`${process.env.NEXT_PUBLIC_API_URL}/api/docs`, '_blank')
               }
             >
               Swagger Docs
@@ -339,76 +333,68 @@ export default function ApiSettingsPage() {
         </div>
       </div>
 
-      {/* Rate Limiting Info */}
-      <div className="border-b">
-        <div className="px-4 py-2 bg-muted/50">
-          <span className="text-xs font-medium text-muted-foreground">
-            Rate Limiting
-          </span>
+      <div className="border-b border-border">
+        <div className="bg-surface-secondary px-4 py-2">
+          <span className="text-xs font-medium text-muted">Rate Limiting</span>
         </div>
-        <div className="grid grid-cols-3 divide-x">
+        <div className="grid grid-cols-3 divide-x divide-border">
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Activity className="h-5 w-5 text-muted-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-default">
+              <Activity className="h-5 w-5 text-muted" />
             </div>
             <div>
               <p className="text-sm font-medium">100 istek/dk</p>
-              <p className="text-xs text-muted-foreground">API key başına</p>
+              <p className="text-xs text-muted">API key başına</p>
             </div>
           </div>
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Clock className="h-5 w-5 text-muted-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-default">
+              <Clock className="h-5 w-5 text-muted" />
             </div>
             <div>
               <p className="text-sm font-medium">60 saniye</p>
-              <p className="text-xs text-muted-foreground">Sıfırlama süresi</p>
+              <p className="text-xs text-muted">Sıfırlama süresi</p>
             </div>
           </div>
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-              <Key className="h-5 w-5 text-muted-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-default">
+              <Key className="h-5 w-5 text-muted" />
             </div>
             <div>
               <p className="text-sm font-medium">X-RateLimit-*</p>
-              <p className="text-xs text-muted-foreground">Response headers</p>
+              <p className="text-xs text-muted">Response headers</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* API Keys Section Header */}
-      <div className="px-4 py-2 bg-muted/50 border-b">
-        <span className="text-xs font-medium text-muted-foreground">
-          API Anahtarları
-        </span>
+      <div className="border-b border-border bg-surface-secondary px-4 py-2">
+        <span className="text-xs font-medium text-muted">API Anahtarları</span>
       </div>
 
-      {/* Table Header */}
-      <div className="grid grid-cols-12 px-4 py-2 border-b bg-muted/30">
-        <div className="col-span-3 text-xs font-medium text-muted-foreground">Ad</div>
-        <div className="col-span-2 text-xs font-medium text-muted-foreground">Anahtar</div>
-        <div className="col-span-2 text-xs font-medium text-muted-foreground">İzinler</div>
-        <div className="col-span-2 text-xs font-medium text-muted-foreground">Son Kullanım</div>
-        <div className="col-span-2 text-xs font-medium text-muted-foreground">Durum</div>
-        <div className="col-span-1 text-xs font-medium text-muted-foreground text-right">İşlem</div>
+      <div className="grid grid-cols-12 border-b border-border bg-surface-secondary/50 px-4 py-2">
+        <div className="col-span-3 text-xs font-medium text-muted">Ad</div>
+        <div className="col-span-2 text-xs font-medium text-muted">Anahtar</div>
+        <div className="col-span-2 text-xs font-medium text-muted">İzinler</div>
+        <div className="col-span-2 text-xs font-medium text-muted">Son Kullanım</div>
+        <div className="col-span-2 text-xs font-medium text-muted">Durum</div>
+        <div className="col-span-1 text-right text-xs font-medium text-muted">İşlem</div>
       </div>
 
-      {/* API Keys List */}
       <div>
         {isLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="flex flex-col gap-2 p-4">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
         ) : apiKeys.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-              <Key className="h-6 w-6 text-muted-foreground" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-default">
+              <Key className="h-6 w-6 text-muted" />
             </div>
             <h3 className="mt-4 text-lg font-medium">Henüz API anahtarı yok</h3>
-            <p className="text-muted-foreground text-center mt-1">
+            <p className="mt-1 text-center text-muted">
               Harici API erişimi için bir API anahtarı oluşturun
             </p>
           </div>
@@ -430,7 +416,6 @@ export default function ApiSettingsPage() {
   );
 }
 
-// Separate component for each API key row
 function ApiKeyRow({
   apiKey,
   index,
@@ -484,185 +469,219 @@ function ApiKeyRow({
 
   return (
     <div
-      className={cn(
-        'grid grid-cols-12 items-center px-4 py-3 border-b',
-        index % 2 === 1 && 'bg-muted/30'
-      )}
+      className={`grid grid-cols-12 items-center border-b border-border px-4 py-3 ${
+        index % 2 === 1 ? 'bg-surface-secondary/50' : ''
+      }`}
     >
       <div className="col-span-3">
         <p className="text-sm font-medium">{apiKey.name}</p>
       </div>
       <div className="col-span-2">
-        <code className="bg-muted px-2 py-1 rounded text-xs">
+        <code className="rounded bg-default px-2 py-1 text-xs">
           {apiKey.keyPrefix}...
         </code>
       </div>
       <div className="col-span-2">
         <div className="flex gap-1">
-          <Badge variant="outline" className="text-xs">Okuma</Badge>
+          <Chip variant="tertiary" size="sm">Okuma</Chip>
           {apiKey.permissions?.write && (
-            <Badge variant="secondary" className="text-xs">Yazma</Badge>
+            <Chip variant="primary" size="sm">Yazma</Chip>
           )}
         </div>
       </div>
       <div className="col-span-2">
-        <p className="text-sm text-muted-foreground">
-          {formatDate(apiKey.lastUsedAt)}
-        </p>
+        <p className="text-sm text-muted">{formatDate(apiKey.lastUsedAt)}</p>
       </div>
       <div className="col-span-2">
         {apiKey.isActive ? (
-          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-            <CheckCircle2 className="h-3 w-3 mr-1" />
+          <span className="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
+            <CheckCircle2 className="mr-1 h-3 w-3" />
             Aktif
           </span>
         ) : (
-          <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full">
+          <span className="inline-flex items-center rounded-full bg-default px-2 py-0.5 text-xs font-medium text-muted">
             İptal Edildi
           </span>
         )}
       </div>
       <div className="col-span-1 text-right">
         <div className="flex justify-end gap-1">
-          {/* Rotate Dialog */}
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                disabled={!apiKey.isActive}
-                title="Yenile"
-              >
-                <RotateCcw className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>
-                  {rotatedKey ? 'Anahtar Yenilendi' : 'API Anahtarını Yenile'}
-                </DialogTitle>
-                <DialogDescription>
-                  {rotatedKey
-                    ? 'Yeni API anahtarınız oluşturuldu. Eski anahtar artık geçersiz.'
-                    : 'Bu işlem mevcut anahtarı geçersiz kılacak ve yeni bir anahtar oluşturacaktır.'}
-                </DialogDescription>
-              </DialogHeader>
+          <Modal>
+            <Button
+              variant="ghost"
+              size="sm"
+              isIconOnly
+              isDisabled={!apiKey.isActive}
+              aria-label="Anahtarı yenile"
+            >
+              <RotateCcw className="h-4 w-4 text-muted" />
+            </Button>
+            <Modal.Backdrop>
+              <Modal.Container>
+                <Modal.Dialog className="sm:max-w-[500px]">
+                  <Modal.CloseTrigger />
+                  <Modal.Header>
+                    <Modal.Heading>
+                      {rotatedKey ? 'Anahtar Yenilendi' : 'API Anahtarını Yenile'}
+                    </Modal.Heading>
+                  </Modal.Header>
+                  <Modal.Body className="flex flex-col gap-4">
+                    <p className="text-sm text-muted">
+                      {rotatedKey
+                        ? 'Yeni API anahtarınız oluşturuldu. Eski anahtar artık geçersiz.'
+                        : 'Bu işlem mevcut anahtarı geçersiz kılacak ve yeni bir anahtar oluşturacaktır.'}
+                    </p>
+                    {rotatedKey && (
+                      <>
+                        <Alert status="danger">
+                          <Alert.Indicator />
+                          <Alert.Content>
+                            <Alert.Description>
+                              Bu anahtar sadece bir kez gösterilecektir.
+                            </Alert.Description>
+                          </Alert.Content>
+                        </Alert>
 
-              {rotatedKey ? (
-                <div className="space-y-4">
-                  <Alert variant="destructive">
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      Bu anahtar sadece bir kez gösterilecektir.
-                    </AlertDescription>
-                  </Alert>
+                        <div className="flex gap-2">
+                          <TextField
+                            value={rotatedKey}
+                            type={showRotatedKey ? 'text' : 'password'}
+                            isReadOnly
+                            className="flex-1"
+                          >
+                            <Input className="font-mono text-sm" />
+                          </TextField>
+                          <Button
+                            variant="outline"
+                            size="md"
+                            isIconOnly
+                            aria-label={showRotatedKey ? 'Gizle' : 'Göster'}
+                            onPress={() => setShowRotatedKey(!showRotatedKey)}
+                          >
+                            {showRotatedKey ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="md"
+                            isIconOnly
+                            aria-label="Kopyala"
+                            onPress={handleCopyRotatedKey}
+                          >
+                            {copied ? (
+                              <CheckCircle2 className="h-4 w-4 text-success" />
+                            ) : (
+                              <Copy className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </Modal.Body>
+                  <Modal.Footer>
+                    {rotatedKey ? (
+                      <Button slot="close" onPress={() => setRotatedKey(null)}>
+                        Tamam
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="tertiary" slot="close">
+                          İptal
+                        </Button>
+                        <Button
+                          onPress={handleRotate}
+                          isDisabled={isRotating}
+                          isPending={isRotating}
+                        >
+                          {isRotating ? 'Yenileniyor...' : 'Yenile'}
+                        </Button>
+                      </>
+                    )}
+                  </Modal.Footer>
+                </Modal.Dialog>
+              </Modal.Container>
+            </Modal.Backdrop>
+          </Modal>
 
-                  <div className="flex gap-2">
-                    <Input
-                      type={showRotatedKey ? 'text' : 'password'}
-                      value={rotatedKey}
-                      readOnly
-                      className="font-mono text-sm"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => setShowRotatedKey(!showRotatedKey)}
-                    >
-                      {showRotatedKey ? (
-                        <EyeOff className="h-4 w-4" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={handleCopyRotatedKey}
-                    >
-                      {copied ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-
-                  <DialogFooter>
-                    <Button onClick={() => setRotatedKey(null)}>Tamam</Button>
-                  </DialogFooter>
-                </div>
-              ) : (
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setRotatedKey(null)}
-                  >
-                    İptal
-                  </Button>
-                  <Button onClick={handleRotate} disabled={isRotating}>
-                    {isRotating ? 'Yenileniyor...' : 'Yenile'}
-                  </Button>
-                </DialogFooter>
-              )}
-            </DialogContent>
-          </Dialog>
-
-          {/* Revoke Button */}
           {apiKey.isActive && (
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" title="İptal Et">
-                  <Ban className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>API Anahtarını İptal Et</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Bu API anahtarı iptal edilecek ve artık kullanılamayacak.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleRevoke}
-                    disabled={isRevoking}
-                  >
-                    {isRevoking ? 'İptal Ediliyor...' : 'İptal Et'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
+              <Button
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                aria-label="API anahtarını iptal et"
+              >
+                <Ban className="h-4 w-4 text-muted" />
+              </Button>
+              <AlertDialog.Backdrop>
+                <AlertDialog.Container>
+                  <AlertDialog.Dialog className="sm:max-w-[400px]">
+                    <AlertDialog.Header>
+                      <AlertDialog.Icon status="warning" />
+                      <AlertDialog.Heading>API Anahtarını İptal Et</AlertDialog.Heading>
+                    </AlertDialog.Header>
+                    <AlertDialog.Body>
+                      <p>Bu API anahtarı iptal edilecek ve artık kullanılamayacak.</p>
+                    </AlertDialog.Body>
+                    <AlertDialog.Footer>
+                      <Button variant="tertiary" slot="close">
+                        Vazgeç
+                      </Button>
+                      <Button
+                        variant="danger"
+                        slot="close"
+                        onPress={handleRevoke}
+                        isDisabled={isRevoking}
+                      >
+                        {isRevoking ? 'İptal Ediliyor...' : 'İptal Et'}
+                      </Button>
+                    </AlertDialog.Footer>
+                  </AlertDialog.Dialog>
+                </AlertDialog.Container>
+              </AlertDialog.Backdrop>
             </AlertDialog>
           )}
 
-          {/* Delete Button */}
           <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" title="Sil">
-                <Trash2 className="h-4 w-4 text-muted-foreground" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>API Anahtarını Sil</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Bu işlem geri alınamaz. API anahtarı kalıcı olarak
-                  silinecektir.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={isDeleting}
-                  className="bg-red-500 hover:bg-red-600"
-                >
-                  {isDeleting ? 'Siliniyor...' : 'Sil'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
+            <Button
+              variant="ghost"
+              size="sm"
+              isIconOnly
+              aria-label="API anahtarını sil"
+            >
+              <Trash2 className="h-4 w-4 text-muted" />
+            </Button>
+            <AlertDialog.Backdrop>
+              <AlertDialog.Container>
+                <AlertDialog.Dialog className="sm:max-w-[400px]">
+                  <AlertDialog.Header>
+                    <AlertDialog.Icon status="danger" />
+                    <AlertDialog.Heading>API Anahtarını Sil</AlertDialog.Heading>
+                  </AlertDialog.Header>
+                  <AlertDialog.Body>
+                    <p>
+                      Bu işlem geri alınamaz. API anahtarı kalıcı olarak silinecektir.
+                    </p>
+                  </AlertDialog.Body>
+                  <AlertDialog.Footer>
+                    <Button variant="tertiary" slot="close">
+                      Vazgeç
+                    </Button>
+                    <Button
+                      variant="danger"
+                      slot="close"
+                      onPress={handleDelete}
+                      isDisabled={isDeleting}
+                    >
+                      {isDeleting ? 'Siliniyor...' : 'Sil'}
+                    </Button>
+                  </AlertDialog.Footer>
+                </AlertDialog.Dialog>
+              </AlertDialog.Container>
+            </AlertDialog.Backdrop>
           </AlertDialog>
         </div>
       </div>

@@ -14,40 +14,20 @@ import {
   Crown,
   Package,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+  Button,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Skeleton,
+  TextField,
+} from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { api } from '@/services/api';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 
 interface Member {
   id: string;
@@ -56,11 +36,7 @@ interface Member {
   inviteStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   joinedAt: string | null;
   invitedAt: string | null;
-  user: {
-    id: string;
-    email: string;
-    name: string | null;
-  } | null;
+  user: { id: string; email: string; name: string | null } | null;
 }
 
 const roleLabels: Record<string, string> = {
@@ -143,116 +119,136 @@ export default function TeamSettingsPage() {
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push(`/${company?.slug}/settings`)}
+            size="sm"
+            isIconOnly
+            aria-label="Geri"
+            onPress={() => router.push(`/${company?.slug}/settings`)}
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <Users className="h-5 w-5 text-muted-foreground" />
+          <Users className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">Takım Üyeleri</h1>
         </div>
-        <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              Üye Davet Et
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Yeni Üye Davet Et</DialogTitle>
-              <DialogDescription>
-                E-posta adresi girerek yeni bir üye davet edin
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">E-posta Adresi</label>
-                <Input
-                  type="email"
-                  placeholder="ornek@email.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Rol</label>
-                <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'ADMIN' | 'MEMBER' | 'STOCKIST')}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="MEMBER">Üye</SelectItem>
-                    <SelectItem value="ADMIN">Yönetici</SelectItem>
-                    <SelectItem value="STOCKIST">Stokçu</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsInviteOpen(false)}>
-                İptal
-              </Button>
-              <Button onClick={handleInvite} disabled={!inviteEmail.trim() || isInviting}>
-                {isInviting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Gönderiliyor...
-                  </>
-                ) : (
-                  'Davet Gönder'
-                )}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+
+        <Modal isOpen={isInviteOpen} onOpenChange={setIsInviteOpen}>
+          <Button size="sm" onPress={() => setIsInviteOpen(true)}>
+            Üye Davet Et
+          </Button>
+          <Modal.Backdrop>
+            <Modal.Container>
+              <Modal.Dialog className="sm:max-w-[480px]">
+                <Modal.CloseTrigger />
+                <Modal.Header>
+                  <Modal.Heading>Yeni Üye Davet Et</Modal.Heading>
+                </Modal.Header>
+                <Modal.Body className="flex flex-col gap-4">
+                  <p className="text-sm text-muted">
+                    E-posta adresi girerek yeni bir üye davet edin
+                  </p>
+                  <TextField
+                    name="inviteEmail"
+                    type="email"
+                    value={inviteEmail}
+                    onChange={setInviteEmail}
+                  >
+                    <Label>E-posta Adresi</Label>
+                    <Input placeholder="ornek@email.com" />
+                  </TextField>
+                  <Select
+                    selectedKey={inviteRole}
+                    onSelectionChange={(key) =>
+                      setInviteRole(key as 'ADMIN' | 'MEMBER' | 'STOCKIST')
+                    }
+                    aria-label="Rol seç"
+                  >
+                    <Label>Rol</Label>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="MEMBER" textValue="Üye">
+                          Üye
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="ADMIN" textValue="Yönetici">
+                          Yönetici
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                        <ListBox.Item id="STOCKIST" textValue="Stokçu">
+                          Stokçu
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
+                </Modal.Body>
+                <Modal.Footer>
+                  <Button variant="tertiary" slot="close">
+                    İptal
+                  </Button>
+                  <Button
+                    onPress={handleInvite}
+                    isDisabled={!inviteEmail.trim() || isInviting}
+                    isPending={isInviting}
+                  >
+                    {isInviting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Gönderiliyor...
+                      </>
+                    ) : (
+                      'Davet Gönder'
+                    )}
+                  </Button>
+                </Modal.Footer>
+              </Modal.Dialog>
+            </Modal.Container>
+          </Modal.Backdrop>
+        </Modal>
       </div>
 
-      {/* Table Header */}
-      <div className="grid grid-cols-12 px-4 py-2 border-b bg-muted/50">
-        <div className="col-span-4 text-xs font-medium text-muted-foreground">Üye</div>
-        <div className="col-span-3 text-xs font-medium text-muted-foreground">Rol</div>
-        <div className="col-span-3 text-xs font-medium text-muted-foreground">Durum</div>
-        <div className="col-span-2 text-xs font-medium text-muted-foreground text-right">İşlem</div>
+      <div className="grid grid-cols-12 border-b border-border bg-surface-secondary px-4 py-2">
+        <div className="col-span-4 text-xs font-medium text-muted">Üye</div>
+        <div className="col-span-3 text-xs font-medium text-muted">Rol</div>
+        <div className="col-span-3 text-xs font-medium text-muted">Durum</div>
+        <div className="col-span-2 text-right text-xs font-medium text-muted">İşlem</div>
       </div>
 
-      {/* Members List */}
       <div>
         {isLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="flex flex-col gap-2 p-4">
             {[...Array(3)].map((_, i) => (
               <Skeleton key={i} className="h-14 w-full" />
             ))}
           </div>
         ) : members.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
-            <Users className="h-12 w-12 text-muted-foreground mb-4" />
+            <Users className="mb-4 h-12 w-12 text-muted" />
             <h3 className="text-lg font-medium">Henüz üye yok</h3>
-            <p className="text-muted-foreground text-center mt-1">
+            <p className="mt-1 text-center text-muted">
               Takımınıza üye eklemek için davet gönderin
             </p>
           </div>
         ) : (
           <>
-            {/* Accepted Members */}
             {acceptedMembers.map((member, index) => {
               const RoleIcon = roleIcons[member.role];
               return (
                 <div
                   key={member.id}
-                  className={cn(
-                    'grid grid-cols-12 items-center px-4 py-3 border-b',
-                    index % 2 === 1 && 'bg-muted/30'
-                  )}
+                  className={`grid grid-cols-12 items-center border-b border-border px-4 py-3 ${
+                    index % 2 === 1 ? 'bg-surface-secondary/50' : ''
+                  }`}
                 >
                   <div className="col-span-4 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="text-sm font-medium text-primary">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
+                      <span className="text-sm font-medium text-accent">
                         {(member.user?.name || member.email).charAt(0).toUpperCase()}
                       </span>
                     </div>
@@ -260,46 +256,55 @@ export default function TeamSettingsPage() {
                       <p className="text-sm font-medium">
                         {member.user?.name || member.email.split('@')[0]}
                       </p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                      <p className="text-xs text-muted">{member.email}</p>
                     </div>
                   </div>
                   <div className="col-span-3">
                     <div className="flex items-center gap-2">
-                      <RoleIcon className="h-4 w-4 text-muted-foreground" />
+                      <RoleIcon className="h-4 w-4 text-muted" />
                       <span className="text-sm">{roleLabels[member.role]}</span>
                     </div>
                   </div>
                   <div className="col-span-3">
-                    <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                    <span className="inline-flex items-center rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
                       Aktif
                     </span>
                   </div>
                   <div className="col-span-2 text-right">
                     {member.role !== 'OWNER' && (
                       <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Üyeyi Sil</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {member.user?.name || member.email} kullanıcısını takımdan çıkarmak istediğinize emin misiniz?
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>İptal</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="bg-red-500 hover:bg-red-600"
-                            >
-                              Sil
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
+                        <Button variant="ghost" size="sm" isIconOnly aria-label="Üyeyi sil">
+                          <Trash2 className="h-4 w-4 text-muted" />
+                        </Button>
+                        <AlertDialog.Backdrop>
+                          <AlertDialog.Container>
+                            <AlertDialog.Dialog className="sm:max-w-[400px]">
+                              <AlertDialog.Header>
+                                <AlertDialog.Icon status="danger" />
+                                <AlertDialog.Heading>Üyeyi Sil</AlertDialog.Heading>
+                              </AlertDialog.Header>
+                              <AlertDialog.Body>
+                                <p>
+                                  {member.user?.name || member.email} kullanıcısını
+                                  takımdan çıkarmak istediğinize emin misiniz?
+                                </p>
+                              </AlertDialog.Body>
+                              <AlertDialog.Footer>
+                                <Button variant="tertiary" slot="close">
+                                  İptal
+                                </Button>
+                                <Button
+                                  variant="danger"
+                                  slot="close"
+                                  onPress={() => handleRemoveMember(member.id)}
+                                >
+                                  Sil
+                                </Button>
+                              </AlertDialog.Footer>
+                            </AlertDialog.Dialog>
+                          </AlertDialog.Container>
+                        </AlertDialog.Backdrop>
                       </AlertDialog>
                     )}
                   </div>
@@ -307,11 +312,10 @@ export default function TeamSettingsPage() {
               );
             })}
 
-            {/* Pending Invites */}
             {pendingMembers.length > 0 && (
               <>
-                <div className="px-4 py-2 bg-muted/50 border-b">
-                  <span className="text-xs font-medium text-muted-foreground">
+                <div className="border-b border-border bg-surface-secondary px-4 py-2">
+                  <span className="text-xs font-medium text-muted">
                     Bekleyen Davetler ({pendingMembers.length})
                   </span>
                 </div>
@@ -320,57 +324,67 @@ export default function TeamSettingsPage() {
                   return (
                     <div
                       key={member.id}
-                      className={cn(
-                        'grid grid-cols-12 items-center px-4 py-3 border-b',
-                        index % 2 === 1 && 'bg-muted/30'
-                      )}
+                      className={`grid grid-cols-12 items-center border-b border-border px-4 py-3 ${
+                        index % 2 === 1 ? 'bg-surface-secondary/50' : ''
+                      }`}
                     >
                       <div className="col-span-4 flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                          <Mail className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-default">
+                          <Mail className="h-4 w-4 text-muted" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-muted-foreground">
+                          <p className="text-sm font-medium text-muted">
                             {member.email}
                           </p>
                         </div>
                       </div>
                       <div className="col-span-3">
                         <div className="flex items-center gap-2">
-                          <RoleIcon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">{roleLabels[member.role]}</span>
+                          <RoleIcon className="h-4 w-4 text-muted" />
+                          <span className="text-sm text-muted">
+                            {roleLabels[member.role]}
+                          </span>
                         </div>
                       </div>
                       <div className="col-span-3">
-                        <span className="inline-flex items-center px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded-full">
-                          <Clock className="h-3 w-3 mr-1" />
+                        <span className="inline-flex items-center rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning-foreground">
+                          <Clock className="mr-1 h-3 w-3" />
                           Beklemede
                         </span>
                       </div>
                       <div className="col-span-2 text-right">
                         <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <Trash2 className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Daveti İptal Et</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                {member.email} adresine gönderilen daveti iptal etmek istediğinize emin misiniz?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>İptal</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleRemoveMember(member.id)}
-                                className="bg-red-500 hover:bg-red-600"
-                              >
-                                Daveti İptal Et
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
+                          <Button variant="ghost" size="sm" isIconOnly aria-label="Daveti iptal et">
+                            <Trash2 className="h-4 w-4 text-muted" />
+                          </Button>
+                          <AlertDialog.Backdrop>
+                            <AlertDialog.Container>
+                              <AlertDialog.Dialog className="sm:max-w-[400px]">
+                                <AlertDialog.Header>
+                                  <AlertDialog.Icon status="danger" />
+                                  <AlertDialog.Heading>Daveti İptal Et</AlertDialog.Heading>
+                                </AlertDialog.Header>
+                                <AlertDialog.Body>
+                                  <p>
+                                    {member.email} adresine gönderilen daveti iptal
+                                    etmek istediğinize emin misiniz?
+                                  </p>
+                                </AlertDialog.Body>
+                                <AlertDialog.Footer>
+                                  <Button variant="tertiary" slot="close">
+                                    İptal
+                                  </Button>
+                                  <Button
+                                    variant="danger"
+                                    slot="close"
+                                    onPress={() => handleRemoveMember(member.id)}
+                                  >
+                                    Daveti İptal Et
+                                  </Button>
+                                </AlertDialog.Footer>
+                              </AlertDialog.Dialog>
+                            </AlertDialog.Container>
+                          </AlertDialog.Backdrop>
                         </AlertDialog>
                       </div>
                     </div>

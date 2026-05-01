@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, ChevronLeft, Loader2, Eye, EyeOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Button, Input, TextField } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useAuthStore } from '@/stores/authStore';
 import { toast } from 'sonner';
@@ -64,163 +63,129 @@ export default function ProfileSettingsPage() {
     }
   };
 
-  const hasChanges = name !== (user?.name || '') || newPassword;
+  const hasChanges = name !== (user?.name || '') || !!newPassword;
+
+  const renderPasswordField = (
+    label: string,
+    value: string,
+    onChange: (v: string) => void,
+    show: boolean,
+    toggleShow: () => void,
+    placeholder: string
+  ) => (
+    <div className="border-b border-border">
+      <div className="grid grid-cols-12 items-center px-4 py-4">
+        <div className="col-span-3">
+          <label className="text-sm font-medium">{label}</label>
+        </div>
+        <div className="col-span-9">
+          <TextField
+            value={value}
+            onChange={onChange}
+            type={show ? 'text' : 'password'}
+            className="max-w-md"
+          >
+            <div className="relative">
+              <Input placeholder={placeholder} />
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                isIconOnly
+                aria-label={show ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                className="absolute right-1 top-1/2 -translate-y-1/2"
+                onPress={toggleShow}
+              >
+                {show ? (
+                  <EyeOff className="h-4 w-4 text-muted" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted" />
+                )}
+              </Button>
+            </div>
+          </TextField>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push(`/${company?.slug}/settings`)}
+            size="sm"
+            isIconOnly
+            aria-label="Geri"
+            onPress={() => router.push(`/${company?.slug}/settings`)}
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <User className="h-5 w-5 text-muted-foreground" />
+          <User className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">Profil</h1>
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit}>
-        {/* Email Section (read-only) */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">E-posta</label>
             </div>
             <div className="col-span-9">
-              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-sm text-muted">{user?.email}</p>
             </div>
           </div>
         </div>
 
-        {/* Name Section */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">Ad Soyad</label>
             </div>
             <div className="col-span-9">
-              <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Adınızı girin"
-                className="max-w-md"
-              />
+              <TextField value={name} onChange={setName} className="max-w-md">
+                <Input placeholder="Adınızı girin" />
+              </TextField>
             </div>
           </div>
         </div>
 
-        {/* Password Change Section Header */}
-        <div className="px-4 py-2 bg-muted/50 border-b">
-          <span className="text-xs font-medium text-muted-foreground">
-            Şifre Değiştir
-          </span>
+        <div className="border-b border-border bg-surface-secondary px-4 py-2">
+          <span className="text-xs font-medium text-muted">Şifre Değiştir</span>
         </div>
 
-        {/* Current Password */}
-        <div className="border-b">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Mevcut Şifre</label>
-            </div>
-            <div className="col-span-9">
-              <div className="relative max-w-md">
-                <Input
-                  type={showCurrentPassword ? 'text' : 'password'}
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                  placeholder="Mevcut şifrenizi girin"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showCurrentPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        {renderPasswordField(
+          'Mevcut Şifre',
+          currentPassword,
+          setCurrentPassword,
+          showCurrentPassword,
+          () => setShowCurrentPassword((v) => !v),
+          'Mevcut şifrenizi girin'
+        )}
+        {renderPasswordField(
+          'Yeni Şifre',
+          newPassword,
+          setNewPassword,
+          showNewPassword,
+          () => setShowNewPassword((v) => !v),
+          'Yeni şifrenizi girin'
+        )}
+        {renderPasswordField(
+          'Şifre Tekrar',
+          confirmPassword,
+          setConfirmPassword,
+          showConfirmPassword,
+          () => setShowConfirmPassword((v) => !v),
+          'Yeni şifrenizi tekrar girin'
+        )}
 
-        {/* New Password */}
-        <div className="border-b">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Yeni Şifre</label>
-            </div>
-            <div className="col-span-9">
-              <div className="relative max-w-md">
-                <Input
-                  type={showNewPassword ? 'text' : 'password'}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Yeni şifrenizi girin"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showNewPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Confirm Password */}
-        <div className="border-b">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Şifre Tekrar</label>
-            </div>
-            <div className="col-span-9">
-              <div className="relative max-w-md">
-                <Input
-                  type={showConfirmPassword ? 'text' : 'password'}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Yeni şifrenizi tekrar girin"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showConfirmPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Save Button */}
         <div className="px-4 py-4">
-          <Button type="submit" disabled={!hasChanges || isLoading}>
+          <Button type="submit" isDisabled={!hasChanges || isLoading} isPending={isLoading}>
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Kaydediliyor...
               </>
             ) : (

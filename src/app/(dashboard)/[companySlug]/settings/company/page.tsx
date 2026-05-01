@@ -3,9 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, ChevronLeft, Loader2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button, Input, Skeleton, TextField } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useCompanyStore } from '@/stores/companyStore';
 import { toast } from 'sonner';
@@ -31,19 +29,16 @@ export default function CompanySettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Lütfen geçerli bir görsel dosyası seçin');
       return;
     }
 
-    // Validate file size (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Dosya boyutu 2MB\'dan küçük olmalıdır');
+      toast.error("Dosya boyutu 2MB'dan küçük olmalıdır");
       return;
     }
 
-    // Convert to base64
     const reader = new FileReader();
     reader.onload = () => {
       setLogo(reader.result as string);
@@ -83,7 +78,6 @@ export default function CompanySettingsPage() {
     if (result) {
       toast.success('Şirket bilgileri güncellendi');
       await refreshCompany();
-      // If slug changed, redirect to new URL
       if (result.slug !== company.slug) {
         router.push(`/${result.slug}/settings/company`);
       }
@@ -92,33 +86,29 @@ export default function CompanySettingsPage() {
     }
   };
 
-  const hasChanges = company && (
-    name !== company.name ||
-    logo !== (company.logo || null)
-  );
+  const hasChanges =
+    !!company && (name !== company.name || logo !== (company.logo || null));
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => router.push(`/${company?.slug}/settings`)}
+            size="sm"
+            isIconOnly
+            aria-label="Geri"
+            onPress={() => router.push(`/${company?.slug}/settings`)}
           >
             <ChevronLeft className="h-5 w-5" />
           </Button>
-          <Building2 className="h-5 w-5 text-muted-foreground" />
+          <Building2 className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">Şirket Bilgileri</h1>
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit}>
-        {/* Logo Section */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">Şirket Logosu</label>
@@ -129,7 +119,7 @@ export default function CompanySettingsPage() {
               ) : (
                 <div className="flex items-center gap-4">
                   <div className="relative">
-                    <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center overflow-hidden border">
+                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-default">
                       {logo ? (
                         <img
                           src={logo}
@@ -137,17 +127,21 @@ export default function CompanySettingsPage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <Building2 className="h-8 w-8 text-muted-foreground" />
+                        <Building2 className="h-8 w-8 text-muted" />
                       )}
                     </div>
                     {logo && (
-                      <button
+                      <Button
                         type="button"
-                        onClick={handleRemoveLogo}
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors"
+                        variant="danger"
+                        size="sm"
+                        isIconOnly
+                        aria-label="Logoyu kaldır"
+                        className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
+                        onPress={handleRemoveLogo}
                       >
-                        <X className="h-4 w-4" />
-                      </button>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
                     )}
                   </div>
                   <div>
@@ -162,11 +156,11 @@ export default function CompanySettingsPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => fileInputRef.current?.click()}
+                      onPress={() => fileInputRef.current?.click()}
                     >
                       Logo Yükle
                     </Button>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-xs text-muted">
                       PNG, JPG veya GIF, max 2MB
                     </p>
                   </div>
@@ -176,8 +170,7 @@ export default function CompanySettingsPage() {
           </div>
         </div>
 
-        {/* Name Section */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">Şirket Adı</label>
@@ -186,19 +179,15 @@ export default function CompanySettingsPage() {
               {isLoading ? (
                 <Skeleton className="h-10 w-full max-w-md" />
               ) : (
-                <Input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Şirket adını girin"
-                  className="max-w-md"
-                />
+                <TextField value={name} onChange={setName} className="max-w-md">
+                  <Input placeholder="Şirket adını girin" />
+                </TextField>
               )}
             </div>
           </div>
         </div>
 
-        {/* URL Section */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">Şirket URL</label>
@@ -207,16 +196,16 @@ export default function CompanySettingsPage() {
               {isLoading ? (
                 <Skeleton className="h-5 w-48" />
               ) : (
-                <p className="text-sm text-muted-foreground">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/{company?.slug}
+                <p className="text-sm text-muted">
+                  {typeof window !== 'undefined' ? window.location.origin : ''}/
+                  {company?.slug}
                 </p>
               )}
             </div>
           </div>
         </div>
 
-        {/* Created At Section */}
-        <div className="border-b">
+        <div className="border-b border-border">
           <div className="grid grid-cols-12 items-center px-4 py-4">
             <div className="col-span-3">
               <label className="text-sm font-medium">Oluşturulma Tarihi</label>
@@ -225,7 +214,7 @@ export default function CompanySettingsPage() {
               {isLoading ? (
                 <Skeleton className="h-5 w-32" />
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-muted">
                   {company?.createdAt
                     ? new Date(company.createdAt).toLocaleDateString('tr-TR', {
                         day: 'numeric',
@@ -239,12 +228,11 @@ export default function CompanySettingsPage() {
           </div>
         </div>
 
-        {/* Save Button */}
         <div className="px-4 py-4">
-          <Button type="submit" disabled={!hasChanges || isUpdating}>
+          <Button type="submit" isDisabled={!hasChanges || isUpdating} isPending={isUpdating}>
             {isUpdating ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Kaydediliyor...
               </>
             ) : (

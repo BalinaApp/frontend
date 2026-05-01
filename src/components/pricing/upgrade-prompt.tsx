@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Lock, ArrowRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@heroui/react';
 import { PlanFeatures } from '@/stores/pricingStore';
 import { UpgradeModal } from './upgrade-modal';
 
@@ -38,12 +38,7 @@ export function UpgradePrompt({
   if (compact) {
     return (
       <>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          onClick={() => setShowModal(true)}
-        >
+        <Button variant="outline" size="sm" onPress={() => setShowModal(true)}>
           <Lock className="h-3 w-3" />
           <span>{planLabel} Planı Gerekli</span>
         </Button>
@@ -59,15 +54,15 @@ export function UpgradePrompt({
 
   return (
     <>
-      <div className="flex flex-col items-center justify-center p-6 border border-dashed rounded-lg bg-muted/30">
-        <div className="flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-4">
-          <Sparkles className="h-6 w-6 text-primary" />
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-surface-secondary/30 p-6">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
+          <Sparkles className="h-6 w-6 text-accent" />
         </div>
-        <h3 className="font-semibold text-lg mb-2">{featureLabel}</h3>
-        <p className="text-muted-foreground text-center text-sm mb-4">
-          Bu özellik <span className="font-medium text-primary">{planLabel}</span> planında kullanılabilir.
+        <h3 className="mb-2 text-lg font-semibold">{featureLabel}</h3>
+        <p className="mb-4 text-center text-sm text-muted">
+          Bu özellik <span className="font-medium text-accent">{planLabel}</span> planında kullanılabilir.
         </p>
-        <Button onClick={() => setShowModal(true)} className="gap-2">
+        <Button onPress={() => setShowModal(true)}>
           Plan Yükselt
           <ArrowRight className="h-4 w-4" />
         </Button>

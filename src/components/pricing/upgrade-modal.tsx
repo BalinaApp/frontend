@@ -2,14 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Check, Sparkles, Zap, Crown } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
+import { Button, Modal } from '@heroui/react';
 import { usePricingStore, PlanFeatures } from '@/stores/pricingStore';
 import { useCompanyStore } from '@/stores/companyStore';
 
@@ -47,6 +40,72 @@ const planFeatures = {
   ],
 };
 
+function PlanCard({
+  type,
+  title,
+  price,
+  features,
+  iconBg,
+  Icon,
+  isRecommended,
+  isCurrent,
+  onUpgrade,
+}: {
+  type: 'PRO' | 'ENTERPRISE';
+  title: string;
+  price: string;
+  features: string[];
+  iconBg: string;
+  Icon: React.ElementType;
+  isRecommended: boolean;
+  isCurrent: boolean;
+  onUpgrade: () => void;
+}) {
+  return (
+    <div
+      className={`relative rounded-lg border p-4 ${
+        isRecommended ? 'border-accent ring-2 ring-accent/20' : 'border-border'
+      }`}
+    >
+      {isRecommended && (
+        <div className="absolute -top-3 left-4 rounded bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
+          Önerilen
+        </div>
+      )}
+      <div className="mb-2 flex items-center gap-2">
+        <div className={`rounded-md p-1.5 ${iconBg}`}>
+          <Icon className="h-4 w-4" />
+        </div>
+        <h3 className="font-semibold">{title}</h3>
+      </div>
+      <div className="mb-4">
+        <span className="text-2xl font-bold">{price}</span>
+        <span className="text-sm text-muted">/ay</span>
+      </div>
+      <ul className="mb-4 flex flex-col gap-2">
+        {features.map((feat) => (
+          <li key={feat} className="flex items-start gap-2 text-sm">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+            <span>{feat}</span>
+          </li>
+        ))}
+      </ul>
+      <Button
+        fullWidth
+        variant={isRecommended ? 'primary' : 'outline'}
+        onPress={onUpgrade}
+        isDisabled={isCurrent}
+      >
+        {isCurrent
+          ? 'Mevcut Plan'
+          : type === 'PRO'
+            ? "Pro'ya Yükselt"
+            : "Enterprise'a Yükselt"}
+      </Button>
+    </div>
+  );
+}
+
 export function UpgradeModal({
   open,
   onOpenChange,
@@ -55,7 +114,7 @@ export function UpgradeModal({
 }: UpgradeModalProps) {
   const router = useRouter();
   const { currentCompany } = useCompanyStore();
-  const { plans, myPlan } = usePricingStore();
+  const { myPlan } = usePricingStore();
 
   const handleUpgrade = (planType: 'PRO' | 'ENTERPRISE') => {
     onOpenChange(false);
@@ -67,104 +126,53 @@ export function UpgradeModal({
   const currentPlanName = myPlan?.plan.name || 'FREE';
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
-            Planınızı Yükseltin
-          </DialogTitle>
-          <DialogDescription>
-            {feature
-              ? `${featureLabels[feature]} özelliğini kullanmak için planınızı yükseltin.`
-              : 'Daha fazla özellik ve limit için planınızı yükseltin.'}
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid gap-4 mt-4 sm:grid-cols-2">
-          {/* Pro Plan */}
-          <div
-            className={`relative rounded-lg border p-4 ${
-              requiredPlan === 'PRO'
-                ? 'border-primary ring-2 ring-primary/20'
-                : 'border-border'
-            }`}
-          >
-            {requiredPlan === 'PRO' && (
-              <div className="absolute -top-3 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-medium rounded">
-                Önerilen
+    <Modal isOpen={open} onOpenChange={onOpenChange}>
+      <Modal.Backdrop>
+        <Modal.Container>
+          <Modal.Dialog className="sm:max-w-[600px]">
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-accent" />
+                Planınızı Yükseltin
+              </Modal.Heading>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="mb-4 text-sm text-muted">
+                {feature
+                  ? `${featureLabels[feature]} özelliğini kullanmak için planınızı yükseltin.`
+                  : 'Daha fazla özellik ve limit için planınızı yükseltin.'}
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <PlanCard
+                  type="PRO"
+                  title="Pro"
+                  price="99 TL"
+                  features={planFeatures.PRO}
+                  iconBg="bg-accent/10 text-accent"
+                  Icon={Zap}
+                  isRecommended={requiredPlan === 'PRO'}
+                  isCurrent={
+                    currentPlanName === 'PRO' || currentPlanName === 'ENTERPRISE'
+                  }
+                  onUpgrade={() => handleUpgrade('PRO')}
+                />
+                <PlanCard
+                  type="ENTERPRISE"
+                  title="Enterprise"
+                  price="299 TL"
+                  features={planFeatures.ENTERPRISE}
+                  iconBg="bg-success/10 text-success"
+                  Icon={Crown}
+                  isRecommended={requiredPlan === 'ENTERPRISE'}
+                  isCurrent={currentPlanName === 'ENTERPRISE'}
+                  onUpgrade={() => handleUpgrade('ENTERPRISE')}
+                />
               </div>
-            )}
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 rounded-md bg-blue-500/10">
-                <Zap className="h-4 w-4 text-blue-500" />
-              </div>
-              <h3 className="font-semibold">Pro</h3>
-            </div>
-            <div className="mb-4">
-              <span className="text-2xl font-bold">99 TL</span>
-              <span className="text-muted-foreground text-sm">/ay</span>
-            </div>
-            <ul className="space-y-2 mb-4">
-              {planFeatures.PRO.map((feat) => (
-                <li key={feat} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                  <span>{feat}</span>
-                </li>
-              ))}
-            </ul>
-            <Button
-              className="w-full"
-              variant={requiredPlan === 'PRO' ? 'default' : 'outline'}
-              onClick={() => handleUpgrade('PRO')}
-              disabled={currentPlanName === 'PRO' || currentPlanName === 'ENTERPRISE'}
-            >
-              {currentPlanName === 'PRO' ? 'Mevcut Plan' : 'Pro\'ya Yükselt'}
-            </Button>
-          </div>
-
-          {/* Enterprise Plan */}
-          <div
-            className={`relative rounded-lg border p-4 ${
-              requiredPlan === 'ENTERPRISE'
-                ? 'border-primary ring-2 ring-primary/20'
-                : 'border-border'
-            }`}
-          >
-            {requiredPlan === 'ENTERPRISE' && (
-              <div className="absolute -top-3 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-xs font-medium rounded">
-                Önerilen
-              </div>
-            )}
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1.5 rounded-md bg-purple-500/10">
-                <Crown className="h-4 w-4 text-purple-500" />
-              </div>
-              <h3 className="font-semibold">Enterprise</h3>
-            </div>
-            <div className="mb-4">
-              <span className="text-2xl font-bold">299 TL</span>
-              <span className="text-muted-foreground text-sm">/ay</span>
-            </div>
-            <ul className="space-y-2 mb-4">
-              {planFeatures.ENTERPRISE.map((feat) => (
-                <li key={feat} className="flex items-start gap-2 text-sm">
-                  <Check className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
-                  <span>{feat}</span>
-                </li>
-              ))}
-            </ul>
-            <Button
-              className="w-full"
-              variant={requiredPlan === 'ENTERPRISE' ? 'default' : 'outline'}
-              onClick={() => handleUpgrade('ENTERPRISE')}
-              disabled={currentPlanName === 'ENTERPRISE'}
-            >
-              {currentPlanName === 'ENTERPRISE' ? 'Mevcut Plan' : 'Enterprise\'a Yükselt'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+            </Modal.Body>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }

@@ -2,11 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { Check, X, Zap, Building2, Sparkles, Crown } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Switch } from '@/components/ui/switch';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button, Skeleton, Switch } from '@heroui/react';
 import { usePricingStore, Plan } from '@/stores/pricingStore';
-import { cn } from '@/lib/utils';
 
 const planIcons = {
   FREE: Zap,
@@ -34,66 +31,49 @@ function PlanColumn({
   isCurrentPlan,
   isYearly,
   onSelect,
-  isFirst,
-  isLast,
 }: {
   plan: Plan;
   isCurrentPlan: boolean;
   isYearly: boolean;
   onSelect: () => void;
-  isFirst: boolean;
-  isLast: boolean;
 }) {
   const Icon = planIcons[plan.name];
   const price = isYearly ? plan.priceYearly : plan.priceMonthly;
   const monthlyEquivalent = isYearly ? plan.priceYearly / 12 : plan.priceMonthly;
 
+  const accentBg =
+    plan.name === 'FREE'
+      ? 'bg-default'
+      : plan.name === 'PRO'
+        ? 'bg-accent/10 text-accent'
+        : 'bg-success/10 text-success';
+
   return (
     <div
-      className={cn(
-        'flex flex-col border-r last:border-r-0 bg-card',
-        isFirst && 'rounded-l-lg',
-        isLast && 'rounded-r-lg',
-        plan.name === 'PRO' && 'bg-blue-50/50 dark:bg-blue-950/20'
-      )}
+      className={`flex flex-col border-r border-border bg-surface last:border-r-0 ${
+        plan.name === 'PRO' ? 'bg-accent/5' : ''
+      }`}
     >
-      {/* Plan Header */}
-      <div className="p-4 border-b text-center relative">
+      <div className="relative border-b border-border p-4 text-center">
         {plan.name === 'PRO' && (
           <div className="absolute -top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            <span className="bg-blue-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+            <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-medium text-accent-foreground">
               Popüler
             </span>
           </div>
         )}
         {isCurrentPlan && (
-          <div className="absolute top-2 right-2">
-            <span className="bg-green-500 text-white text-xs font-medium px-2 py-0.5 rounded-full">
+          <div className="absolute right-2 top-2">
+            <span className="rounded-full bg-success px-2 py-0.5 text-xs font-medium text-success-foreground">
               Mevcut
             </span>
           </div>
         )}
 
         <div
-          className={cn(
-            'inline-flex items-center justify-center w-10 h-10 rounded-full mb-2',
-            plan.name === 'FREE'
-              ? 'bg-gray-100 dark:bg-gray-800'
-              : plan.name === 'PRO'
-              ? 'bg-blue-100 dark:bg-blue-900'
-              : 'bg-purple-100 dark:bg-purple-900'
-          )}
+          className={`mb-2 inline-flex h-10 w-10 items-center justify-center rounded-full ${accentBg}`}
         >
-          <Icon
-            className={cn(
-              'h-5 w-5',
-              plan.name === 'FREE'
-                ? 'text-gray-600 dark:text-gray-400'
-                : plan.name === 'PRO'
-                ? 'text-blue-600 dark:text-blue-400'
-                : 'text-purple-600 dark:text-purple-400'
-            )}
-          />
+          <Icon className="h-5 w-5" />
         </div>
 
         <h3 className="text-lg font-bold">{plan.displayName}</h3>
@@ -102,63 +82,57 @@ function PlanColumn({
           <span className="text-2xl font-bold">
             {price === 0 ? '0' : formatPrice(monthlyEquivalent)}
           </span>
-          <span className="text-muted-foreground text-sm"> TL/ay</span>
+          <span className="text-sm text-muted"> TL/ay</span>
         </div>
       </div>
 
-      {/* Features */}
-      <div className="flex-1 p-4 space-y-3">
-        {/* Store Limit */}
+      <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="flex items-center gap-2 text-sm">
-          <Check className="h-4 w-4 text-green-500 shrink-0" />
+          <Check className="h-4 w-4 shrink-0 text-success" />
           <span>
             <strong>{plan.storeLimit}</strong> Mağaza
           </span>
         </div>
 
-        {/* Refresh Interval */}
         <div className="flex items-center gap-2 text-sm">
-          <Check className="h-4 w-4 text-green-500 shrink-0" />
+          <Check className="h-4 w-4 shrink-0 text-success" />
           <span>
             <strong>{plan.refreshInterval}</strong> dk güncelleme
           </span>
         </div>
 
-        {/* History Days */}
         <div className="flex items-center gap-2 text-sm">
-          <Check className="h-4 w-4 text-green-500 shrink-0" />
+          <Check className="h-4 w-4 shrink-0 text-success" />
           <span>
             <strong>{plan.historyDays}</strong> gün geçmiş veri
           </span>
         </div>
 
-        <hr />
+        <hr className="border-border" />
 
-        {/* Plan Features */}
         {Object.entries(featureLabels).map(([key, label]) => {
           const hasFeature = plan.features[key as keyof typeof plan.features];
           return (
             <div key={key} className="flex items-center gap-2 text-sm">
               {hasFeature ? (
-                <Check className="h-4 w-4 text-green-500 shrink-0" />
+                <Check className="h-4 w-4 shrink-0 text-success" />
               ) : (
-                <X className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                <X className="h-4 w-4 shrink-0 text-muted/40" />
               )}
-              <span className={hasFeature ? '' : 'text-muted-foreground'}>
-                {label}
-              </span>
+              <span className={hasFeature ? '' : 'text-muted'}>{label}</span>
             </div>
           );
         })}
       </div>
 
-      {/* Action Button */}
-      <div className="p-4 border-t">
+      <div className="border-t border-border p-4">
         <Button
-          className="w-full"
-          variant={isCurrentPlan ? 'outline' : plan.name === 'PRO' ? 'default' : 'outline'}
-          disabled={isCurrentPlan}
-          onClick={onSelect}
+          fullWidth
+          variant={
+            isCurrentPlan ? 'outline' : plan.name === 'PRO' ? 'primary' : 'outline'
+          }
+          isDisabled={isCurrentPlan}
+          onPress={onSelect}
         >
           {isCurrentPlan ? 'Mevcut Planınız' : 'Planı Seç'}
         </Button>
@@ -169,18 +143,18 @@ function PlanColumn({
 
 function PlanSkeleton() {
   return (
-    <div className="flex flex-col border-r last:border-r-0">
-      <div className="p-4 border-b text-center">
-        <Skeleton className="w-10 h-10 rounded-full mx-auto mb-2" />
-        <Skeleton className="h-5 w-16 mx-auto mb-2" />
-        <Skeleton className="h-8 w-24 mx-auto" />
+    <div className="flex flex-col border-r border-border last:border-r-0">
+      <div className="border-b border-border p-4 text-center">
+        <Skeleton className="mx-auto mb-2 h-10 w-10 rounded-full" />
+        <Skeleton className="mx-auto mb-2 h-5 w-16" />
+        <Skeleton className="mx-auto h-8 w-24" />
       </div>
-      <div className="flex-1 p-4 space-y-3">
+      <div className="flex flex-1 flex-col gap-3 p-4">
         {[...Array(8)].map((_, i) => (
           <Skeleton key={i} className="h-5 w-full" />
         ))}
       </div>
-      <div className="p-4 border-t">
+      <div className="border-t border-border p-4">
         <Skeleton className="h-9 w-full" />
       </div>
     </div>
@@ -214,54 +188,49 @@ export default function PricingPage() {
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Crown className="h-5 w-5 text-muted-foreground" />
+          <Crown className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">Planlar</h1>
         </div>
         <div className="flex items-center gap-3">
-          {/* Usage Badge */}
           {usage && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm">
+            <div className="flex items-center gap-2 rounded-full bg-default px-3 py-1.5 text-sm">
               <span>
                 Kullanım: <strong>{usage.storeCount}</strong> /{' '}
                 {usage.storeLimit === 999 ? '∞' : usage.storeLimit}
               </span>
               {usage.isNearLimit && !usage.isAtLimit && (
-                <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
+                <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs text-warning-foreground">
                   Limite Yakın
                 </span>
               )}
               {usage.isAtLimit && (
-                <span className="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">
+                <span className="rounded bg-danger/15 px-1.5 py-0.5 text-xs text-danger">
                   Limit Doldu
                 </span>
               )}
             </div>
           )}
 
-          {/* Billing Toggle */}
           <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'text-sm',
-                !isYearly ? 'font-medium' : 'text-muted-foreground'
-              )}
-            >
+            <span className={`text-sm ${!isYearly ? 'font-medium' : 'text-muted'}`}>
               Aylık
             </span>
-            <Switch checked={isYearly} onCheckedChange={setIsYearly} />
-            <span
-              className={cn(
-                'text-sm',
-                isYearly ? 'font-medium' : 'text-muted-foreground'
-              )}
+            <Switch
+              isSelected={isYearly}
+              onChange={setIsYearly}
+              aria-label="Yıllık fatura"
             >
+              <Switch.Control>
+                <Switch.Thumb />
+              </Switch.Control>
+            </Switch>
+            <span className={`text-sm ${isYearly ? 'font-medium' : 'text-muted'}`}>
               Yıllık
             </span>
             {isYearly && (
-              <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">
+              <span className="rounded bg-success/15 px-1.5 py-0.5 text-xs text-success">
                 %17 Tasarruf
               </span>
             )}
@@ -269,8 +238,7 @@ export default function PricingPage() {
         </div>
       </div>
 
-      {/* Plans Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 border-b">
+      <div className="grid grid-cols-1 border-b border-border md:grid-cols-3">
         {isPlansLoading || isMyPlanLoading ? (
           <>
             <PlanSkeleton />
@@ -278,22 +246,19 @@ export default function PricingPage() {
             <PlanSkeleton />
           </>
         ) : (
-          plans.map((plan, index) => (
+          plans.map((plan) => (
             <PlanColumn
               key={plan.id}
               plan={plan}
               isCurrentPlan={myPlan?.plan.name === plan.name}
               isYearly={isYearly}
               onSelect={() => handleSelectPlan(plan.name)}
-              isFirst={index === 0}
-              isLast={index === plans.length - 1}
             />
           ))
         )}
       </div>
 
-      {/* Footer Info */}
-      <div className="px-4 py-3 text-center text-sm text-muted-foreground">
+      <div className="px-4 py-3 text-center text-sm text-muted">
         <p>
           Tüm planlar 14 gün ücretsiz deneme içerir. İstediğiniz zaman iptal
           edebilirsiniz.

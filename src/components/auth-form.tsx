@@ -5,8 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button, Checkbox, Input, TextField } from '@heroui/react';
+import { Button, Checkbox, Input, TextField, toast } from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -63,7 +62,7 @@ export function AuthForm() {
         setStep('login');
       }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Bir hata oluştu');
+      toast.danger(err.response?.data?.message || 'Bir hata oluştu');
     } finally {
       setIsLoading(false);
     }
@@ -89,7 +88,7 @@ export function AuthForm() {
         else router.push('/dashboard');
       }
     } catch (err: any) {
-      toast.error(err.message || 'Giriş başarısız');
+      toast.danger(err.message || 'Giriş başarısız');
     } finally {
       setIsLoading(false);
     }
@@ -100,11 +99,11 @@ export function AuthForm() {
 
     const pwdError = validatePassword(password);
     if (pwdError) {
-      toast.error(pwdError);
+      toast.danger(pwdError);
       return;
     }
     if (password !== confirmPassword) {
-      toast.error('Şifreler eşleşmiyor');
+      toast.danger('Şifreler eşleşmiyor');
       return;
     }
 
@@ -123,7 +122,7 @@ export function AuthForm() {
         router.push('/dashboard');
       }
     } catch (err: any) {
-      toast.error(err.message || 'Kayıt başarısız');
+      toast.danger(err.message || 'Kayıt başarısız');
     } finally {
       setIsLoading(false);
     }

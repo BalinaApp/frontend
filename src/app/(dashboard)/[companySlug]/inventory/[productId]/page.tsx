@@ -6,10 +6,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useCompanyStore } from '@/stores/companyStore';
-import { Button, Chip, Skeleton } from '@heroui/react';
+import { Button, Chip, Skeleton, toast } from '@heroui/react';
 import { EditableStockCell, EditablePriceCell } from '@/components/inventory';
 import { ArrowLeft, ExternalLink, Package, ImageIcon } from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function ProductDetailPage() {
   const params = useParams();
@@ -72,7 +71,7 @@ export default function ProductDetailPage() {
   const handleStockUpdate = async (newStock: number): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const success = await updateProductStock(currentCompany.id, productId, newStock);
-    toast[success ? 'success' : 'error'](
+    toast[success ? 'success' : 'danger'](
       success ? 'Stok güncellendi' : 'Stok güncellenemedi'
     );
     return success;
@@ -84,7 +83,7 @@ export default function ProductDetailPage() {
   ): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const success = await updateVariationStock(currentCompany.id, variationId, newStock);
-    toast[success ? 'success' : 'error'](
+    toast[success ? 'success' : 'danger'](
       success ? 'Varyasyon stoğu güncellendi' : 'Varyasyon stoğu güncellenemedi'
     );
     return success;
@@ -93,7 +92,7 @@ export default function ProductDetailPage() {
   const handlePurchasePriceUpdate = async (newPrice: number): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const success = await updateProductPurchasePrice(currentCompany.id, productId, newPrice);
-    toast[success ? 'success' : 'error'](
+    toast[success ? 'success' : 'danger'](
       success ? 'Alış fiyatı güncellendi' : 'Alış fiyatı güncellenemedi'
     );
     return success;

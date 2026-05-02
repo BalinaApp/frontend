@@ -23,8 +23,9 @@ import {
   Modal,
   Skeleton,
   TextField,
+,
+  toast,
 } from '@heroui/react';
-import { toast } from 'sonner';
 import { useCompanyStore } from '@/stores/companyStore';
 import {
   useProductMappingStore,
@@ -98,7 +99,7 @@ export default function ProductMappingsPage() {
       setSelectedSuggestion(null);
       setNewMappingName('');
       fetchSuggestions(currentCompany.id);
-    } else if (error) toast.error(error);
+    } else if (error) toast.danger(error);
   };
 
   const handleDeleteMapping = async () => {
@@ -109,7 +110,7 @@ export default function ProductMappingsPage() {
       setIsDeleteDialogOpen(false);
       setSelectedMappingId(null);
       fetchSuggestions(currentCompany.id);
-    } else if (error) toast.error(error);
+    } else if (error) toast.danger(error);
   };
 
   const handleAutoMatch = async () => {
@@ -120,14 +121,14 @@ export default function ProductMappingsPage() {
         `${result.created} eşleştirme oluşturuldu${result.skipped > 0 ? `, ${result.skipped} atlandı` : ''}`
       );
       fetchSuggestions(currentCompany.id);
-    } else if (error) toast.error(error);
+    } else if (error) toast.danger(error);
   };
 
   const handleDismissSuggestion = async (suggestionKey: string) => {
     if (!currentCompany?.id) return;
     const success = await dismissSuggestion(currentCompany.id, suggestionKey);
     if (success) toast.success('Öneri reddedildi');
-    else if (error) toast.error(error);
+    else if (error) toast.danger(error);
   };
 
   useEffect(() => {
@@ -185,7 +186,7 @@ export default function ProductMappingsPage() {
       clearSearchResults();
       fetchSuggestions(currentCompany.id);
       setActiveTab('mappings');
-    } else if (error) toast.error(error);
+    } else if (error) toast.danger(error);
   };
 
   const openManualCreateDialog = () => {

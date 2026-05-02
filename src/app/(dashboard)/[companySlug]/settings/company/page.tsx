@@ -3,10 +3,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Building2, ChevronLeft, Loader2, X } from 'lucide-react';
-import { Button, Input, Skeleton, TextField } from '@heroui/react';
+import { Button, Input, Skeleton, TextField, toast } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useCompanyStore } from '@/stores/companyStore';
-import { toast } from 'sonner';
 
 export default function CompanySettingsPage() {
   const router = useRouter();
@@ -30,12 +29,12 @@ export default function CompanySettingsPage() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Lütfen geçerli bir görsel dosyası seçin');
+      toast.danger('Lütfen geçerli bir görsel dosyası seçin');
       return;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      toast.error("Dosya boyutu 2MB'dan küçük olmalıdır");
+      toast.danger("Dosya boyutu 2MB'dan küçük olmalıdır");
       return;
     }
 
@@ -82,7 +81,7 @@ export default function CompanySettingsPage() {
         router.push(`/${result.slug}/settings/company`);
       }
     } else {
-      toast.error('Şirket bilgileri güncellenemedi');
+      toast.danger('Şirket bilgileri güncellenemedi');
     }
   };
 

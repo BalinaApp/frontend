@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Mail } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button, InputOTP, Skeleton } from '@heroui/react';
+import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
@@ -56,7 +55,7 @@ export default function VerifyEmailPage() {
     async (e?: React.FormEvent) => {
       e?.preventDefault();
       if (code.length !== 6 || !email) {
-        if (code.length !== 6) toast.error('Lütfen 6 haneli kodu girin');
+        if (code.length !== 6) toast.danger('Lütfen 6 haneli kodu girin');
         return;
       }
       setIsLoading(true);
@@ -70,7 +69,7 @@ export default function VerifyEmailPage() {
         if (!user.currentCompanyId) router.push('/setup-company');
         else router.push('/dashboard');
       } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Doğrulama başarısız');
+        toast.danger(err.response?.data?.message || 'Doğrulama başarısız');
         setCode('');
       } finally {
         setIsLoading(false);
@@ -87,7 +86,7 @@ export default function VerifyEmailPage() {
       setResendCooldown(60);
       toast.success('Yeni doğrulama kodu gönderildi');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Kod gönderilemedi');
+      toast.danger(err.response?.data?.message || 'Kod gönderilemedi');
     } finally {
       setIsResending(false);
     }

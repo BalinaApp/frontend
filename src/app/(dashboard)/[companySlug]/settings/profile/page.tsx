@@ -3,10 +3,9 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User, ChevronLeft, Loader2, Eye, EyeOff } from 'lucide-react';
-import { Button, Input, TextField } from '@heroui/react';
+import { Button, Input, TextField, toast } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useAuthStore } from '@/stores/authStore';
-import { toast } from 'sonner';
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -32,15 +31,15 @@ export default function ProfileSettingsPage() {
 
     if (newPassword) {
       if (!currentPassword) {
-        toast.error('Mevcut şifrenizi girmelisiniz');
+        toast.danger('Mevcut şifrenizi girmelisiniz');
         return;
       }
       if (newPassword !== confirmPassword) {
-        toast.error('Yeni şifreler eşleşmiyor');
+        toast.danger('Yeni şifreler eşleşmiyor');
         return;
       }
       if (newPassword.length < 6) {
-        toast.error('Yeni şifre en az 6 karakter olmalıdır');
+        toast.danger('Yeni şifre en az 6 karakter olmalıdır');
         return;
       }
       updateData.currentPassword = currentPassword;
@@ -59,7 +58,7 @@ export default function ProfileSettingsPage() {
       setNewPassword('');
       setConfirmPassword('');
     } else {
-      toast.error('Profil güncellenemedi');
+      toast.danger('Profil güncellenemedi');
     }
   };
 

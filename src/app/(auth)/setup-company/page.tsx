@@ -3,15 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Briefcase, Loader2, X } from 'lucide-react';
-import { toast } from 'sonner';
-import {
-  Button,
-  Input,
-  Label,
-  ListBox,
-  Select,
-  TextField,
-} from '@heroui/react';
+import { Button, Input, Label, ListBox, Select, TextField, toast } from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -46,17 +38,17 @@ export default function SetupCompanyPage() {
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail)) {
-      toast.error('Geçerli bir e-posta adresi girin');
+      toast.danger('Geçerli bir e-posta adresi girin');
       return;
     }
 
     if (inviteEmail.toLowerCase() === user?.email?.toLowerCase()) {
-      toast.error('Kendinizi ekleyemezsiniz');
+      toast.danger('Kendinizi ekleyemezsiniz');
       return;
     }
 
     if (teamMembers.some((m) => m.email.toLowerCase() === inviteEmail.toLowerCase())) {
-      toast.error('Bu e-posta zaten eklendi');
+      toast.danger('Bu e-posta zaten eklendi');
       return;
     }
 
@@ -73,7 +65,7 @@ export default function SetupCompanyPage() {
     e.preventDefault();
 
     if (!companyName.trim()) {
-      toast.error('Şirket adı gereklidir');
+      toast.danger('Şirket adı gereklidir');
       return;
     }
 
@@ -105,7 +97,7 @@ export default function SetupCompanyPage() {
       );
       router.push('/dashboard');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Bir hata oluştu');
+      toast.danger(err.response?.data?.message || 'Bir hata oluştu');
     } finally {
       setIsLoading(false);
     }

@@ -24,18 +24,9 @@ import {
   Eye,
   EyeOff,
 } from 'lucide-react';
-import {
-  Button,
-  Input,
-  Label,
-  Modal,
-  Switch,
-  Tabs,
-  TextField,
-} from '@heroui/react';
+import { Button, Input, Label, Modal, Switch, Tabs, TextField, toast } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore, CreateStoreDto } from '@/stores/storeStore';
-import { toast } from 'sonner';
 import { api } from '@/services/api';
 
 const marketplaces = [
@@ -210,14 +201,14 @@ export default function StoresPage() {
         ...prev,
         [storeId]: { ...prev[storeId], saving: false, saved: false, error: errorMessage },
       }));
-      toast.error(errorMessage);
+      toast.danger(errorMessage);
     }
   };
 
   const handleTestWcsc = async () => {
     if (!currentCompany?.id || !settingsModalStoreId) return;
     if (!wcscState.apiKey || !wcscState.apiSecret) {
-      toast.error('API Key ve API Secret gerekli');
+      toast.danger('API Key ve API Secret gerekli');
       return;
     }
     setWcscState((prev) => ({ ...prev, testing: true, testResult: null }));
@@ -246,7 +237,7 @@ export default function StoresPage() {
   const handleConnectWcsc = async () => {
     if (!currentCompany?.id || !settingsModalStoreId) return;
     if (!wcscState.apiKey || !wcscState.apiSecret) {
-      toast.error('API Key ve API Secret gerekli');
+      toast.danger('API Key ve API Secret gerekli');
       return;
     }
     setWcscState((prev) => ({ ...prev, connecting: true }));
@@ -265,7 +256,7 @@ export default function StoresPage() {
         testResult: null,
       }));
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Bağlantı başarısız');
+      toast.danger(error.response?.data?.message || 'Bağlantı başarısız');
       setWcscState((prev) => ({ ...prev, connecting: false }));
     }
   };
@@ -281,7 +272,7 @@ export default function StoresPage() {
       fetchStores(currentCompany.id);
       setWcscState((prev) => ({ ...prev, disconnecting: false }));
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Bağlantı kesilemedi');
+      toast.danger(error.response?.data?.message || 'Bağlantı kesilemedi');
       setWcscState((prev) => ({ ...prev, disconnecting: false }));
     }
   };
@@ -318,19 +309,19 @@ export default function StoresPage() {
 
     const value = formData[step.key as keyof typeof formData];
     if (step.key === 'name' && !value.trim()) {
-      toast.error('Mağaza adı gerekli');
+      toast.danger('Mağaza adı gerekli');
       return false;
     }
     if (step.key === 'url' && !value.trim()) {
-      toast.error('Site URL gerekli');
+      toast.danger('Site URL gerekli');
       return false;
     }
     if (step.key === 'consumerKey' && (!value || value.length < 32)) {
-      toast.error('Consumer Key en az 32 karakter olmalı');
+      toast.danger('Consumer Key en az 32 karakter olmalı');
       return false;
     }
     if (step.key === 'consumerSecret' && (!value || value.length < 32)) {
-      toast.error('Consumer Secret en az 32 karakter olmalı');
+      toast.danger('Consumer Secret en az 32 karakter olmalı');
       return false;
     }
     return true;
@@ -381,7 +372,7 @@ export default function StoresPage() {
         handleDialogClose();
         setShowUpgradeDialog(true);
       } else {
-        toast.error(errorMessage);
+        toast.danger(errorMessage);
       }
     } finally {
       setIsSubmitting(false);
@@ -396,7 +387,7 @@ export default function StoresPage() {
       toast.success('Mağaza bağlantısı kesildi');
       setDeleteConfirmStoreId(null);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Mağaza silinemedi');
+      toast.danger(error.response?.data?.message || 'Mağaza silinemedi');
     } finally {
       setIsDeleting(false);
     }
@@ -409,7 +400,7 @@ export default function StoresPage() {
       toast.success('Senkronizasyon başlatıldı');
       fetchStores(currentCompany.id);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Senkronizasyon başarısız');
+      toast.danger(error.response?.data?.message || 'Senkronizasyon başarısız');
     }
   };
 
@@ -425,7 +416,7 @@ export default function StoresPage() {
       await updateStore(currentCompany.id, storeId, { status: newStatus as any });
       toast.success(newStatus === 'ACTIVE' ? 'Mağaza aktif edildi' : 'Mağaza pasif edildi');
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Durum değiştirilemedi');
+      toast.danger(error.response?.data?.message || 'Durum değiştirilemedi');
     }
   };
 

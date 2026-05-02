@@ -37,8 +37,9 @@ import {
   Modal,
   Select,
   TextField,
+,
+  toast,
 } from '@heroui/react';
-import { toast } from 'sonner';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore, type Company } from '@/stores/companyStore';
@@ -106,7 +107,7 @@ export function AppSidebar() {
       toast.success(`${company.name} şirketine geçildi`);
       router.push(`/${company.slug}`);
     } catch {
-      toast.error('Şirket değiştirilemedi');
+      toast.danger('Şirket değiştirilemedi');
     }
   };
 
@@ -368,17 +369,17 @@ function CreateCompanyModal({
     if (!inviteEmail) return;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(inviteEmail)) {
-      toast.error('Geçerli bir e-posta adresi girin');
+      toast.danger('Geçerli bir e-posta adresi girin');
       return;
     }
     if (inviteEmail.toLowerCase() === user?.email?.toLowerCase()) {
-      toast.error('Kendinizi ekleyemezsiniz');
+      toast.danger('Kendinizi ekleyemezsiniz');
       return;
     }
     if (
       teamMembers.some((m) => m.email.toLowerCase() === inviteEmail.toLowerCase())
     ) {
-      toast.error('Bu e-posta zaten eklendi');
+      toast.danger('Bu e-posta zaten eklendi');
       return;
     }
     setTeamMembers([...teamMembers, { email: inviteEmail, role: inviteRole }]);
@@ -389,7 +390,7 @@ function CreateCompanyModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) {
-      toast.error('Şirket adı gereklidir');
+      toast.danger('Şirket adı gereklidir');
       return;
     }
     setIsCreating(true);
@@ -420,7 +421,7 @@ function CreateCompanyModal({
       reset();
       router.push(`/${company.slug}`);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Şirket oluşturulamadı');
+      toast.danger(error.response?.data?.message || 'Şirket oluşturulamadı');
     } finally {
       setIsCreating(false);
     }

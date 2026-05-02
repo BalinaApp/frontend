@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, Eye, EyeOff, CheckCircle } from 'lucide-react';
-import { toast } from 'sonner';
-import { Button, Input, TextField } from '@heroui/react';
+import { Button, Input, TextField, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/services/api';
 
@@ -41,11 +40,11 @@ export default function ResetPasswordPage() {
     e.preventDefault();
     const pwdError = validatePassword(password);
     if (pwdError) {
-      toast.error(pwdError);
+      toast.danger(pwdError);
       return;
     }
     if (password !== confirmPassword) {
-      toast.error('Şifreler eşleşmiyor');
+      toast.danger('Şifreler eşleşmiyor');
       return;
     }
 
@@ -55,7 +54,7 @@ export default function ResetPasswordPage() {
       setIsSuccess(true);
       toast.success('Şifreniz başarıyla güncellendi');
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Bir hata oluştu');
+      toast.danger(err.response?.data?.message || 'Bir hata oluştu');
     } finally {
       setIsLoading(false);
     }

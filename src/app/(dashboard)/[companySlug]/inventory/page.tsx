@@ -14,19 +14,11 @@ import {
   TrendingUp,
   AlertTriangle,
 } from 'lucide-react';
-import {
-  Button,
-  Input,
-  ListBox,
-  Select,
-  Skeleton,
-  TextField,
-} from '@heroui/react';
+import { Button, Input, ListBox, Select, Skeleton, TextField, toast } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { EditableStockCell, EditablePriceCell } from '@/components/inventory';
-import { toast } from 'sonner';
 
 type StockFilter = 'all' | 'instock' | 'critical' | 'outofstock';
 type MappingFilter = 'all' | 'mapped' | 'unmapped';
@@ -146,7 +138,7 @@ export default function InventoryPage() {
       updateProductInList(productId, { stockQuantity: newStock });
       toast.success('Stok güncellendi');
     } else {
-      toast.error('Stok güncellenemedi');
+      toast.danger('Stok güncellenemedi');
     }
     return success;
   };
@@ -161,7 +153,7 @@ export default function InventoryPage() {
       updateProductInList(productId, { purchasePrice: newPrice });
       toast.success('Alış fiyatı güncellendi');
     } else {
-      toast.error('Alış fiyatı güncellenemedi');
+      toast.danger('Alış fiyatı güncellenemedi');
     }
     return success;
   };

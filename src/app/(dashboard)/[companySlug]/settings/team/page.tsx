@@ -14,20 +14,9 @@ import {
   Crown,
   Package,
 } from 'lucide-react';
-import {
-  AlertDialog,
-  Button,
-  Input,
-  Label,
-  ListBox,
-  Modal,
-  Select,
-  Skeleton,
-  TextField,
-} from '@heroui/react';
+import { AlertDialog, Button, Input, Label, ListBox, Modal, Select, Skeleton, TextField, toast } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { api } from '@/services/api';
-import { toast } from 'sonner';
 
 interface Member {
   id: string;
@@ -71,7 +60,7 @@ export default function TeamSettingsPage() {
       setMembers(response.data);
     } catch (error) {
       console.error('Failed to fetch members:', error);
-      toast.error('Üyeler yüklenemedi');
+      toast.danger('Üyeler yüklenemedi');
     } finally {
       setIsLoading(false);
     }
@@ -96,7 +85,7 @@ export default function TeamSettingsPage() {
       setInviteRole('MEMBER');
       fetchMembers();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Davet gönderilemedi');
+      toast.danger(error.response?.data?.message || 'Davet gönderilemedi');
     } finally {
       setIsInviting(false);
     }
@@ -110,7 +99,7 @@ export default function TeamSettingsPage() {
       toast.success('Üye silindi');
       fetchMembers();
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Üye silinemedi');
+      toast.danger(error.response?.data?.message || 'Üye silinemedi');
     }
   };
 

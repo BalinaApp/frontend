@@ -15,23 +15,22 @@ import {
   Check,
   Loader2,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+  Button,
+  Chip,
+  Input,
+  Label,
+  Modal,
+  Skeleton,
+  TextField,
+} from '@heroui/react';
 import { toast } from 'sonner';
-import { Label } from '@/components/ui/label';
 import { useCompanyStore } from '@/stores/companyStore';
-import { useProductMappingStore, type MappingSuggestion, type SearchProduct } from '@/stores/productMappingStore';
-import { cn } from '@/lib/utils';
+import {
+  useProductMappingStore,
+  type MappingSuggestion,
+  type SearchProduct,
+} from '@/stores/productMappingStore';
 
 export default function ProductMappingsPage() {
   const { currentCompany } = useCompanyStore();
@@ -55,7 +54,9 @@ export default function ProductMappingsPage() {
     clearSearchResults,
   } = useProductMappingStore();
 
-  const [activeTab, setActiveTab] = useState<'mappings' | 'suggestions' | 'manual'>('mappings');
+  const [activeTab, setActiveTab] = useState<'mappings' | 'suggestions' | 'manual'>(
+    'mappings'
+  );
   const [expandedSuggestions, setExpandedSuggestions] = useState<Set<string>>(new Set());
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -78,87 +79,59 @@ export default function ProductMappingsPage() {
   const toggleSuggestionExpanded = (sku: string) => {
     setExpandedSuggestions((prev) => {
       const next = new Set(prev);
-      if (next.has(sku)) {
-        next.delete(sku);
-      } else {
-        next.add(sku);
-      }
+      if (next.has(sku)) next.delete(sku);
+      else next.add(sku);
       return next;
     });
   };
 
   const handleCreateFromSuggestion = async (suggestion: MappingSuggestion) => {
     if (!currentCompany?.id) return;
-
     const result = await createMapping(currentCompany.id, {
       masterSku: suggestion.masterSku,
       name: newMappingName || undefined,
       productIds: suggestion.products.map((p) => p.id),
     });
-
     if (result) {
       toast.success('Eşleştirme başarıyla oluşturuldu');
       setIsCreateDialogOpen(false);
       setSelectedSuggestion(null);
       setNewMappingName('');
       fetchSuggestions(currentCompany.id);
-    } else if (error) {
-      toast.error(error);
-    }
+    } else if (error) toast.error(error);
   };
 
   const handleDeleteMapping = async () => {
     if (!currentCompany?.id || !selectedMappingId) return;
-
     const success = await deleteMapping(currentCompany.id, selectedMappingId);
     if (success) {
       toast.success('Eşleştirme silindi');
       setIsDeleteDialogOpen(false);
       setSelectedMappingId(null);
       fetchSuggestions(currentCompany.id);
-    } else if (error) {
-      toast.error(error);
-    }
+    } else if (error) toast.error(error);
   };
 
   const handleAutoMatch = async () => {
     if (!currentCompany?.id) return;
-
     const result = await runAutoMatch(currentCompany.id);
     if (result) {
-      toast.success(`${result.created} eşleştirme oluşturuldu${result.skipped > 0 ? `, ${result.skipped} atlandı` : ''}`);
+      toast.success(
+        `${result.created} eşleştirme oluşturuldu${result.skipped > 0 ? `, ${result.skipped} atlandı` : ''}`
+      );
       fetchSuggestions(currentCompany.id);
-    } else if (error) {
-      toast.error(error);
-    }
-  };
-
-  const openCreateDialog = (suggestion: MappingSuggestion) => {
-    setSelectedSuggestion(suggestion);
-    setNewMappingName('');
-    setIsCreateDialogOpen(true);
-  };
-
-  const openDeleteDialog = (mappingId: string) => {
-    setSelectedMappingId(mappingId);
-    setIsDeleteDialogOpen(true);
+    } else if (error) toast.error(error);
   };
 
   const handleDismissSuggestion = async (suggestionKey: string) => {
     if (!currentCompany?.id) return;
-
     const success = await dismissSuggestion(currentCompany.id, suggestionKey);
-    if (success) {
-      toast.success('Öneri reddedildi');
-    } else if (error) {
-      toast.error(error);
-    }
+    if (success) toast.success('Öneri reddedildi');
+    else if (error) toast.error(error);
   };
 
-  // Search handler with debounce
   useEffect(() => {
     if (!currentCompany?.id || activeTab !== 'manual') return;
-
     const timer = setTimeout(() => {
       if (searchQuery.trim().length >= 2) {
         searchProducts(currentCompany.id, searchQuery);
@@ -166,11 +139,9 @@ export default function ProductMappingsPage() {
         clearSearchResults();
       }
     }, 300);
-
     return () => clearTimeout(timer);
   }, [searchQuery, currentCompany?.id, activeTab, searchProducts, clearSearchResults]);
 
-  // Clear search when switching tabs
   useEffect(() => {
     if (activeTab !== 'manual') {
       setSearchQuery('');
@@ -181,39 +152,29 @@ export default function ProductMappingsPage() {
 
   const toggleProductSelection = (product: SearchProduct) => {
     if (product.isAlreadyMapped) return;
-
-    setSelectedProducts((prev) => {
-      const isSelected = prev.some((p) => p.id === product.id);
-      if (isSelected) {
-        return prev.filter((p) => p.id !== product.id);
-      } else {
-        return [...prev, product];
-      }
-    });
+    setSelectedProducts((prev) =>
+      prev.some((p) => p.id === product.id)
+        ? prev.filter((p) => p.id !== product.id)
+        : [...prev, product]
+    );
   };
 
-  const uniqueStoresInSelection = useMemo(() => {
-    const stores = new Set(selectedProducts.map((p) => p.storeId));
-    return stores.size;
-  }, [selectedProducts]);
+  const uniqueStoresInSelection = useMemo(
+    () => new Set(selectedProducts.map((p) => p.storeId)).size,
+    [selectedProducts]
+  );
 
-  const canOpenCreateDialog = useMemo(() => {
-    return selectedProducts.length >= 2 && uniqueStoresInSelection >= 2;
-  }, [selectedProducts, uniqueStoresInSelection]);
-
-  const canCreateManualMapping = useMemo(() => {
-    return selectedProducts.length >= 2 && uniqueStoresInSelection >= 2 && manualMappingSku.trim().length > 0;
-  }, [selectedProducts, uniqueStoresInSelection, manualMappingSku]);
+  const canOpenCreateDialog =
+    selectedProducts.length >= 2 && uniqueStoresInSelection >= 2;
+  const canCreateManualMapping = canOpenCreateDialog && manualMappingSku.trim().length > 0;
 
   const handleManualCreateMapping = async () => {
     if (!currentCompany?.id || !canCreateManualMapping) return;
-
     const result = await createMapping(currentCompany.id, {
       masterSku: manualMappingSku.trim(),
       name: manualMappingName.trim() || undefined,
       productIds: selectedProducts.map((p) => p.id),
     });
-
     if (result) {
       toast.success('Eşleştirme başarıyla oluşturuldu');
       setIsManualCreateDialogOpen(false);
@@ -224,83 +185,58 @@ export default function ProductMappingsPage() {
       clearSearchResults();
       fetchSuggestions(currentCompany.id);
       setActiveTab('mappings');
-    } else if (error) {
-      toast.error(error);
-    }
+    } else if (error) toast.error(error);
   };
 
   const openManualCreateDialog = () => {
-    // Suggest SKU from the first selected product
     if (selectedProducts.length > 0 && !manualMappingSku) {
-      const firstProduct = selectedProducts[0];
-      setManualMappingSku(firstProduct.sku || '');
+      setManualMappingSku(selectedProducts[0].sku || '');
     }
     setIsManualCreateDialogOpen(true);
   };
 
+  const tabs = [
+    { id: 'mappings' as const, label: `Eşleştirmeler (${mappings.length})` },
+    { id: 'suggestions' as const, label: `Öneriler (${suggestions.length})` },
+    { id: 'manual' as const, label: 'Manuel Eşleştirme' },
+  ];
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <Link2 className="h-5 w-5" />
           <h1 className="text-xl font-semibold">Ürün Eşleştirme</h1>
         </div>
         {suggestions.length > 0 && (
-          <Button
-            onClick={handleAutoMatch}
-            disabled={isCreating}
-            className="gap-2"
-          >
+          <Button onPress={handleAutoMatch} isDisabled={isCreating}>
             <Wand2 className="h-4 w-4" />
             Otomatik Eşleştir ({suggestions.length})
           </Button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-6 py-3 border-b">
-        <button
-          onClick={() => setActiveTab('mappings')}
-          className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-            activeTab === 'mappings'
-              ? 'bg-gray-100 text-gray-900'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          )}
-        >
-          Eşleştirmeler ({mappings.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('suggestions')}
-          className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-            activeTab === 'suggestions'
-              ? 'bg-gray-100 text-gray-900'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          )}
-        >
-          Öneriler ({suggestions.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('manual')}
-          className={cn(
-            'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
-            activeTab === 'manual'
-              ? 'bg-gray-100 text-gray-900'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-          )}
-        >
-          Manuel Eşleştirme
-        </button>
+      <div className="flex items-center gap-1 border-b border-border px-6 py-3">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? 'bg-default text-foreground'
+                : 'text-muted hover:bg-default/50 hover:text-foreground'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Content */}
       <div className="flex-1 overflow-auto p-6">
         {isLoading ? (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="border rounded-lg p-4">
+              <div key={i} className="rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between">
                   <Skeleton className="h-5 w-40" />
                   <Skeleton className="h-5 w-20" />
@@ -314,43 +250,44 @@ export default function ProductMappingsPage() {
           </div>
         ) : activeTab === 'mappings' ? (
           mappings.length === 0 ? (
-            <div className="text-center py-12">
-              <Link2 className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Henüz eşleştirme yok
-              </h3>
-              <p className="text-gray-500 mb-4">
+            <div className="py-12 text-center">
+              <Link2 className="mx-auto mb-4 h-12 w-12 text-muted/50" />
+              <h3 className="mb-2 text-lg font-medium">Henüz eşleştirme yok</h3>
+              <p className="mb-4 text-muted">
                 Farklı mağazalardaki aynı ürünleri eşleştirerek stok yönetimini kolaylaştırın.
               </p>
               {suggestions.length > 0 && (
-                <Button onClick={() => setActiveTab('suggestions')} variant="outline">
+                <Button onPress={() => setActiveTab('suggestions')} variant="outline">
                   Önerileri Görüntüle
                 </Button>
               )}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3">
               {mappings.map((mapping) => (
-                <div key={mapping.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                <div
+                  key={mapping.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-surface-secondary/30"
+                >
                   <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded bg-green-100 flex items-center justify-center">
-                      <Link2 className="h-5 w-5 text-green-600" />
+                    <div className="flex h-10 w-10 items-center justify-center rounded bg-success/15">
+                      <Link2 className="h-5 w-5 text-success" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
                           {mapping.name || mapping.items[0]?.productName || mapping.masterSku}
                         </span>
-                        <Badge variant="secondary" className="font-mono text-xs">
+                        <Chip variant="secondary" size="sm" className="font-mono">
                           SKU: {mapping.masterSku}
-                        </Badge>
+                        </Chip>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                      <div className="mt-1 flex items-center gap-3 text-sm text-muted">
                         <span className="flex items-center gap-1">
                           <Store className="h-3 w-3" />
-                          {mapping.items.map(i => i.storeName).join(', ')}
+                          {mapping.items.map((i) => i.storeName).join(', ')}
                         </span>
-                        <span className="flex items-center gap-1 text-green-600 font-medium">
+                        <span className="flex items-center gap-1 font-medium text-success">
                           <Package className="h-3 w-3" />
                           {mapping.realStock} adet stok
                         </span>
@@ -360,10 +297,14 @@ export default function ProductMappingsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => openDeleteDialog(mapping.id)}
+                    isIconOnly
+                    aria-label="Sil"
+                    onPress={() => {
+                      setSelectedMappingId(mapping.id);
+                      setIsDeleteDialogOpen(true);
+                    }}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Trash2 className="h-4 w-4 text-danger" />
                   </Button>
                 </div>
               ))}
@@ -371,25 +312,21 @@ export default function ProductMappingsPage() {
           )
         ) : activeTab === 'suggestions' ? (
           suggestions.length === 0 ? (
-            <div className="text-center py-12">
-              <Wand2 className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                Öneri bulunamadı
-              </h3>
-              <p className="text-gray-500">
-                Farklı mağazalarda aynı SKU'ya sahip ürün bulunamadı.
-              </p>
+            <div className="py-12 text-center">
+              <Wand2 className="mx-auto mb-4 h-12 w-12 text-muted/50" />
+              <h3 className="mb-2 text-lg font-medium">Öneri bulunamadı</h3>
+              <p className="text-muted">Farklı mağazalarda aynı SKU&apos;ya sahip ürün bulunamadı.</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               {suggestions.map((suggestion) => (
-                <div key={suggestion.suggestionKey} className="border rounded-lg">
+                <div key={suggestion.suggestionKey} className="rounded-lg border border-border">
                   <div
-                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                    className="flex cursor-pointer items-center justify-between p-4 hover:bg-surface-secondary/30"
                     onClick={() => toggleSuggestionExpanded(suggestion.suggestionKey)}
                   >
                     <div className="flex items-center gap-3">
-                      <button className="p-1">
+                      <button className="p-1" type="button" aria-label="Genişlet">
                         {expandedSuggestions.has(suggestion.suggestionKey) ? (
                           <ChevronUp className="h-4 w-4" />
                         ) : (
@@ -397,17 +334,15 @@ export default function ProductMappingsPage() {
                         )}
                       </button>
                       <div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="font-mono">
-                            SKU: {suggestion.masterSku}
-                          </Badge>
-                        </div>
-                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                        <Chip variant="tertiary" size="sm" className="font-mono">
+                          SKU: {suggestion.masterSku}
+                        </Chip>
+                        <div className="mt-1 flex items-center gap-4 text-sm text-muted">
                           <span className="flex items-center gap-1">
                             <Store className="h-3 w-3" />
                             {suggestion.storeCount} mağaza
                           </span>
-                          <span className="flex items-center gap-1 text-green-600 font-medium">
+                          <span className="flex items-center gap-1 font-medium text-success">
                             <Package className="h-3 w-3" />
                             {suggestion.realStock} adet stok
                           </span>
@@ -418,21 +353,19 @@ export default function ProductMappingsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-gray-500 hover:text-gray-700"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDismissSuggestion(suggestion.suggestionKey);
-                        }}
-                        disabled={isDismissing}
+                        isIconOnly
+                        aria-label="Reddet"
+                        onPress={() => handleDismissSuggestion(suggestion.suggestionKey)}
+                        isDisabled={isDismissing}
                       >
-                        <X className="h-4 w-4" />
+                        <X className="h-4 w-4 text-muted" />
                       </Button>
                       <Button
                         size="sm"
-                        className="gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openCreateDialog(suggestion);
+                        onPress={() => {
+                          setSelectedSuggestion(suggestion);
+                          setNewMappingName('');
+                          setIsCreateDialogOpen(true);
                         }}
                       >
                         <Plus className="h-4 w-4" />
@@ -442,27 +375,27 @@ export default function ProductMappingsPage() {
                   </div>
 
                   {expandedSuggestions.has(suggestion.suggestionKey) && (
-                    <div className="border-t px-4 py-3 bg-gray-50">
+                    <div className="border-t border-border bg-surface-secondary/30 px-4 py-3">
                       <div className="grid gap-2">
                         {suggestion.products.map((product) => (
                           <div
                             key={product.id}
-                            className="flex items-center justify-between p-2 bg-white rounded border"
+                            className="flex items-center justify-between rounded border border-border bg-surface p-2"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded bg-gray-100 flex items-center justify-center">
-                                <Package className="h-4 w-4 text-gray-400" />
+                              <div className="flex h-8 w-8 items-center justify-center rounded bg-default">
+                                <Package className="h-4 w-4 text-muted" />
                               </div>
                               <div>
                                 <p className="text-sm font-medium">{product.name}</p>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted">
                                   {product.storeName} - SKU: {product.sku}
                                 </p>
                               </div>
                             </div>
                             <div className="text-right">
                               <p className="text-sm font-medium">{product.stockQuantity} adet</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-muted">
                                 {product.price.toLocaleString('tr-TR')} TL
                               </p>
                             </div>
@@ -476,141 +409,127 @@ export default function ProductMappingsPage() {
             </div>
           )
         ) : (
-          /* Manual Tab Content */
-          <div className="space-y-6">
-            {/* Search Section */}
-            <div className="space-y-4">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-4">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Ürün adı veya SKU ile ara..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+                <Search className="absolute left-3 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-muted" />
+                <TextField value={searchQuery} onChange={setSearchQuery}>
+                  <Input
+                    placeholder="Ürün adı veya SKU ile ara..."
+                    className="pl-10"
+                  />
+                </TextField>
               </div>
 
-              {/* Selected Products */}
               {selectedProducts.length > 0 && (
-                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-blue-900">
+                <div className="rounded-lg border border-accent/30 bg-accent/10 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-medium">
                       Seçilen Ürünler ({selectedProducts.length})
                     </h3>
                     <Button
                       size="sm"
-                      onClick={openManualCreateDialog}
-                      disabled={!canOpenCreateDialog || isCreating}
-                      className="gap-1"
+                      onPress={openManualCreateDialog}
+                      isDisabled={!canOpenCreateDialog || isCreating}
                     >
                       <Plus className="h-4 w-4" />
                       Eşleştirme Oluştur
                     </Button>
                   </div>
                   {uniqueStoresInSelection < 2 && selectedProducts.length >= 2 && (
-                    <p className="text-xs text-amber-600 mb-2">
+                    <p className="mb-2 text-xs text-warning-foreground">
                       ⚠️ En az 2 farklı mağazadan ürün seçmelisiniz
                     </p>
                   )}
                   <div className="flex flex-wrap gap-2">
                     {selectedProducts.map((product) => (
-                      <Badge
+                      <Chip
                         key={product.id}
                         variant="secondary"
-                        className="flex items-center gap-1 cursor-pointer hover:bg-blue-200"
+                        size="sm"
                         onClick={() => toggleProductSelection(product)}
+                        className="cursor-pointer"
                       >
-                        <span className="text-xs text-blue-600">{product.storeName}:</span>
+                        <span className="text-xs text-accent">{product.storeName}:</span>
                         {product.name.substring(0, 30)}
                         {product.name.length > 30 && '...'}
-                        <X className="h-3 w-3 ml-1" />
-                      </Badge>
+                        <X className="ml-1 h-3 w-3" />
+                      </Chip>
                     ))}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Search Results */}
             {isSearching ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-muted" />
               </div>
             ) : searchQuery.length < 2 ? (
-              <div className="text-center py-12">
-                <Search className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Manuel Eşleştirme
-                </h3>
-                <p className="text-gray-500">
+              <div className="py-12 text-center">
+                <Search className="mx-auto mb-4 h-12 w-12 text-muted/50" />
+                <h3 className="mb-2 text-lg font-medium">Manuel Eşleştirme</h3>
+                <p className="text-muted">
                   Farklı mağazalardaki ürünleri arayıp manuel olarak eşleştirin.
                   <br />
                   En az 2 karakter girin.
                 </p>
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="text-center py-12">
-                <Package className="h-12 w-12 mx-auto text-gray-300 mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Sonuç bulunamadı
-                </h3>
-                <p className="text-gray-500">
-                  "{searchQuery}" için eşleşen ürün bulunamadı.
-                </p>
+              <div className="py-12 text-center">
+                <Package className="mx-auto mb-4 h-12 w-12 text-muted/50" />
+                <h3 className="mb-2 text-lg font-medium">Sonuç bulunamadı</h3>
+                <p className="text-muted">&quot;{searchQuery}&quot; için eşleşen ürün bulunamadı.</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                <p className="text-sm text-gray-500 mb-3">
-                  {searchResults.length} sonuç bulundu
-                </p>
+              <div className="flex flex-col gap-2">
+                <p className="mb-3 text-sm text-muted">{searchResults.length} sonuç bulundu</p>
                 {searchResults.map((product) => {
                   const isSelected = selectedProducts.some((p) => p.id === product.id);
                   return (
                     <div
                       key={product.id}
-                      className={cn(
-                        'flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors',
+                      className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
                         product.isAlreadyMapped
-                          ? 'bg-gray-100 cursor-not-allowed opacity-60'
+                          ? 'cursor-not-allowed border-border bg-default opacity-60'
                           : isSelected
-                            ? 'bg-blue-50 border-blue-300'
-                            : 'bg-white hover:bg-gray-50'
-                      )}
+                            ? 'border-accent bg-accent/10'
+                            : 'border-border bg-surface hover:bg-surface-secondary/30'
+                      }`}
                       onClick={() => toggleProductSelection(product)}
                     >
                       <div className="flex items-center gap-3">
                         <div
-                          className={cn(
-                            'h-8 w-8 rounded flex items-center justify-center',
-                            isSelected ? 'bg-blue-500' : 'bg-gray-100'
-                          )}
+                          className={`flex h-8 w-8 items-center justify-center rounded ${
+                            isSelected ? 'bg-accent' : 'bg-default'
+                          }`}
                         >
                           {isSelected ? (
-                            <Check className="h-4 w-4 text-white" />
+                            <Check className="h-4 w-4 text-accent-foreground" />
                           ) : (
-                            <Package className="h-4 w-4 text-gray-400" />
+                            <Package className="h-4 w-4 text-muted" />
                           )}
                         </div>
                         <div>
                           <p className="text-sm font-medium">{product.name}</p>
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <Badge variant="outline" className="text-xs">
+                          <div className="flex items-center gap-2 text-xs text-muted">
+                            <Chip variant="tertiary" size="sm">
                               {product.storeName}
-                            </Badge>
+                            </Chip>
                             {product.sku && (
                               <span className="font-mono">SKU: {product.sku}</span>
                             )}
                             {product.isAlreadyMapped && (
-                              <Badge variant="secondary" className="text-xs">
+                              <Chip variant="secondary" size="sm">
                                 Zaten eşleşmiş
-                              </Badge>
+                              </Chip>
                             )}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-medium">{product.stockQuantity} adet</p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-muted">
                           {product.price.toLocaleString('tr-TR')} TL
                         </p>
                       </div>
@@ -623,136 +542,137 @@ export default function ProductMappingsPage() {
         )}
       </div>
 
-      {/* Create Mapping Dialog */}
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Eşleştirme Oluştur</DialogTitle>
-            <DialogDescription>
-              SKU: {selectedSuggestion?.masterSku} için eşleştirme oluşturun.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="name">Eşleştirme Adı (Opsiyonel)</Label>
-            <Input
-              id="name"
-              value={newMappingName}
-              onChange={(e) => setNewMappingName(e.target.value)}
-              placeholder="Örn: Ana Ürün Grubu"
-              className="mt-2"
-            />
-            {selectedSuggestion && (
-              <div className="mt-4">
-                <p className="text-sm text-gray-500 mb-2">
-                  {selectedSuggestion.products.length} ürün eşleştirilecek:
+      <Modal isOpen={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[480px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Eşleştirme Oluştur</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="flex flex-col gap-4">
+                <p className="text-sm text-muted">
+                  SKU: {selectedSuggestion?.masterSku} için eşleştirme oluşturun.
                 </p>
-                <div className="space-y-1 max-h-40 overflow-auto">
-                  {selectedSuggestion.products.map((p) => (
-                    <div key={p.id} className="text-sm flex items-center gap-2">
-                      <Store className="h-3 w-3 text-gray-400" />
-                      {p.storeName}: {p.name}
+                <TextField value={newMappingName} onChange={setNewMappingName}>
+                  <Label>Eşleştirme Adı (Opsiyonel)</Label>
+                  <Input placeholder="Örn: Ana Ürün Grubu" />
+                </TextField>
+                {selectedSuggestion && (
+                  <div>
+                    <p className="mb-2 text-sm text-muted">
+                      {selectedSuggestion.products.length} ürün eşleştirilecek:
+                    </p>
+                    <div className="flex max-h-40 flex-col gap-1 overflow-auto">
+                      {selectedSuggestion.products.map((p) => (
+                        <div key={p.id} className="flex items-center gap-2 text-sm">
+                          <Store className="h-3 w-3 text-muted" />
+                          {p.storeName}: {p.name}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-              İptal
-            </Button>
-            <Button
-              onClick={() => selectedSuggestion && handleCreateFromSuggestion(selectedSuggestion)}
-              disabled={isCreating}
-            >
-              {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Eşleştirmeyi Sil</DialogTitle>
-            <DialogDescription>
-              Bu eşleştirmeyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              İptal
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteMapping}
-              disabled={isDeleting}
-            >
-              {isDeleting ? 'Siliniyor...' : 'Sil'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Manual Mapping Dialog */}
-      <Dialog open={isManualCreateDialogOpen} onOpenChange={setIsManualCreateDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Manuel Eşleştirme Oluştur</DialogTitle>
-            <DialogDescription>
-              Seçtiğiniz {selectedProducts.length} ürün için eşleştirme oluşturun.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4 space-y-4">
-            <div>
-              <Label htmlFor="manualSku">Master SKU *</Label>
-              <Input
-                id="manualSku"
-                value={manualMappingSku}
-                onChange={(e) => setManualMappingSku(e.target.value)}
-                placeholder="Eşleştirme için ortak SKU"
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <Label htmlFor="manualName">Eşleştirme Adı (Opsiyonel)</Label>
-              <Input
-                id="manualName"
-                value={manualMappingName}
-                onChange={(e) => setManualMappingName(e.target.value)}
-                placeholder="Örn: Ana Ürün Grubu"
-                className="mt-2"
-              />
-            </div>
-            <div>
-              <p className="text-sm text-gray-500 mb-2">
-                Eşleştirilecek ürünler:
-              </p>
-              <div className="space-y-1 max-h-40 overflow-auto">
-                {selectedProducts.map((p) => (
-                  <div key={p.id} className="text-sm flex items-center gap-2">
-                    <Store className="h-3 w-3 text-gray-400" />
-                    <span className="text-gray-600">{p.storeName}:</span>
-                    {p.name}
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsManualCreateDialogOpen(false)}>
-              İptal
-            </Button>
-            <Button
-              onClick={handleManualCreateMapping}
-              disabled={isCreating || !canCreateManualMapping}
-            >
-              {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                )}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close">
+                  İptal
+                </Button>
+                <Button
+                  onPress={() =>
+                    selectedSuggestion && handleCreateFromSuggestion(selectedSuggestion)
+                  }
+                  isDisabled={isCreating}
+                  isPending={isCreating}
+                >
+                  {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal isOpen={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[400px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Eşleştirmeyi Sil</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <p className="text-sm text-muted">
+                  Bu eşleştirmeyi silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close">
+                  İptal
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleDeleteMapping}
+                  isDisabled={isDeleting}
+                  isPending={isDeleting}
+                >
+                  {isDeleting ? 'Siliniyor...' : 'Sil'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <Modal isOpen={isManualCreateDialogOpen} onOpenChange={setIsManualCreateDialogOpen}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[480px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Manuel Eşleştirme Oluştur</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="flex flex-col gap-4">
+                <p className="text-sm text-muted">
+                  Seçtiğiniz {selectedProducts.length} ürün için eşleştirme oluşturun.
+                </p>
+                <TextField value={manualMappingSku} onChange={setManualMappingSku}>
+                  <Label>Master SKU *</Label>
+                  <Input placeholder="Eşleştirme için ortak SKU" />
+                </TextField>
+                <TextField value={manualMappingName} onChange={setManualMappingName}>
+                  <Label>Eşleştirme Adı (Opsiyonel)</Label>
+                  <Input placeholder="Örn: Ana Ürün Grubu" />
+                </TextField>
+                <div>
+                  <p className="mb-2 text-sm text-muted">Eşleştirilecek ürünler:</p>
+                  <div className="flex max-h-40 flex-col gap-1 overflow-auto">
+                    {selectedProducts.map((p) => (
+                      <div key={p.id} className="flex items-center gap-2 text-sm">
+                        <Store className="h-3 w-3 text-muted" />
+                        <span className="text-muted">{p.storeName}:</span>
+                        {p.name}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close">
+                  İptal
+                </Button>
+                <Button
+                  onPress={handleManualCreateMapping}
+                  isDisabled={isCreating || !canCreateManualMapping}
+                  isPending={isCreating}
+                >
+                  {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </div>
   );
 }

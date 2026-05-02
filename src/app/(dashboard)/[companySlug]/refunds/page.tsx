@@ -21,29 +21,15 @@ import {
   Cell,
   Pie,
   PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from '@/components/ui/chart';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Button, Input, ListBox, Select, Skeleton, TextField } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useRefundStore } from '@/stores/refundStore';
-import { cn } from '@/lib/utils';
 
 const PERIOD_OPTIONS = [
   { value: 'today', label: 'Bugün' },
@@ -54,33 +40,9 @@ const PERIOD_OPTIONS = [
 ];
 
 const REASON_COLORS = [
-  '#ef4444', // red
-  '#f97316', // orange
-  '#eab308', // yellow
-  '#22c55e', // green
-  '#3b82f6', // blue
-  '#8b5cf6', // purple
-  '#ec4899', // pink
-  '#6b7280', // gray
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#3b82f6', '#8b5cf6', '#ec4899', '#6b7280',
 ];
-
-const trendChartConfig = {
-  count: {
-    label: 'İade Sayısı',
-    color: '#ef4444',
-  },
-  amount: {
-    label: 'İade Tutarı',
-    color: '#f97316',
-  },
-} satisfies ChartConfig;
-
-const storeChartConfig = {
-  refundRate: {
-    label: 'İade Oranı',
-    color: '#ef4444',
-  },
-} satisfies ChartConfig;
 
 function formatCurrency(num: number): string {
   return num.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' TL';
@@ -94,16 +56,39 @@ function formatDate(dateString: string): string {
   });
 }
 
-function getRefundRateColor(rate: number): string {
-  if (rate >= 10) return 'text-red-600';
-  if (rate >= 5) return 'text-orange-500';
-  return 'text-green-600';
+function refundRateTone(rate: number) {
+  if (rate >= 10) return 'text-danger';
+  if (rate >= 5) return 'text-warning';
+  return 'text-success';
 }
 
-function getRefundRateBgColor(rate: number): string {
-  if (rate >= 10) return 'bg-red-100';
-  if (rate >= 5) return 'bg-orange-100';
-  return 'bg-green-100';
+function refundRateFill(rate: number) {
+  if (rate >= 10) return '#ef4444';
+  if (rate >= 5) return '#f97316';
+  return '#22c55e';
+}
+
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { value: number; name: string; color?: string }[];
+  label?: string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-overlay p-2 shadow-md">
+      {label && <p className="mb-1 text-xs font-medium">{label}</p>}
+      {payload.map((entry, i) => (
+        <p key={i} className="flex gap-2 text-sm">
+          <span style={{ color: entry.color }}>{entry.name}:</span>
+          <span className="font-medium">{entry.value.toLocaleString('tr-TR')}</span>
+        </p>
+      ))}
+    </div>
+  );
 }
 
 export default function RefundsPage() {
@@ -149,9 +134,7 @@ export default function RefundsPage() {
   }, [currentCompany?.id, period, selectedStoreId, fetchAllRefundData, fetchRefundList]);
 
   const handlePageChange = (newPage: number) => {
-    if (currentCompany?.id) {
-      fetchRefundList(currentCompany.id, newPage);
-    }
+    if (currentCompany?.id) fetchRefundList(currentCompany.id, newPage);
   };
 
   const filteredRefunds = refundList.filter((refund) => {
@@ -165,7 +148,6 @@ export default function RefundsPage() {
     );
   });
 
-  // Prepare pie chart data
   const pieData = reasons.map((reason, index) => ({
     name: reason.reason,
     value: reason.count,
@@ -175,48 +157,68 @@ export default function RefundsPage() {
 
   return (
     <>
-      {/* Header with Filters */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <RotateCcw className="h-5 w-5 text-muted-foreground" />
+          <RotateCcw className="h-5 w-5 text-muted" />
           <h1 className="text-lg font-semibold">İade Analizi</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={selectedStoreId || 'all'} onValueChange={(v) => setSelectedStoreId(v === 'all' ? null : v)}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Tüm Mağazalar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm Mağazalar</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={selectedStoreId || 'all'}
+            onSelectionChange={(key) =>
+              setSelectedStoreId(key === 'all' ? null : String(key))
+            }
+            aria-label="Mağaza filtresi"
+            className="w-[160px]"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tüm Mağazalar">
+                  Tüm Mağazalar
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {stores.map((store) => (
+                  <ListBox.Item key={store.id} id={store.id} textValue={store.name}>
+                    {store.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
-          <Select value={period} onValueChange={setPeriod}>
-            <SelectTrigger className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {PERIOD_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={period}
+            onSelectionChange={(key) => setPeriod(String(key))}
+            aria-label="Dönem"
+            className="w-[140px]"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {PERIOD_OPTIONS.map((opt) => (
+                  <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
+                    {opt.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 border-b">
-        {/* Total Refunds */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Toplam İade</span>
-            <Package className="h-5 w-5 text-red-500" />
+      <div className="grid grid-cols-2 border-b border-border lg:grid-cols-4">
+        <div className="border-r border-border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-muted">Toplam İade</span>
+            <Package className="h-5 w-5 text-danger" />
           </div>
           {isSummaryLoading ? (
             <Skeleton className="h-8 w-20" />
@@ -224,83 +226,84 @@ export default function RefundsPage() {
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold">{summary?.totalRefunds || 0}</span>
               {summary?.refundCountChange !== undefined && summary.refundCountChange !== 0 && (
-                <span className={cn(
-                  'flex items-center text-xs font-medium',
-                  summary.refundCountChange > 0 ? 'text-red-600' : 'text-green-600'
-                )}>
+                <span
+                  className={`flex items-center text-xs font-medium ${
+                    summary.refundCountChange > 0 ? 'text-danger' : 'text-success'
+                  }`}
+                >
                   {summary.refundCountChange > 0 ? (
-                    <TrendingUp className="h-3 w-3 mr-0.5" />
+                    <TrendingUp className="mr-0.5 h-3 w-3" />
                   ) : (
-                    <TrendingDown className="h-3 w-3 mr-0.5" />
+                    <TrendingDown className="mr-0.5 h-3 w-3" />
                   )}
-                  {summary.refundCountChange > 0 ? '+' : ''}{summary.refundCountChange}%
+                  {summary.refundCountChange > 0 ? '+' : ''}
+                  {summary.refundCountChange}%
                 </span>
               )}
             </div>
           )}
         </div>
 
-        {/* Total Refund Amount */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">İade Tutarı</span>
-            <RotateCcw className="h-5 w-5 text-red-500" />
+        <div className="border-r border-border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-muted">İade Tutarı</span>
+            <RotateCcw className="h-5 w-5 text-danger" />
           </div>
           {isSummaryLoading ? (
             <Skeleton className="h-8 w-24" />
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-bold text-red-600">
+              <span className="text-2xl font-bold text-danger">
                 {formatCurrency(summary?.totalRefundAmount || 0)}
               </span>
               {summary?.refundAmountChange !== undefined && summary.refundAmountChange !== 0 && (
-                <span className={cn(
-                  'flex items-center text-xs font-medium',
-                  summary.refundAmountChange > 0 ? 'text-red-600' : 'text-green-600'
-                )}>
+                <span
+                  className={`flex items-center text-xs font-medium ${
+                    summary.refundAmountChange > 0 ? 'text-danger' : 'text-success'
+                  }`}
+                >
                   {summary.refundAmountChange > 0 ? (
-                    <TrendingUp className="h-3 w-3 mr-0.5" />
+                    <TrendingUp className="mr-0.5 h-3 w-3" />
                   ) : (
-                    <TrendingDown className="h-3 w-3 mr-0.5" />
+                    <TrendingDown className="mr-0.5 h-3 w-3" />
                   )}
-                  {summary.refundAmountChange > 0 ? '+' : ''}{summary.refundAmountChange}%
+                  {summary.refundAmountChange > 0 ? '+' : ''}
+                  {summary.refundAmountChange}%
                 </span>
               )}
             </div>
           )}
         </div>
 
-        {/* Refund Rate */}
-        <div className="p-4 border-r">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">İade Oranı</span>
-            <AlertTriangle className={cn(
-              'h-5 w-5',
-              summary ? getRefundRateColor(summary.refundRate).replace('text-', 'text-') : 'text-muted-foreground'
-            )} />
+        <div className="border-r border-border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-muted">İade Oranı</span>
+            <AlertTriangle
+              className={`h-5 w-5 ${summary ? refundRateTone(summary.refundRate) : 'text-muted'}`}
+            />
           </div>
           {isSummaryLoading ? (
             <Skeleton className="h-8 w-16" />
           ) : (
             <div className="flex items-baseline gap-2">
-              <span className={cn(
-                'text-2xl font-bold',
-                summary ? getRefundRateColor(summary.refundRate) : ''
-              )}>
+              <span
+                className={`text-2xl font-bold ${
+                  summary ? refundRateTone(summary.refundRate) : ''
+                }`}
+              >
                 %{summary?.refundRate || 0}
               </span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-muted">
                 ({summary?.totalRefunds || 0}/{summary?.totalOrders || 0})
               </span>
             </div>
           )}
         </div>
 
-        {/* Avg Refund Amount */}
         <div className="p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Ort. İade Tutarı</span>
-            <Store className="h-5 w-5 text-muted-foreground" />
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-sm font-medium text-muted">Ort. İade Tutarı</span>
+            <Store className="h-5 w-5 text-muted" />
           </div>
           {isSummaryLoading ? (
             <Skeleton className="h-8 w-20" />
@@ -312,19 +315,18 @@ export default function RefundsPage() {
         </div>
       </div>
 
-      {/* Refund Trend Chart */}
-      <div className="border-b">
-        <div className="flex items-center gap-2 px-4 py-3 border-b">
-          <TrendingUp className="h-4 w-4 text-muted-foreground" />
+      <div className="border-b border-border">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <TrendingUp className="h-4 w-4 text-muted" />
           <h3 className="text-sm font-medium">İade Trendi</h3>
         </div>
         <div className="p-4">
           {isTrendLoading ? (
             <Skeleton className="h-48 w-full" />
           ) : (
-            <ChartContainer config={trendChartConfig} className="h-48 w-full">
+            <ResponsiveContainer width="100%" height={192}>
               <AreaChart data={trend} margin={{ left: 0, right: 0 }}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
                 <XAxis
                   dataKey="date"
                   tickLine={false}
@@ -336,48 +338,39 @@ export default function RefundsPage() {
                     return `${date.getDate()}/${date.getMonth() + 1}`;
                   }}
                 />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={8}
-                  fontSize={12}
-                />
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent indicator="line" />}
-                />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} fontSize={12} />
+                <Tooltip cursor={false} content={<CustomTooltip />} />
                 <Area
                   dataKey="count"
+                  name="İade Sayısı"
                   type="monotone"
-                  fill="var(--color-count)"
+                  fill="#ef4444"
                   fillOpacity={0.2}
-                  stroke="var(--color-count)"
+                  stroke="#ef4444"
                   strokeWidth={2}
                 />
               </AreaChart>
-            </ChartContainer>
+            </ResponsiveContainer>
           )}
         </div>
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 border-b">
-        {/* Refund Reasons Pie Chart */}
-        <div className="border-r">
-          <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/50">
-            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+      <div className="grid grid-cols-1 border-b border-border lg:grid-cols-2">
+        <div className="border-r border-border">
+          <div className="flex items-center gap-2 border-b border-border bg-surface-secondary/50 px-4 py-3">
+            <AlertTriangle className="h-4 w-4 text-muted" />
             <h3 className="text-sm font-medium">İade Nedenleri</h3>
           </div>
-          <div className="p-4 bg-muted/50">
+          <div className="bg-surface-secondary/50 p-4">
             {isReasonsLoading ? (
               <Skeleton className="h-48 w-full" />
             ) : reasons.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground">
+              <div className="flex h-48 items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
             ) : (
               <div className="flex items-center gap-4">
-                <ChartContainer config={{}} className="h-48 w-48">
+                <ResponsiveContainer width={192} height={192}>
                   <PieChart>
                     <Pie
                       data={pieData}
@@ -388,18 +381,18 @@ export default function RefundsPage() {
                       outerRadius={70}
                       innerRadius={40}
                     >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                      {pieData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
                       ))}
                     </Pie>
-                    <ChartTooltip
+                    <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const data = payload[0].payload;
+                        const data = (payload[0] as { payload: typeof pieData[number] }).payload;
                         return (
-                          <div className="bg-background border rounded-lg shadow-lg p-2">
+                          <div className="rounded-lg border border-border bg-overlay p-2 shadow-md">
                             <p className="text-sm font-medium">{data.name}</p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-muted">
                               {data.value} adet (%{data.percentage})
                             </p>
                           </div>
@@ -407,16 +400,16 @@ export default function RefundsPage() {
                       }}
                     />
                   </PieChart>
-                </ChartContainer>
-                <div className="flex-1 space-y-2">
+                </ResponsiveContainer>
+                <div className="flex flex-1 flex-col gap-2">
                   {reasons.slice(0, 5).map((reason, index) => (
                     <div key={reason.reason} className="flex items-center gap-2">
                       <div
-                        className="w-3 h-3 rounded-full"
+                        className="h-3 w-3 rounded-full"
                         style={{ backgroundColor: REASON_COLORS[index % REASON_COLORS.length] }}
                       />
-                      <span className="text-sm flex-1 truncate">{reason.reason}</span>
-                      <span className="text-sm text-muted-foreground">%{reason.percentage}</span>
+                      <span className="flex-1 truncate text-sm">{reason.reason}</span>
+                      <span className="text-sm text-muted">%{reason.percentage}</span>
                     </div>
                   ))}
                 </div>
@@ -425,23 +418,22 @@ export default function RefundsPage() {
           </div>
         </div>
 
-        {/* Store Comparison Bar Chart */}
         <div>
-          <div className="flex items-center gap-2 px-4 py-3 border-b bg-muted/50">
-            <Store className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center gap-2 border-b border-border bg-surface-secondary/50 px-4 py-3">
+            <Store className="h-4 w-4 text-muted" />
             <h3 className="text-sm font-medium">Mağaza Karşılaştırması</h3>
           </div>
-          <div className="p-4 bg-muted/50">
+          <div className="bg-surface-secondary/50 p-4">
             {isComparisonLoading ? (
               <Skeleton className="h-48 w-full" />
             ) : storeComparison.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground">
+              <div className="flex h-48 items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
             ) : (
-              <ChartContainer config={storeChartConfig} className="h-48 w-full">
+              <ResponsiveContainer width="100%" height={192}>
                 <BarChart data={storeComparison} layout="vertical" margin={{ left: 0, right: 20 }}>
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" />
+                  <CartesianGrid horizontal={false} strokeDasharray="3 3" className="stroke-border" />
                   <XAxis type="number" tickFormatter={(v) => `%${v}`} fontSize={12} />
                   <YAxis
                     dataKey="storeName"
@@ -451,14 +443,16 @@ export default function RefundsPage() {
                     fontSize={12}
                     width={100}
                   />
-                  <ChartTooltip
+                  <Tooltip
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
-                      const data = payload[0].payload;
+                      const data = (payload[0] as { payload: typeof storeComparison[number] }).payload;
                       return (
-                        <div className="bg-background border rounded-lg shadow-lg p-2">
+                        <div className="rounded-lg border border-border bg-overlay p-2 shadow-md">
                           <p className="text-sm font-medium">{data.storeName}</p>
-                          <p className="text-xs">İade: {data.refundCount} / {data.totalOrders}</p>
+                          <p className="text-xs">
+                            İade: {data.refundCount} / {data.totalOrders}
+                          </p>
                           <p className="text-xs">Oran: %{data.refundRate}</p>
                           <p className="text-xs">Tutar: {formatCurrency(data.refundAmount)}</p>
                         </div>
@@ -467,46 +461,39 @@ export default function RefundsPage() {
                   />
                   <Bar dataKey="refundRate" radius={4}>
                     {storeComparison.map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.refundRate >= 10 ? '#ef4444' : entry.refundRate >= 5 ? '#f97316' : '#22c55e'}
-                      />
+                      <Cell key={index} fill={refundRateFill(entry.refundRate)} />
                     ))}
                   </Bar>
                 </BarChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
       </div>
 
-      {/* Refund List Table */}
       <div>
-        <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div className="flex items-center gap-2">
-            <RotateCcw className="h-4 w-4 text-muted-foreground" />
+            <RotateCcw className="h-4 w-4 text-muted" />
             <h3 className="text-sm font-medium">İade Listesi</h3>
-            <span className="text-xs text-muted-foreground">({refundListTotal} kayıt)</span>
+            <span className="text-xs text-muted">({refundListTotal} kayıt)</span>
           </div>
           <div className="relative w-64">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8 h-8"
-            />
+            <Search className="absolute left-2 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-muted" />
+            <TextField value={searchTerm} onChange={setSearchTerm}>
+              <Input placeholder="Ara..." className="h-8 pl-8" />
+            </TextField>
           </div>
         </div>
 
         {isListLoading ? (
-          <div className="p-4 space-y-2">
+          <div className="flex flex-col gap-2 p-4">
             {[...Array(5)].map((_, i) => (
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
         ) : filteredRefunds.length === 0 ? (
-          <div className="p-8 text-center text-muted-foreground">
+          <div className="p-8 text-center text-muted">
             {searchTerm ? 'Arama sonucu bulunamadı' : 'İade kaydı bulunamadı'}
           </div>
         ) : (
@@ -514,30 +501,44 @@ export default function RefundsPage() {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Sipariş No</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Tarih</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Müşteri</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Mağaza</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Neden</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Sipariş Tutarı</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">İade Tutarı</th>
+                  <tr className="border-b border-border bg-surface-secondary">
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Sipariş No</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Tarih</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Müşteri</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Mağaza</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-muted">Neden</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-muted">
+                      Sipariş Tutarı
+                    </th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-muted">
+                      İade Tutarı
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredRefunds.map((refund, index) => (
-                    <tr key={refund.id} className={index % 2 === 0 ? '' : 'bg-muted/30'}>
+                    <tr
+                      key={refund.id}
+                      className={index % 2 === 0 ? '' : 'bg-surface-secondary/30'}
+                    >
                       <td className="px-4 py-2 text-sm font-medium">{refund.orderNumber}</td>
-                      <td className="px-4 py-2 text-sm text-muted-foreground">{formatDate(refund.refundDate)}</td>
+                      <td className="px-4 py-2 text-sm text-muted">
+                        {formatDate(refund.refundDate)}
+                      </td>
                       <td className="px-4 py-2 text-sm">{refund.customerName || '-'}</td>
                       <td className="px-4 py-2 text-sm">{refund.storeName}</td>
                       <td className="px-4 py-2 text-sm">
-                        <span className="inline-block max-w-[200px] truncate" title={refund.reason || ''}>
+                        <span
+                          className="inline-block max-w-[200px] truncate"
+                          title={refund.reason || ''}
+                        >
                           {refund.reason || 'Belirtilmemiş'}
                         </span>
                       </td>
-                      <td className="px-4 py-2 text-sm text-right">{formatCurrency(refund.orderTotal)}</td>
-                      <td className="px-4 py-2 text-sm text-right font-medium text-red-600">
+                      <td className="px-4 py-2 text-right text-sm">
+                        {formatCurrency(refund.orderTotal)}
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm font-medium text-danger">
                         -{formatCurrency(refund.amount)}
                       </td>
                     </tr>
@@ -546,26 +547,29 @@ export default function RefundsPage() {
               </table>
             </div>
 
-            {/* Pagination */}
             {refundListTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-border px-4 py-3">
+                <span className="text-sm text-muted">
                   Sayfa {refundListPage} / {refundListTotalPages}
                 </span>
                 <div className="flex items-center gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePageChange(refundListPage - 1)}
-                    disabled={refundListPage <= 1}
+                    isIconOnly
+                    aria-label="Önceki sayfa"
+                    onPress={() => handlePageChange(refundListPage - 1)}
+                    isDisabled={refundListPage <= 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handlePageChange(refundListPage + 1)}
-                    disabled={refundListPage >= refundListTotalPages}
+                    isIconOnly
+                    aria-label="Sonraki sayfa"
+                    onPress={() => handlePageChange(refundListPage + 1)}
+                    isDisabled={refundListPage >= refundListTotalPages}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>

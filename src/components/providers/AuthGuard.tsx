@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@heroui/react';
 
 // Paths that don't require authentication
 const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email'];

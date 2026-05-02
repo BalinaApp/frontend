@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useCompany } from '@/components/providers/CompanyProvider';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@heroui/react';
 
 // Define which paths each role can access
 // OWNER and ADMIN have full access (not listed here as they're unrestricted)

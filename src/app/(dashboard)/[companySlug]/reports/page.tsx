@@ -9,7 +9,6 @@ import {
   Package,
   ShoppingCart,
   Percent,
-  CalendarIcon,
   AlertTriangle,
   Search,
 } from 'lucide-react';
@@ -23,45 +22,21 @@ import {
   BarChart,
   Bar,
   Cell,
+  ResponsiveContainer,
+  Tooltip,
 } from 'recharts';
 import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart';
-import { format } from 'date-fns';
-import { tr } from 'date-fns/locale';
-import { DateRange } from 'react-day-picker';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
-import { Calendar } from '@/components/ui/calendar';
-import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
+  Chip,
+  Input,
+  ListBox,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  DataTable,
-  DataTableHeader,
-  DataTableBody,
-  DataTableRow,
-  DataTableHead,
-  DataTableCell,
-} from '@/components/ui/data-table';
+  Skeleton,
+  TextField,
+} from '@heroui/react';
+import { DateRangeInput, type DateRange } from '@/components/date-range-input';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useProfitStore } from '@/stores/profitStore';
-import { cn } from '@/lib/utils';
 
 const periodOptions = [
   { value: 'today', label: 'Bugün' },
@@ -71,15 +46,6 @@ const periodOptions = [
   { value: '365d', label: 'Son 1 Yıl' },
   { value: 'custom', label: 'Özel Tarih' },
 ];
-
-const trendChartConfig: ChartConfig = {
-  grossProfit: { label: 'Brüt Kar', color: '#3b82f6' },
-  netProfit: { label: 'Net Kar', color: '#10b981' },
-};
-
-const productChartConfig: ChartConfig = {
-  netProfit: { label: 'Net Kar', color: '#10b981' },
-};
 
 export default function ReportsPage() {
   const { currentCompany } = useCompanyStore();
@@ -101,65 +67,57 @@ export default function ReportsPage() {
   } = useProfitStore();
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
-    customDateRange ? { from: customDateRange.from, to: customDateRange.to } : undefined
+    customDateRange?.from && customDateRange?.to
+      ? { from: customDateRange.from, to: customDateRange.to }
+      : undefined
   );
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    if (currentCompany?.id) {
-      fetchAllProfitAnalytics(currentCompany.id);
-    }
+    if (currentCompany?.id) fetchAllProfitAnalytics(currentCompany.id);
   }, [currentCompany?.id, period, customDateRange, selectedStoreId, fetchAllProfitAnalytics]);
 
   const handlePeriodChange = (value: string) => {
-    if (value !== 'custom') {
-      setDateRange(undefined);
-    }
+    if (value !== 'custom') setDateRange(undefined);
     setPeriod(value);
   };
 
-  const handleDateRangeChange = (range: DateRange | undefined) => {
-    setDateRange(range);
+  const handleDateRangeChange = (range: DateRange | null) => {
+    setDateRange(range ?? undefined);
     if (range?.from && range?.to) {
       setCustomDateRange({ from: range.from, to: range.to });
     }
   };
 
-  const handleStoreChange = (value: string) => {
-    setSelectedStoreId(value === 'all' ? null : value);
-  };
-
-  const formatCurrency = (num: number) => {
-    return num.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL';
-  };
-
-  const formatNumber = (num: number) => {
-    return num.toLocaleString('tr-TR');
-  };
+  const formatCurrency = (num: number) =>
+    num.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' TL';
 
   const formatChartDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('tr-TR', { day: '2-digit', month: 'short' });
   };
 
-  const renderChangeIndicator = (change: number) => {
+  const renderChange = (change: number) => {
     if (change === 0) return null;
-    const isPositive = change > 0;
+    const positive = change > 0;
     return (
-      <span className={cn(
-        'flex items-center text-xs font-medium',
-        isPositive ? 'text-green-600' : 'text-red-600'
-      )}>
-        {isPositive ? <TrendingUp className="h-3 w-3 mr-0.5" /> : <TrendingDown className="h-3 w-3 mr-0.5" />}
-        {isPositive ? '+' : ''}{change}%
+      <span
+        className={`flex items-center text-xs font-medium ${
+          positive ? 'text-success' : 'text-danger'
+        }`}
+      >
+        {positive ? (
+          <TrendingUp className="mr-0.5 h-3 w-3" />
+        ) : (
+          <TrendingDown className="mr-0.5 h-3 w-3" />
+        )}
+        {positive ? '+' : ''}
+        {change}%
       </span>
     );
   };
 
-  // Top 10 products by profit
   const topProducts = productProfits.slice(0, 10);
-
-  // Filter products by search term
   const filteredProducts = productProfits.filter((product) => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -170,199 +128,138 @@ export default function ReportsPage() {
   });
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-background z-10">
+    <div className="flex h-full flex-col overflow-auto">
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background px-6 py-4">
         <div className="flex items-center gap-2">
           <BarChart3 className="h-5 w-5" />
           <h1 className="text-xl font-semibold">Kar Analizi</h1>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={period} onValueChange={handlePeriodChange}>
-            <SelectTrigger className="w-36 h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {periodOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={period}
+            onSelectionChange={(key) => handlePeriodChange(String(key))}
+            aria-label="Dönem"
+            className="w-36"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {periodOptions.map((opt) => (
+                  <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
+                    {opt.label}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
 
           {period === 'custom' && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    'w-[260px] justify-start text-left font-normal h-9',
-                    !dateRange && 'text-muted-foreground'
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, 'dd MMM yyyy', { locale: tr })} -{' '}
-                        {format(dateRange.to, 'dd MMM yyyy', { locale: tr })}
-                      </>
-                    ) : (
-                      format(dateRange.from, 'dd MMM yyyy', { locale: tr })
-                    )
-                  ) : (
-                    <span>Tarih seçin</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={handleDateRangeChange}
-                  numberOfMonths={2}
-                  disabled={{ after: new Date() }}
-                />
-              </PopoverContent>
-            </Popover>
+            <DateRangeInput
+              value={dateRange}
+              onChange={handleDateRangeChange}
+              className="w-[280px]"
+            />
           )}
 
-          <Select value={selectedStoreId || 'all'} onValueChange={handleStoreChange}>
-            <SelectTrigger className="w-48 h-9">
-              <SelectValue placeholder="Tüm Mağazalar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm Mağazalar</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={selectedStoreId || 'all'}
+            onSelectionChange={(key) =>
+              setSelectedStoreId(key === 'all' ? null : String(key))
+            }
+            aria-label="Mağaza filtresi"
+            className="w-48"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tüm Mağazalar">
+                  Tüm Mağazalar
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {stores.map((store) => (
+                  <ListBox.Item key={store.id} id={store.id} textValue={store.name}>
+                    {store.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-4 border-b">
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Net Kar</span>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-28 mt-1" />
-          ) : (
-            <div className="flex items-baseline gap-2 mt-1">
-              <p className={cn(
-                'text-2xl font-semibold',
-                (summary?.netProfit || 0) < 0 ? 'text-red-600' : 'text-green-600'
-              )}>
-                {summary ? formatCurrency(summary.netProfit) : '0,00 TL'}
-              </p>
-              {summary && renderChangeIndicator(summary.profitChange)}
-            </div>
-          )}
-        </div>
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Brüt Kar</span>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-28 mt-1" />
-          ) : (
-            <p className={cn(
-              'text-2xl font-semibold mt-1',
-              (summary?.grossProfit || 0) < 0 ? 'text-red-600' : ''
-            )}>
-              {summary ? formatCurrency(summary.grossProfit) : '0,00 TL'}
-            </p>
-          )}
-        </div>
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Kar Marjı</span>
-            <Percent className="h-4 w-4 text-muted-foreground" />
-          </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-20 mt-1" />
-          ) : (
-            <p className={cn(
-              'text-2xl font-semibold mt-1',
-              (summary?.profitMargin || 0) < 0 ? 'text-red-600' : 'text-green-600'
-            )}>
-              %{summary?.profitMargin || 0}
-            </p>
-          )}
-        </div>
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Toplam Gelir</span>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-28 mt-1" />
-          ) : (
-            <p className="text-2xl font-semibold mt-1">
-              {summary ? formatCurrency(summary.totalRevenue) : '0,00 TL'}
-            </p>
-          )}
-        </div>
+      <div className="grid grid-cols-4 border-b border-border">
+        <SummaryCell
+          label="Net Kar"
+          Icon={DollarSign}
+          loading={isSummaryLoading}
+          extra={summary && renderChange(summary.profitChange)}
+        >
+          <span
+            className={
+              (summary?.netProfit || 0) < 0 ? 'text-danger' : 'text-success'
+            }
+          >
+            {summary ? formatCurrency(summary.netProfit) : '0,00 TL'}
+          </span>
+        </SummaryCell>
+        <SummaryCell label="Brüt Kar" Icon={TrendingUp} loading={isSummaryLoading}>
+          <span className={(summary?.grossProfit || 0) < 0 ? 'text-danger' : ''}>
+            {summary ? formatCurrency(summary.grossProfit) : '0,00 TL'}
+          </span>
+        </SummaryCell>
+        <SummaryCell label="Kar Marjı" Icon={Percent} loading={isSummaryLoading}>
+          <span
+            className={
+              (summary?.profitMargin || 0) < 0 ? 'text-danger' : 'text-success'
+            }
+          >
+            %{summary?.profitMargin || 0}
+          </span>
+        </SummaryCell>
+        <SummaryCell label="Toplam Gelir" Icon={ShoppingCart} loading={isSummaryLoading} last>
+          {summary ? formatCurrency(summary.totalRevenue) : '0,00 TL'}
+        </SummaryCell>
       </div>
 
-      {/* Cost Breakdown */}
-      <div className="grid grid-cols-4 border-b bg-muted/30">
-        <div className="px-6 py-3 border-r flex items-center gap-2">
-          <Package className="h-4 w-4 text-blue-600" />
-          <span className="text-sm text-muted-foreground">Maliyet:</span>
-          <span className="font-medium">
-            {summary ? formatCurrency(summary.totalCost) : '0,00 TL'}
-          </span>
-        </div>
-        <div className="px-6 py-3 border-r flex items-center gap-2">
-          <Percent className="h-4 w-4 text-orange-600" />
-          <span className="text-sm text-muted-foreground">Komisyon:</span>
-          <span className="font-medium">
-            {summary ? formatCurrency(summary.totalCommission) : '0,00 TL'}
-          </span>
-        </div>
-        <div className="px-6 py-3 border-r flex items-center gap-2">
-          <ShoppingCart className="h-4 w-4 text-purple-600" />
-          <span className="text-sm text-muted-foreground">Kargo:</span>
-          <span className="font-medium">
-            {summary ? formatCurrency(summary.totalShippingCost) : '0,00 TL'}
-          </span>
-        </div>
-        <div className="px-6 py-3 flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-green-600" />
-          <span className="text-sm text-muted-foreground">Ort. Sipariş Karı:</span>
-          <span className="font-medium">
-            {summary ? formatCurrency(summary.avgOrderProfit) : '0,00 TL'}
-          </span>
-        </div>
+      <div className="grid grid-cols-4 border-b border-border bg-surface-secondary/30">
+        <CostRow Icon={Package} iconTone="text-accent" label="Maliyet:">
+          {summary ? formatCurrency(summary.totalCost) : '0,00 TL'}
+        </CostRow>
+        <CostRow Icon={Percent} iconTone="text-warning" label="Komisyon:">
+          {summary ? formatCurrency(summary.totalCommission) : '0,00 TL'}
+        </CostRow>
+        <CostRow Icon={ShoppingCart} iconTone="text-accent" label="Kargo:">
+          {summary ? formatCurrency(summary.totalShippingCost) : '0,00 TL'}
+        </CostRow>
+        <CostRow Icon={BarChart3} iconTone="text-success" label="Ort. Sipariş Karı:" last>
+          {summary ? formatCurrency(summary.avgOrderProfit) : '0,00 TL'}
+        </CostRow>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-2 border-b">
-        {/* Profit Trend */}
-        <div className="border-r">
-          <div className="px-4 py-3 border-b">
+      <div className="grid grid-cols-2 border-b border-border">
+        <div className="border-r border-border">
+          <div className="border-b border-border px-4 py-3">
             <h3 className="text-sm font-medium">Kar Trendi</h3>
           </div>
           <div className="p-6">
             {isTrendLoading ? (
               <Skeleton className="h-[250px] w-full" />
             ) : trend.length === 0 ? (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+              <div className="flex h-[250px] items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
             ) : (
-              <ChartContainer config={trendChartConfig} className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height={250}>
                 <LineChart data={trend} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                   <XAxis
                     dataKey="date"
                     tickFormatter={formatChartDate}
@@ -378,51 +275,59 @@ export default function ReportsPage() {
                     axisLine={false}
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}K`}
                   />
-                  <ChartTooltip
+                  <Tooltip
                     cursor={false}
-                    content={<ChartTooltipContent labelFormatter={formatChartDate} />}
+                    labelFormatter={(label) => formatChartDate(String(label))}
+                    formatter={(value: number) => formatCurrency(value)}
                   />
-                  <Legend formatter={(value) => (value === 'grossProfit' ? 'Brüt Kar' : 'Net Kar')} />
+                  <Legend
+                    formatter={(value) => (value === 'grossProfit' ? 'Brüt Kar' : 'Net Kar')}
+                  />
                   <Line
                     type="monotone"
                     dataKey="grossProfit"
-                    stroke="var(--color-grossProfit)"
+                    name="grossProfit"
+                    stroke="#3b82f6"
                     strokeWidth={2}
                     dot={false}
                   />
                   <Line
                     type="monotone"
                     dataKey="netProfit"
-                    stroke="var(--color-netProfit)"
+                    name="netProfit"
+                    stroke="#10b981"
                     strokeWidth={2}
                     dot={false}
                   />
                 </LineChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Top Products by Profit */}
         <div>
-          <div className="px-4 py-3 border-b">
+          <div className="border-b border-border px-4 py-3">
             <h3 className="text-sm font-medium">En Karlı Ürünler</h3>
           </div>
           <div className="p-6">
             {isProductsLoading ? (
               <Skeleton className="h-[250px] w-full" />
             ) : topProducts.length === 0 ? (
-              <div className="h-[250px] flex items-center justify-center text-muted-foreground">
+              <div className="flex h-[250px] items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
             ) : (
-              <ChartContainer config={productChartConfig} className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height={250}>
                 <BarChart
                   data={topProducts.slice(0, 5)}
                   layout="vertical"
                   margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" horizontal={false} />
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-border"
+                    horizontal={false}
+                  />
                   <XAxis
                     type="number"
                     tick={{ fontSize: 12 }}
@@ -437,133 +342,198 @@ export default function ReportsPage() {
                     tickLine={false}
                     axisLine={false}
                     width={95}
-                    tickFormatter={(value) => value.length > 15 ? value.slice(0, 15) + '...' : value}
+                    tickFormatter={(value) =>
+                      value.length > 15 ? value.slice(0, 15) + '...' : value
+                    }
                   />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                  <Bar dataKey="netProfit" name="Net Kar (TL)" radius={[0, 4, 4, 0]}>
-                    {topProducts.slice(0, 5).map((entry, index) => (
-                      <Cell
-                        key={`cell-${index}`}
-                        fill={entry.netProfit >= 0 ? '#10b981' : '#ef4444'}
-                      />
+                  <Tooltip
+                    cursor={false}
+                    formatter={(value: number) => [formatCurrency(value), 'Net Kar']}
+                  />
+                  <Bar dataKey="netProfit" radius={[0, 4, 4, 0]}>
+                    {topProducts.slice(0, 5).map((entry, i) => (
+                      <Cell key={i} fill={entry.netProfit >= 0 ? '#10b981' : '#ef4444'} />
                     ))}
                   </Bar>
                 </BarChart>
-              </ChartContainer>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
       </div>
 
-      {/* Product Profit Table */}
       <div>
-        <div className="px-4 py-3 border-b flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <h3 className="text-sm font-medium">Ürün Bazlı Kar Analizi</h3>
           <div className="flex items-center gap-3">
             <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Ürün ara..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 h-8 w-48"
-              />
+              <Search className="absolute left-2.5 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-muted" />
+              <TextField value={searchTerm} onChange={setSearchTerm}>
+                <Input placeholder="Ürün ara..." className="h-8 w-48 pl-8" />
+              </TextField>
             </div>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-xs text-muted">
               {filteredProducts.length}/{productProfits.length} ürün
             </span>
           </div>
         </div>
-        <div className="overflow-auto max-h-[400px]">
+        <div className="max-h-[400px] overflow-auto">
           {isProductsLoading ? (
-            <div className="p-6 space-y-3">
+            <div className="flex flex-col gap-3 p-6">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Skeleton key={i} className="h-12 w-full" />
               ))}
             </div>
           ) : filteredProducts.length === 0 ? (
-            <div className="p-6 text-center text-muted-foreground">
+            <div className="p-6 text-center text-muted">
               {searchTerm ? 'Arama sonucu bulunamadı' : 'Ürün kar verisi bulunamadı'}
             </div>
           ) : (
-            <DataTable>
-              <DataTableHeader>
-                <DataTableRow className="hover:bg-transparent">
-                  <DataTableHead className="pl-6">Ürün</DataTableHead>
-                  <DataTableHead className="text-right">Satış Fiyatı</DataTableHead>
-                  <DataTableHead className="text-right">Alış Fiyatı</DataTableHead>
-                  <DataTableHead className="text-center">Satılan</DataTableHead>
-                  <DataTableHead className="text-right">Brüt Kar</DataTableHead>
-                  <DataTableHead className="text-right">Net Kar</DataTableHead>
-                  <DataTableHead className="text-right pr-6">Kar Marjı</DataTableHead>
-                </DataTableRow>
-              </DataTableHeader>
-              <DataTableBody>
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border bg-surface-secondary">
+                  <th className="px-6 py-2 text-left text-xs font-medium text-muted">Ürün</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted">
+                    Satış Fiyatı
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted">
+                    Alış Fiyatı
+                  </th>
+                  <th className="px-4 py-2 text-center text-xs font-medium text-muted">Satılan</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted">Brüt Kar</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted">Net Kar</th>
+                  <th className="px-4 py-2 pr-6 text-right text-xs font-medium text-muted">
+                    Kar Marjı
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
                 {filteredProducts.map((product) => (
-                  <DataTableRow key={product.productId}>
-                    <DataTableCell className="pl-6">
+                  <tr key={product.productId} className="border-b border-border">
+                    <td className="px-6 py-3">
                       <div className="flex items-center gap-3">
                         {product.imageUrl ? (
                           <img
                             src={product.imageUrl}
                             alt={product.productName}
-                            className="w-10 h-10 rounded object-cover"
+                            className="h-10 w-10 rounded object-cover"
                           />
                         ) : (
-                          <div className="w-10 h-10 rounded bg-muted flex items-center justify-center">
-                            <Package className="h-5 w-5 text-muted-foreground" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded bg-default">
+                            <Package className="h-5 w-5 text-muted" />
                           </div>
                         )}
                         <div>
-                          <p className="font-medium text-sm">{product.productName}</p>
+                          <p className="text-sm font-medium">{product.productName}</p>
                           {product.sku && (
-                            <p className="text-xs text-muted-foreground">SKU: {product.sku}</p>
+                            <p className="text-xs text-muted">SKU: {product.sku}</p>
                           )}
                         </div>
                       </div>
-                    </DataTableCell>
-                    <DataTableCell className="text-right">
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       {formatCurrency(product.salePrice)}
-                    </DataTableCell>
-                    <DataTableCell className="text-right">
+                    </td>
+                    <td className="px-4 py-3 text-right">
                       {product.hasPurchasePrice ? (
                         formatCurrency(product.purchasePrice!)
                       ) : (
-                        <span className="flex items-center justify-end gap-1 text-muted-foreground">
-                          <AlertTriangle className="h-3 w-3 text-yellow-500" />
+                        <span className="flex items-center justify-end gap-1 text-muted">
+                          <AlertTriangle className="h-3 w-3 text-warning" />
                           Belirsiz
                         </span>
                       )}
-                    </DataTableCell>
-                    <DataTableCell className="text-center">
-                      {product.quantitySold}
-                    </DataTableCell>
-                    <DataTableCell className="text-right">
-                      <span className={product.grossProfit < 0 ? 'text-red-600' : ''}>
+                    </td>
+                    <td className="px-4 py-3 text-center">{product.quantitySold}</td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={product.grossProfit < 0 ? 'text-danger' : ''}>
                         {formatCurrency(product.grossProfit)}
                       </span>
-                    </DataTableCell>
-                    <DataTableCell className="text-right font-medium">
-                      <span className={product.netProfit < 0 ? 'text-red-600' : 'text-green-600'}>
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium">
+                      <span
+                        className={product.netProfit < 0 ? 'text-danger' : 'text-success'}
+                      >
                         {formatCurrency(product.netProfit)}
                       </span>
-                    </DataTableCell>
-                    <DataTableCell className="text-right pr-6">
-                      <Badge className={cn(
-                        product.profitMargin < 0 ? 'bg-red-100 text-red-800' :
-                        product.profitMargin < 20 ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
-                      )}>
+                    </td>
+                    <td className="px-4 py-3 pr-6 text-right">
+                      <Chip
+                        variant="primary"
+                        size="sm"
+                        className={
+                          product.profitMargin < 0
+                            ? 'bg-danger/15 text-danger'
+                            : product.profitMargin < 20
+                              ? 'bg-warning/15 text-warning-foreground'
+                              : 'bg-success/15 text-success'
+                        }
+                      >
                         %{product.profitMargin}
-                      </Badge>
-                    </DataTableCell>
-                  </DataTableRow>
+                      </Chip>
+                    </td>
+                  </tr>
                 ))}
-              </DataTableBody>
-            </DataTable>
+              </tbody>
+            </table>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function SummaryCell({
+  label,
+  Icon,
+  loading,
+  last,
+  extra,
+  children,
+}: {
+  label: string;
+  Icon: React.ElementType;
+  loading: boolean;
+  last?: boolean;
+  extra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`px-6 py-4 ${!last ? 'border-r border-border' : ''}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted">{label}</span>
+        <Icon className="h-4 w-4 text-muted" />
+      </div>
+      {loading ? (
+        <Skeleton className="mt-1 h-8 w-28" />
+      ) : (
+        <div className="mt-1 flex items-baseline gap-2">
+          <p className="text-2xl font-semibold">{children}</p>
+          {extra}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CostRow({
+  Icon,
+  iconTone,
+  label,
+  last,
+  children,
+}: {
+  Icon: React.ElementType;
+  iconTone: string;
+  label: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`flex items-center gap-2 px-6 py-3 ${!last ? 'border-r border-border' : ''}`}>
+      <Icon className={`h-4 w-4 ${iconTone}`} />
+      <span className="text-sm text-muted">{label}</span>
+      <span className="font-medium">{children}</span>
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type AuthStep = 'email' | 'login' | 'register';
+type AuthStep = 'email' | 'login';
 
 const SOCIAL_BUTTON_CLASS =
   'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
@@ -35,32 +35,25 @@ const STEP_HEADERS: Record<
       </>
     ),
   },
-  register: {
-    title: 'Bilgilerinizi girin',
-    subtitle: 'Lütfen kişisel bilgilerinizi doldurun.',
-  },
 };
+
+function persistVerifyEmail(email: string, pendingRegistration: boolean) {
+  sessionStorage.setItem(
+    'verifyEmail',
+    JSON.stringify({ email, pendingRegistration, timestamp: Date.now() })
+  );
+}
 
 export function AuthForm() {
   const router = useRouter();
-  const { login, register } = useAuthStore();
+  const { login } = useAuthStore();
 
   const [step, setStep] = useState<AuthStep>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [name, setName] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const validatePassword = (pwd: string) => {
-    if (pwd.length < 8) return 'Şifre en az 8 karakter olmalıdır';
-    if (!/[A-Z]/.test(pwd)) return 'Şifre en az bir büyük harf içermelidir';
-    if (!/[a-z]/.test(pwd)) return 'Şifre en az bir küçük harf içermelidir';
-    if (!/\d/.test(pwd)) return 'Şifre en az bir rakam içermelidir';
-    return '';
-  };
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,14 +65,19 @@ export function AuthForm() {
       const { exists, status } = response.data;
 
       if (!exists) {
-        setStep('register');
+        // New user — request a verification code, then route to verify-email
+        try {
+          await api.post('/auth/resend-verification', { email });
+        } catch {
+          // Best effort; backend may not support this for unknown emails yet
+        }
+        persistVerifyEmail(email, true);
+        toast.info('E-posta adresinize doğrulama kodu gönderildi');
+        router.push('/verify-email');
       } else if (status === 'needs_verification') {
         toast.info('E-posta doğrulaması gerekiyor');
         await api.post('/auth/resend-verification', { email });
-        sessionStorage.setItem(
-          'verifyEmail',
-          JSON.stringify({ email, timestamp: Date.now() })
-        );
+        persistVerifyEmail(email, false);
         router.push('/verify-email');
       } else {
         setStep('login');
@@ -99,10 +97,7 @@ export function AuthForm() {
       const result = await login(email, password, rememberMe);
       if (result.requiresVerification) {
         toast.info('E-posta doğrulaması gerekiyor');
-        sessionStorage.setItem(
-          'verifyEmail',
-          JSON.stringify({ email, timestamp: Date.now() })
-        );
+        persistVerifyEmail(email, false);
         router.push('/verify-email');
       } else {
         toast.success('Giriş başarılı!');
@@ -117,45 +112,9 @@ export function AuthForm() {
     }
   };
 
-  const handleRegisterSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const pwdError = validatePassword(password);
-    if (pwdError) {
-      toast.danger(pwdError);
-      return;
-    }
-    if (password !== confirmPassword) {
-      toast.danger('Şifreler eşleşmiyor');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const result = await register(email, name, password);
-      if (result.requiresVerification && result.email) {
-        toast.success('Kayıt başarılı! Doğrulama kodu gönderildi.');
-        sessionStorage.setItem(
-          'verifyEmail',
-          JSON.stringify({ email: result.email, timestamp: Date.now() })
-        );
-        router.push('/verify-email');
-      } else {
-        toast.success('Kayıt başarılı!');
-        router.push('/dashboard');
-      }
-    } catch (err: any) {
-      toast.danger(err.message || 'Kayıt başarısız');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const handleBack = () => {
     setStep('email');
     setPassword('');
-    setConfirmPassword('');
-    setName('');
   };
 
   const handleSocialLogin = (provider: 'apple' | 'google') => {
@@ -292,89 +251,6 @@ export function AuthForm() {
               </>
             ) : (
               'Giriş Yap'
-            )}
-          </Button>
-
-          <button
-            type="button"
-            onClick={handleBack}
-            disabled={isLoading}
-            className="mt-1 flex items-center gap-1 text-sm text-black/60 hover:text-black"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Farklı e-posta kullan
-          </button>
-        </form>
-      )}
-
-      {step === 'register' && (
-        <form
-          onSubmit={handleRegisterSubmit}
-          className="flex w-full flex-col items-center gap-2"
-        >
-          <TextField
-            name="name"
-            value={name}
-            onChange={setName}
-            isRequired
-            isDisabled={isLoading}
-            autoFocus
-            aria-label="Ad ve soyad"
-          >
-            <Input placeholder="Ad ve Soyad" className={FIELD_INPUT_CLASS} />
-          </TextField>
-
-          <TextField
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={setPassword}
-            isRequired
-            isDisabled={isLoading}
-            aria-label="Şifre"
-          >
-            <div className="relative">
-              <Input placeholder="Şifre" className={FIELD_INPUT_CLASS} />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-black"
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
-              </button>
-            </div>
-          </TextField>
-
-          <TextField
-            name="confirmPassword"
-            type={showPassword ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            isRequired
-            isDisabled={isLoading}
-            aria-label="Şifre tekrarı"
-          >
-            <Input placeholder="Şifre Tekrarı" className={FIELD_INPUT_CLASS} />
-          </TextField>
-
-          <Button
-            type="submit"
-            isPending={isLoading}
-            isDisabled={isLoading || !name || !password || !confirmPassword}
-            className={PRIMARY_BUTTON_CLASS}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Kayıt yapılıyor...
-              </>
-            ) : (
-              'Kayıt ol'
             )}
           </Button>
 

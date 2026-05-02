@@ -18,6 +18,7 @@ type View = 'check-email' | 'otp';
 export default function VerifyEmailPage() {
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
+  const [pendingRegistration, setPendingRegistration] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const { setUser, setTokens } = useAuthStore();
 
@@ -31,10 +32,15 @@ export default function VerifyEmailPage() {
     const storedData = sessionStorage.getItem('verifyEmail');
     if (storedData) {
       try {
-        const { email: storedEmail, timestamp } = JSON.parse(storedData);
+        const {
+          email: storedEmail,
+          timestamp,
+          pendingRegistration: pending,
+        } = JSON.parse(storedData);
         const fifteenMinutes = 15 * 60 * 1000;
         if (storedEmail && timestamp && Date.now() - timestamp < fifteenMinutes) {
           setEmail(storedEmail);
+          setPendingRegistration(!!pending);
           setIsChecking(false);
         } else {
           sessionStorage.removeItem('verifyEmail');
@@ -63,7 +69,27 @@ export default function VerifyEmailPage() {
         if (code.length !== 6) toast.danger('Lütfen 6 haneli kodu girin');
         return;
       }
+
       setIsLoading(true);
+
+      // Pending registration: backend doesn't have a user record yet, so we
+      // can't call /auth/verify-email here. Persist the verified code and
+      // route to /complete-profile, which finalises registration with name +
+      // password and submits the OTP alongside.
+      if (pendingRegistration) {
+        sessionStorage.setItem(
+          'verifyEmail',
+          JSON.stringify({
+            email,
+            pendingRegistration: true,
+            code,
+            timestamp: Date.now(),
+          })
+        );
+        router.push('/complete-profile');
+        return;
+      }
+
       try {
         const response = await api.post('/auth/verify-email', { email, code });
         const { user, accessToken, refreshToken } = response.data;
@@ -80,7 +106,7 @@ export default function VerifyEmailPage() {
         setIsLoading(false);
       }
     },
-    [code, email, router, setUser, setTokens]
+    [code, email, pendingRegistration, router, setUser, setTokens]
   );
 
   const handleResend = async () => {

@@ -120,33 +120,33 @@ export function AppSidebar() {
       {/* Team Switcher */}
       <div className="p-2">
         <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-default/50"
-            >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-                {currentCompany ? (
-                  <span className="text-xs font-semibold">
-                    {getInitials(currentCompany.name)}
-                  </span>
-                ) : (
-                  <Building2 className="size-4" />
-                )}
-              </div>
-              <div className="flex flex-1 flex-col leading-tight">
-                <span className="truncate font-semibold">
-                  {currentCompany?.name || 'Şirket Seçin'}
+          <Button
+            variant="ghost"
+            fullWidth
+            aria-label="Şirket seç"
+            className="h-auto justify-start gap-2 p-2 text-left"
+          >
+            <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-accent text-accent-foreground">
+              {currentCompany ? (
+                <span className="text-xs font-semibold">
+                  {getInitials(currentCompany.name)}
                 </span>
-                {isPricingEnabled && (
-                  <span className="truncate text-xs text-muted">
-                    {user?.plan?.displayName || 'Free'} Plan
-                  </span>
-                )}
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
-            </button>
-          </Dropdown.Trigger>
+              ) : (
+                <Building2 className="size-4" />
+              )}
+            </div>
+            <div className="flex flex-1 flex-col leading-tight">
+              <span className="truncate text-sm font-semibold">
+                {currentCompany?.name || 'Şirket Seçin'}
+              </span>
+              {isPricingEnabled && (
+                <span className="truncate text-xs font-normal text-muted">
+                  {user?.plan?.displayName || 'Free'} Plan
+                </span>
+              )}
+            </div>
+            <ChevronsUpDown className="ml-auto size-4 shrink-0" />
+          </Button>
           <Dropdown.Popover className="min-w-56">
             <Dropdown.Menu
               onAction={(key) => {
@@ -222,25 +222,27 @@ export function AppSidebar() {
       {/* User Menu */}
       <div className="border-t border-border p-2">
         <Dropdown>
-          <Dropdown.Trigger>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-md p-2 text-left text-sm hover:bg-default/50"
-            >
-              <Avatar className="size-8 rounded-lg">
-                <Avatar.Fallback className="rounded-lg text-xs">
-                  {getInitials(user?.name, user?.email)}
-                </Avatar.Fallback>
-              </Avatar>
-              <div className="flex flex-1 flex-col leading-tight">
-                <span className="truncate text-sm font-semibold">
-                  {user?.name || 'Kullanıcı'}
-                </span>
-                <span className="truncate text-xs text-muted">{user?.email}</span>
-              </div>
-              <ChevronsUpDown className="ml-auto size-4" />
-            </button>
-          </Dropdown.Trigger>
+          <Button
+            variant="ghost"
+            fullWidth
+            aria-label="Kullanıcı menüsü"
+            className="h-auto justify-start gap-2 p-2 text-left"
+          >
+            <Avatar className="size-8 rounded-lg">
+              <Avatar.Fallback className="rounded-lg text-xs">
+                {getInitials(user?.name, user?.email)}
+              </Avatar.Fallback>
+            </Avatar>
+            <div className="flex flex-1 flex-col leading-tight">
+              <span className="truncate text-sm font-semibold">
+                {user?.name || 'Kullanıcı'}
+              </span>
+              <span className="truncate text-xs font-normal text-muted">
+                {user?.email}
+              </span>
+            </div>
+            <ChevronsUpDown className="ml-auto size-4 shrink-0" />
+          </Button>
           <Dropdown.Popover className="min-w-56">
             <Dropdown.Menu
               onAction={(key) => {

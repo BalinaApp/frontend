@@ -23,7 +23,6 @@ import {
   Modal,
   Skeleton,
   TextField,
-,
   toast,
 } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';

@@ -2,14 +2,18 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Mail } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
 const PRIMARY_BUTTON_CLASS =
-  'w-full rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
+  'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
+const TERTIARY_BUTTON_CLASS =
+  'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
+
+type View = 'check-email' | 'otp';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
@@ -17,6 +21,7 @@ export default function VerifyEmailPage() {
   const [isChecking, setIsChecking] = useState(true);
   const { setUser, setTokens } = useAuthStore();
 
+  const [view, setView] = useState<View>('check-email');
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -93,8 +98,8 @@ export default function VerifyEmailPage() {
   };
 
   useEffect(() => {
-    if (code.length === 6 && email && !isLoading) handleSubmit();
-  }, [code, email, isLoading, handleSubmit]);
+    if (view === 'otp' && code.length === 6 && email && !isLoading) handleSubmit();
+  }, [view, code, email, isLoading, handleSubmit]);
 
   if (isChecking || !email) {
     return (
@@ -103,86 +108,106 @@ export default function VerifyEmailPage() {
           <Skeleton className="h-16 w-16 rounded-lg" />
           <Skeleton className="h-7 w-48" />
           <Skeleton className="h-4 w-56" />
-          <div className="flex gap-2">
-            <Skeleton className="h-12 w-10" />
-            <Skeleton className="h-12 w-10" />
-            <Skeleton className="h-12 w-10" />
-            <Skeleton className="h-4 w-4 self-center" />
-            <Skeleton className="h-12 w-10" />
-            <Skeleton className="h-12 w-10" />
-            <Skeleton className="h-12 w-10" />
-          </div>
           <Skeleton className="h-9 w-full" />
         </div>
       </div>
     );
   }
 
+  const resendLabel = isResending
+    ? 'Gönderiliyor...'
+    : resendCooldown > 0
+      ? `Tekrar gönder (${resendCooldown}s)`
+      : 'Sihirli bağlantıyı tekrar gönder';
+
   return (
     <AuthShell
-      title="E-posta Doğrulama"
+      title="E-postalarınızı kontrol edin"
       subtitle={
-        <span className="flex items-center justify-center gap-2">
-          <Mail className="h-4 w-4" />
-          <span className="font-medium text-black">{email}</span>
-        </span>
+        <>
+          Lütfen <span className="font-medium text-black">{email}</span>{' '}
+          adresindeki gelen kutunuzu kontrol edin.
+        </>
       }
     >
-      <p className="text-center text-sm text-black/60">
-        E-posta adresinize gönderilen 6 haneli kodu girin
-      </p>
-      <form onSubmit={handleSubmit} className="flex w-full flex-col items-center gap-4">
-        <InputOTP
-          maxLength={6}
-          value={code}
-          onChange={setCode}
-          isDisabled={isLoading}
-        >
-          <InputOTP.Group>
-            <InputOTP.Slot index={0} />
-            <InputOTP.Slot index={1} />
-            <InputOTP.Slot index={2} />
-          </InputOTP.Group>
-          <InputOTP.Separator />
-          <InputOTP.Group>
-            <InputOTP.Slot index={3} />
-            <InputOTP.Slot index={4} />
-            <InputOTP.Slot index={5} />
-          </InputOTP.Group>
-        </InputOTP>
+      {view === 'check-email' ? (
+        <>
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="tertiary"
+              onPress={() => setView('otp')}
+              className={TERTIARY_BUTTON_CLASS}
+            >
+              Manuel kod gir
+            </Button>
+          </div>
 
-        <Button
-          type="submit"
-          isPending={isLoading}
-          isDisabled={isLoading || code.length !== 6}
-          className={PRIMARY_BUTTON_CLASS}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Doğrulanıyor...
-            </>
-          ) : (
-            'Doğrula'
-          )}
-        </Button>
+          <hr className="w-8 border-t border-black/[0.12]" aria-hidden="true" />
 
-        <p className="text-sm text-black/60">
-          Kod almadınız mı?{' '}
-          <button
-            type="button"
-            onClick={handleResend}
-            disabled={isResending || resendCooldown > 0}
-            className="text-[#0485F7] hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="flex flex-col gap-2">
+            <Button
+              variant="tertiary"
+              onPress={handleResend}
+              isDisabled={isResending || resendCooldown > 0}
+              isPending={isResending}
+              className={TERTIARY_BUTTON_CLASS}
+            >
+              {resendLabel}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2">
+          <InputOTP
+            maxLength={6}
+            value={code}
+            onChange={setCode}
+            isDisabled={isLoading}
+            autoFocus
           >
-            {isResending
-              ? 'Gönderiliyor...'
-              : resendCooldown > 0
-                ? `Tekrar gönder (${resendCooldown}s)`
-                : 'Tekrar gönder'}
-          </button>
-        </p>
-      </form>
+            <InputOTP.Group>
+              <InputOTP.Slot index={0} />
+              <InputOTP.Slot index={1} />
+              <InputOTP.Slot index={2} />
+            </InputOTP.Group>
+            <InputOTP.Separator />
+            <InputOTP.Group>
+              <InputOTP.Slot index={3} />
+              <InputOTP.Slot index={4} />
+              <InputOTP.Slot index={5} />
+            </InputOTP.Group>
+          </InputOTP>
+
+          <Button
+            type="submit"
+            isPending={isLoading}
+            isDisabled={isLoading || code.length !== 6}
+            className={PRIMARY_BUTTON_CLASS}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Doğrulanıyor...
+              </>
+            ) : (
+              'Kodu onayla'
+            )}
+          </Button>
+
+          <hr className="my-2 w-8 border-t border-black/[0.12]" aria-hidden="true" />
+
+          <Button
+            type="button"
+            variant="tertiary"
+            onPress={handleResend}
+            isDisabled={isResending || resendCooldown > 0}
+            isPending={isResending}
+            className={TERTIARY_BUTTON_CLASS}
+          >
+            {resendLabel}
+          </Button>
+        </form>
+      )}
     </AuthShell>
   );
 }

@@ -1,28 +1,25 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BarChart3, Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
-import {
-  Button,
-  Checkbox,
-  Description,
-  Input,
-  Label,
-  TextField,
-} from '@heroui/react';
+import { Button, Checkbox, Input, TextField } from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
 type AuthStep = 'email' | 'login' | 'register';
 
-interface AuthFormProps {
-  className?: string;
-}
+const SOCIAL_BUTTON_CLASS =
+  'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
+const PRIMARY_BUTTON_CLASS =
+  'w-full rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
+const FIELD_INPUT_CLASS =
+  'h-9 w-[332px] rounded-xl bg-white px-3 text-sm placeholder:text-[#71717A] shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)]';
 
-export function AuthForm({ className }: AuthFormProps) {
+export function AuthForm() {
   const router = useRouter();
   const { login, register } = useAuthStore();
 
@@ -88,11 +85,8 @@ export function AuthForm({ className }: AuthFormProps) {
       } else {
         toast.success('Giriş başarılı!');
         const currentUser = useAuthStore.getState().user;
-        if (!currentUser?.currentCompanyId) {
-          router.push('/setup-company');
-        } else {
-          router.push('/dashboard');
-        }
+        if (!currentUser?.currentCompanyId) router.push('/setup-company');
+        else router.push('/dashboard');
       }
     } catch (err: any) {
       toast.error(err.message || 'Giriş başarısız');
@@ -109,14 +103,12 @@ export function AuthForm({ className }: AuthFormProps) {
       toast.error(pwdError);
       return;
     }
-
     if (password !== confirmPassword) {
       toast.error('Şifreler eşleşmiyor');
       return;
     }
 
     setIsLoading(true);
-
     try {
       const result = await register(email, name, password);
       if (result.requiresVerification && result.email) {
@@ -144,34 +136,40 @@ export function AuthForm({ className }: AuthFormProps) {
     setName('');
   };
 
-  return (
-    <div className={['flex flex-col gap-6', className].filter(Boolean).join(' ')}>
-      <div className="flex flex-col items-center gap-2 text-center">
-        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-          <BarChart3 className="h-7 w-7" />
-        </div>
-        <h1 className="text-xl font-bold">
-          {step === 'email' && 'Hoş Geldiniz'}
-          {step === 'login' && 'Tekrar Hoş Geldiniz'}
-          {step === 'register' && 'Hesap Oluşturun'}
-        </h1>
-        <p className="text-sm text-muted">
-          {step === 'email' && 'WooCommerce Analytics hesabınıza giriş yapın veya kayıt olun'}
-          {step === 'login' && (
-            <>
-              <span className="font-medium text-foreground">{email}</span> ile giriş yapın
-            </>
-          )}
-          {step === 'register' && (
-            <>
-              <span className="font-medium text-foreground">{email}</span> ile hesap oluşturun
-            </>
-          )}
-        </p>
-      </div>
+  const handleSocialLogin = (provider: 'apple' | 'google') => {
+    toast.info(`${provider === 'apple' ? 'Apple' : 'Google'} ile giriş yakında eklenecek`);
+  };
 
-      {step === 'email' && (
-        <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4">
+  if (step === 'email') {
+    return (
+      <div className="flex w-full flex-col items-center gap-5">
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="tertiary"
+            size="md"
+            onPress={() => handleSocialLogin('apple')}
+            className={SOCIAL_BUTTON_CLASS}
+          >
+            <Image src="/figma/logo-apple.svg" alt="" width={16} height={16} />
+            Apple ile giriş
+          </Button>
+          <Button
+            variant="tertiary"
+            size="md"
+            onPress={() => handleSocialLogin('google')}
+            className={SOCIAL_BUTTON_CLASS}
+          >
+            <Image src="/figma/logo-google.svg" alt="" width={16} height={16} />
+            Google ile giriş
+          </Button>
+        </div>
+
+        <hr className="w-8 border-t border-black/[0.12]" aria-hidden="true" />
+
+        <form
+          onSubmit={handleEmailSubmit}
+          className="flex w-full flex-col items-center gap-2"
+        >
           <TextField
             name="email"
             type="email"
@@ -180,15 +178,18 @@ export function AuthForm({ className }: AuthFormProps) {
             isRequired
             isDisabled={isLoading}
             autoFocus
+            aria-label="E-posta adresiniz"
           >
-            <Label>E-posta</Label>
-            <Input placeholder="ornek@email.com" />
+            <Input
+              placeholder="E-posta Adresiniz"
+              className={FIELD_INPUT_CLASS}
+            />
           </TextField>
           <Button
             type="submit"
-            fullWidth
             isPending={isLoading}
             isDisabled={isLoading || !email}
+            className={PRIMARY_BUTTON_CLASS}
           >
             {isLoading ? (
               <>
@@ -196,168 +197,180 @@ export function AuthForm({ className }: AuthFormProps) {
                 Kontrol ediliyor...
               </>
             ) : (
-              'Devam Et'
+              'E-posta ile ilerle'
             )}
           </Button>
         </form>
-      )}
+      </div>
+    );
+  }
 
-      {step === 'login' && (
-        <form onSubmit={handleLoginSubmit} className="flex flex-col gap-4">
-          <TextField
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={setPassword}
-            isRequired
-            isDisabled={isLoading}
-            autoFocus
-          >
-            <Label>Şifre</Label>
-            <div className="relative">
-              <Input placeholder="••••••••" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-                className="absolute right-1 top-1/2 -translate-y-1/2"
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted" />
-                )}
-              </Button>
-            </div>
-          </TextField>
-          <div className="flex items-center justify-between">
-            <Checkbox
-              isSelected={rememberMe}
-              onChange={setRememberMe}
-              isDisabled={isLoading}
+  if (step === 'login') {
+    return (
+      <form
+        onSubmit={handleLoginSubmit}
+        className="flex w-full flex-col items-center gap-3"
+      >
+        <p className="text-sm text-black/70">
+          <span className="font-medium text-black">{email}</span> ile devam
+        </p>
+        <TextField
+          name="password"
+          type={showPassword ? 'text' : 'password'}
+          value={password}
+          onChange={setPassword}
+          isRequired
+          isDisabled={isLoading}
+          autoFocus
+          aria-label="Şifre"
+        >
+          <div className="relative">
+            <Input placeholder="Şifre" className={FIELD_INPUT_CLASS} />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-black"
             >
-              Beni hatırla
-            </Checkbox>
-            <Link
-              href="/forgot-password"
-              className="text-sm text-accent hover:underline"
-            >
-              Şifremi unuttum
-            </Link>
+              {showPassword ? (
+                <EyeOff className="h-4 w-4" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
+            </button>
           </div>
-          <Button
-            type="submit"
-            fullWidth
-            isPending={isLoading}
-            isDisabled={isLoading || !password}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Giriş yapılıyor...
-              </>
-            ) : (
-              'Giriş Yap'
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            fullWidth
-            onPress={handleBack}
-            isDisabled={isLoading}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Farklı e-posta kullan
-          </Button>
-        </form>
-      )}
+        </TextField>
 
-      {step === 'register' && (
-        <form onSubmit={handleRegisterSubmit} className="flex flex-col gap-4">
-          <TextField
-            name="name"
-            value={name}
-            onChange={setName}
-            isRequired
-            isDisabled={isLoading}
-            autoFocus
-          >
-            <Label>Ad Soyad</Label>
-            <Input placeholder="John Doe" />
-          </TextField>
-          <TextField
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            value={password}
-            onChange={setPassword}
-            isRequired
+        <div className="flex w-[332px] items-center justify-between">
+          <Checkbox
+            isSelected={rememberMe}
+            onChange={setRememberMe}
             isDisabled={isLoading}
           >
-            <Label>Şifre</Label>
-            <div className="relative">
-              <Input placeholder="••••••••" />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-                className="absolute right-1 top-1/2 -translate-y-1/2"
-                onPress={() => setShowPassword((v) => !v)}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted" />
-                )}
-              </Button>
-            </div>
-            <Description>
-              En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam
-            </Description>
-          </TextField>
-          <TextField
-            name="confirmPassword"
-            type={showPassword ? 'text' : 'password'}
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            isRequired
-            isDisabled={isLoading}
+            <span className="text-sm">Beni hatırla</span>
+          </Checkbox>
+          <Link
+            href="/forgot-password"
+            className="text-sm text-[#0485F7] hover:underline"
           >
-            <Label>Şifre Tekrar</Label>
-            <Input placeholder="••••••••" />
-          </TextField>
-          <Button
-            type="submit"
-            fullWidth
-            isPending={isLoading}
-            isDisabled={isLoading || !name || !password || !confirmPassword}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Kayıt yapılıyor...
-              </>
-            ) : (
-              'Kayıt Ol'
-            )}
-          </Button>
-          <Button
+            Şifremi unuttum
+          </Link>
+        </div>
+
+        <Button
+          type="submit"
+          isPending={isLoading}
+          isDisabled={isLoading || !password}
+          className={PRIMARY_BUTTON_CLASS}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Giriş yapılıyor...
+            </>
+          ) : (
+            'Giriş Yap'
+          )}
+        </Button>
+
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={isLoading}
+          className="flex items-center gap-1 text-sm text-black/60 hover:text-black"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Farklı e-posta kullan
+        </button>
+      </form>
+    );
+  }
+
+  // Register step
+  return (
+    <form
+      onSubmit={handleRegisterSubmit}
+      className="flex w-full flex-col items-center gap-3"
+    >
+      <p className="text-sm text-black/70">
+        <span className="font-medium text-black">{email}</span> ile hesap oluştur
+      </p>
+      <TextField
+        name="name"
+        value={name}
+        onChange={setName}
+        isRequired
+        isDisabled={isLoading}
+        autoFocus
+        aria-label="Ad Soyad"
+      >
+        <Input placeholder="Ad Soyad" className={FIELD_INPUT_CLASS} />
+      </TextField>
+      <TextField
+        name="password"
+        type={showPassword ? 'text' : 'password'}
+        value={password}
+        onChange={setPassword}
+        isRequired
+        isDisabled={isLoading}
+        aria-label="Şifre"
+      >
+        <div className="relative">
+          <Input placeholder="Şifre" className={FIELD_INPUT_CLASS} />
+          <button
             type="button"
-            variant="ghost"
-            fullWidth
-            onPress={handleBack}
-            isDisabled={isLoading}
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-black"
           >
-            <ArrowLeft className="h-4 w-4" />
-            Farklı e-posta kullan
-          </Button>
-        </form>
-      )}
-    </div>
+            {showPassword ? (
+              <EyeOff className="h-4 w-4" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+          </button>
+        </div>
+      </TextField>
+      <p className="w-[332px] text-xs text-black/60">
+        En az 8 karakter, bir büyük harf, bir küçük harf ve bir rakam
+      </p>
+      <TextField
+        name="confirmPassword"
+        type={showPassword ? 'text' : 'password'}
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        isRequired
+        isDisabled={isLoading}
+        aria-label="Şifre tekrar"
+      >
+        <Input placeholder="Şifre Tekrar" className={FIELD_INPUT_CLASS} />
+      </TextField>
+
+      <Button
+        type="submit"
+        isPending={isLoading}
+        isDisabled={isLoading || !name || !password || !confirmPassword}
+        className={PRIMARY_BUTTON_CLASS}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Kayıt yapılıyor...
+          </>
+        ) : (
+          'Kayıt Ol'
+        )}
+      </Button>
+
+      <button
+        type="button"
+        onClick={handleBack}
+        disabled={isLoading}
+        className="flex items-center gap-1 text-sm text-black/60 hover:text-black"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Farklı e-posta kullan
+      </button>
+    </form>
   );
 }

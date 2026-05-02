@@ -14,29 +14,18 @@ import {
   TrendingUp,
   AlertTriangle,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
+  Button,
+  Input,
+  ListBox,
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  DataTable,
-  DataTableHeader,
-  DataTableBody,
-  DataTableRow,
-  DataTableHead,
-  DataTableCell,
-} from '@/components/ui/data-table';
+  Skeleton,
+  TextField,
+} from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { EditableStockCell, EditablePriceCell } from '@/components/inventory';
-import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 type StockFilter = 'all' | 'instock' | 'critical' | 'outofstock';
@@ -70,74 +59,50 @@ export default function InventoryPage() {
   const [sortField, setSortField] = useState<SortField>('name');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
 
-  // Fetch summary on mount and auto-refresh every 60 seconds
   useEffect(() => {
-    if (currentCompany?.id) {
-      fetchSummary(currentCompany.id);
-    }
-
-    // Auto-refresh every 60 seconds
+    if (currentCompany?.id) fetchSummary(currentCompany.id);
     const interval = setInterval(() => {
-      if (currentCompany?.id) {
-        fetchSummary(currentCompany.id);
-      }
+      if (currentCompany?.id) fetchSummary(currentCompany.id);
     }, 60000);
-
     return () => clearInterval(interval);
   }, [currentCompany?.id, fetchSummary]);
 
   const fetchData = useCallback(() => {
     if (!currentCompany?.id) return;
-
     const filters: Record<string, string | undefined> = {};
-
-    if (stockFilter === 'outofstock') {
-      filters.stockStatus = 'outofstock';
-    } else if (stockFilter === 'critical') {
-      filters.stockStatus = 'critical';
-    } else if (stockFilter === 'instock') {
-      filters.stockStatus = 'instock';
-    }
-
-    if (selectedStoreId !== 'all') {
-      filters.storeId = selectedStoreId;
-    }
-
-    if (searchQuery) {
-      filters.search = searchQuery;
-    }
-
-    if (mappingFilter !== 'all') {
-      filters.mappingStatus = mappingFilter;
-    }
+    if (stockFilter !== 'all') filters.stockStatus = stockFilter;
+    if (selectedStoreId !== 'all') filters.storeId = selectedStoreId;
+    if (searchQuery) filters.search = searchQuery;
+    if (mappingFilter !== 'all') filters.mappingStatus = mappingFilter;
 
     fetchProducts(currentCompany.id, {
       page: 1,
       limit: 20,
       sortBy: sortField,
-      sortOrder: sortOrder,
+      sortOrder,
       ...filters,
     });
-  }, [currentCompany?.id, stockFilter, mappingFilter, selectedStoreId, searchQuery, sortField, sortOrder, fetchProducts]);
+  }, [
+    currentCompany?.id,
+    stockFilter,
+    mappingFilter,
+    selectedStoreId,
+    searchQuery,
+    sortField,
+    sortOrder,
+    fetchProducts,
+  ]);
 
   useEffect(() => {
     fetchData();
-
-    // Auto-refresh products every 60 seconds
-    const interval = setInterval(() => {
-      fetchData();
-    }, 60000);
-
+    const interval = setInterval(() => fetchData(), 60000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
   const handlePageChange = (page: number) => {
     if (!currentCompany?.id) return;
-
     const filters: Record<string, string | undefined> = {};
-    if (stockFilter === 'outofstock') filters.stockStatus = 'outofstock';
-    else if (stockFilter === 'critical') filters.stockStatus = 'critical';
-    else if (stockFilter === 'instock') filters.stockStatus = 'instock';
+    if (stockFilter !== 'all') filters.stockStatus = stockFilter;
     if (selectedStoreId !== 'all') filters.storeId = selectedStoreId;
     if (searchQuery) filters.search = searchQuery;
     if (mappingFilter !== 'all') filters.mappingStatus = mappingFilter;
@@ -146,7 +111,7 @@ export default function InventoryPage() {
       page,
       limit: 20,
       sortBy: sortField,
-      sortOrder: sortOrder,
+      sortOrder,
       ...filters,
     });
   };
@@ -158,37 +123,21 @@ export default function InventoryPage() {
     { id: 'outofstock' as const, label: 'Stok Yok' },
   ];
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    fetchData();
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-  };
-
   const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
+    if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    else {
       setSortField(field);
       setSortOrder('asc');
     }
   };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) {
-      return (num / 1000000).toFixed(1) + 'M';
-    }
-    if (num >= 1000) {
-      return (num / 1000).toFixed(1) + 'K';
-    }
+    if (num >= 1_000_000) return (num / 1_000_000).toFixed(1) + 'M';
+    if (num >= 1_000) return (num / 1_000).toFixed(1) + 'K';
     return num.toLocaleString('tr-TR');
   };
 
-  const formatCurrency = (num: number) => {
-    return num.toLocaleString('tr-TR') + ' TL';
-  };
+  const formatCurrency = (num: number) => num.toLocaleString('tr-TR') + ' TL';
 
   const handleStockUpdate = async (productId: string, newStock: number): Promise<boolean> => {
     if (!currentCompany?.id) return false;
@@ -202,7 +151,10 @@ export default function InventoryPage() {
     return success;
   };
 
-  const handlePurchasePriceUpdate = async (productId: string, newPrice: number): Promise<boolean> => {
+  const handlePurchasePriceUpdate = async (
+    productId: string,
+    newPrice: number
+  ): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const success = await updateProductPurchasePrice(currentCompany.id, productId, newPrice);
     if (success) {
@@ -215,190 +167,203 @@ export default function InventoryPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b">
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <Package className="h-5 w-5" />
           <h1 className="text-xl font-semibold">Stoklar</h1>
         </div>
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-4 border-b">
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Toplam Stok</span>
-            <Box className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-semibold mt-1">
-            {summary ? formatNumber(summary.totalStock) : '-'}
-          </p>
-        </div>
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Stok Değeri</span>
-            <ShoppingCart className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className="text-2xl font-semibold mt-1">
-            {summary ? formatCurrency(summary.totalStockValue) : '-'}
-          </p>
-        </div>
-        <div className="px-6 py-4 border-r">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Net Kar</span>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <p className={`text-2xl font-semibold mt-1 ${summary && summary.netProfit < 0 ? 'text-red-500' : 'text-green-600'}`}>
+      <div className="grid grid-cols-4 border-b border-border">
+        <SummaryCell label="Toplam Stok" Icon={Box}>
+          {summary ? formatNumber(summary.totalStock) : '-'}
+        </SummaryCell>
+        <SummaryCell label="Stok Değeri" Icon={ShoppingCart}>
+          {summary ? formatCurrency(summary.totalStockValue) : '-'}
+        </SummaryCell>
+        <SummaryCell label="Net Kar" Icon={TrendingUp}>
+          <span
+            className={
+              summary && summary.netProfit < 0 ? 'text-danger' : 'text-success'
+            }
+          >
             {summary ? formatCurrency(summary.netProfit) : '-'}
-          </p>
-        </div>
-        <div className="px-6 py-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Kritik Stok</span>
-            <AlertTriangle className="h-4 w-4 text-orange-500" />
-          </div>
-          <p className="text-2xl font-semibold mt-1 text-orange-500">
+          </span>
+        </SummaryCell>
+        <SummaryCell label="Kritik Stok" Icon={AlertTriangle} iconTone="text-warning" last>
+          <span className="text-warning-foreground">
             {summary ? summary.criticalStockCount : '-'}
-          </p>
-        </div>
+          </span>
+        </SummaryCell>
       </div>
 
-      {/* Filters Row */}
-      <div className="flex items-center justify-between px-6 py-3 border-b gap-4">
-        {/* Tabs */}
+      <div className="flex items-center justify-between gap-4 border-b border-border px-6 py-3">
         <div className="flex items-center gap-1">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setStockFilter(tab.id)}
-              className={cn(
-                'px-3 py-1.5 text-sm font-medium rounded-md transition-colors',
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                 stockFilter === tab.id
-                  ? 'bg-gray-100 text-gray-900'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-              )}
+                  ? 'bg-default text-foreground'
+                  : 'text-muted hover:bg-default/50 hover:text-foreground'
+              }`}
             >
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* Search and Filter */}
         <div className="flex items-center gap-3">
-          {/* Search Input */}
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Ürün veya SKU ara..."
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              fetchData();
+            }}
+            className="relative"
+          >
+            <Search className="absolute left-3 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-muted" />
+            <TextField
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 w-64 h-9"
-            />
+              onChange={setSearchQuery}
+              className="w-64"
+            >
+              <Input placeholder="Ürün veya SKU ara..." className="pl-9" />
+            </TextField>
             {searchQuery && (
               <button
                 type="button"
-                onClick={clearSearch}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                aria-label="Aramayı temizle"
               >
                 <X className="h-4 w-4" />
               </button>
             )}
           </form>
 
-          {/* Store Filter Dropdown */}
-          <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
-            <SelectTrigger className="w-48 h-9">
-              <SelectValue placeholder="Tüm Mağazalar" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm Mağazalar</SelectItem>
-              {stores.map((store) => (
-                <SelectItem key={store.id} value={store.id}>
-                  {store.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
+          <Select
+            selectedKey={selectedStoreId}
+            onSelectionChange={(key) => setSelectedStoreId(String(key))}
+            aria-label="Mağaza filtresi"
+            className="w-48"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tüm Mağazalar">
+                  Tüm Mağazalar
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                {stores.map((store) => (
+                  <ListBox.Item key={store.id} id={store.id} textValue={store.name}>
+                    {store.name}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
           </Select>
 
-          {/* Mapping Filter Dropdown */}
-          <Select value={mappingFilter} onValueChange={(v) => setMappingFilter(v as MappingFilter)}>
-            <SelectTrigger className="w-40 h-9">
-              <SelectValue placeholder="Eşleştirme" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tüm Ürünler</SelectItem>
-              <SelectItem value="mapped">Eşleştirilmiş</SelectItem>
-              <SelectItem value="unmapped">Eşleştirilmemiş</SelectItem>
-            </SelectContent>
+          <Select
+            selectedKey={mappingFilter}
+            onSelectionChange={(key) => setMappingFilter(key as MappingFilter)}
+            aria-label="Eşleştirme filtresi"
+            className="w-40"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                <ListBox.Item id="all" textValue="Tüm Ürünler">
+                  Tüm Ürünler
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="mapped" textValue="Eşleştirilmiş">
+                  Eşleştirilmiş
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+                <ListBox.Item id="unmapped" textValue="Eşleştirilmemiş">
+                  Eşleştirilmemiş
+                  <ListBox.ItemIndicator />
+                </ListBox.Item>
+              </ListBox>
+            </Select.Popover>
           </Select>
         </div>
       </div>
 
-      {/* Products Table */}
       <div className="flex-1 overflow-auto">
-        <DataTable>
-          <DataTableHeader>
-            <DataTableRow className="hover:bg-transparent">
-              <DataTableHead className="pl-6 min-w-[280px]">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-border bg-surface-secondary">
+              <th className="min-w-[280px] px-6 py-2 text-left text-xs font-medium text-muted">
                 <button
                   onClick={() => handleSort('name')}
-                  className="flex items-center gap-1 hover:text-gray-900"
+                  className="flex items-center gap-1 hover:text-foreground"
                 >
                   Ürün
                   <ArrowUpDown className="h-3 w-3" />
                 </button>
-              </DataTableHead>
-              <DataTableHead>SKU</DataTableHead>
-              <DataTableHead>Mağaza</DataTableHead>
-              <DataTableHead className="text-center">
+              </th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-muted">SKU</th>
+              <th className="px-4 py-2 text-left text-xs font-medium text-muted">Mağaza</th>
+              <th className="px-4 py-2 text-center text-xs font-medium text-muted">
                 <button
                   onClick={() => handleSort('stockQuantity')}
-                  className="flex items-center gap-1 hover:text-gray-900 mx-auto"
+                  className="mx-auto flex items-center gap-1 hover:text-foreground"
                 >
                   Stok
                   <ArrowUpDown className="h-3 w-3" />
                 </button>
-              </DataTableHead>
-              <DataTableHead className="text-center">
+              </th>
+              <th className="px-4 py-2 text-center text-xs font-medium text-muted">
                 <button
                   onClick={() => handleSort('price')}
-                  className="flex items-center gap-1 hover:text-gray-900 mx-auto"
+                  className="mx-auto flex items-center gap-1 hover:text-foreground"
                 >
                   Satış Fiyatı
                   <ArrowUpDown className="h-3 w-3" />
                 </button>
-              </DataTableHead>
-              <DataTableHead className="text-center pr-6">Alış Fiyatı</DataTableHead>
-            </DataTableRow>
-          </DataTableHeader>
-          <DataTableBody>
+              </th>
+              <th className="px-4 py-2 pr-6 text-center text-xs font-medium text-muted">
+                Alış Fiyatı
+              </th>
+            </tr>
+          </thead>
+          <tbody>
             {isLoading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                <DataTableRow key={i}>
-                  <DataTableCell className="pl-6">
+                <tr key={i} className="border-b border-border">
+                  <td className="px-6 py-3">
                     <div className="flex items-center gap-3">
                       <Skeleton className="h-10 w-10 rounded" />
                       <Skeleton className="h-4 w-40" />
                     </div>
-                  </DataTableCell>
-                  <DataTableCell><Skeleton className="h-4 w-20" /></DataTableCell>
-                  <DataTableCell><Skeleton className="h-4 w-24" /></DataTableCell>
-                  <DataTableCell><Skeleton className="h-8 w-16 mx-auto" /></DataTableCell>
-                  <DataTableCell><Skeleton className="h-4 w-20 mx-auto" /></DataTableCell>
-                  <DataTableCell className="pr-6"><Skeleton className="h-8 w-20 mx-auto" /></DataTableCell>
-                </DataTableRow>
+                  </td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
+                  <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                  <td className="px-4 py-3"><Skeleton className="mx-auto h-8 w-16" /></td>
+                  <td className="px-4 py-3"><Skeleton className="mx-auto h-4 w-20" /></td>
+                  <td className="px-4 py-3 pr-6"><Skeleton className="mx-auto h-8 w-20" /></td>
+                </tr>
               ))
             ) : products.length === 0 ? (
-              <DataTableRow>
-                <DataTableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+              <tr>
+                <td colSpan={6} className="py-12 text-center text-muted">
                   Ürün bulunamadı
-                </DataTableCell>
-              </DataTableRow>
+                </td>
+              </tr>
             ) : (
               products.map((product) => (
-                <DataTableRow key={product.id}>
-                  <DataTableCell className="pl-6">
+                <tr key={product.id} className="border-b border-border">
+                  <td className="px-6 py-3">
                     <Link
                       href={`/${companySlug}/inventory/${product.id}`}
                       className="flex items-center gap-3 hover:opacity-80"
@@ -412,80 +377,97 @@ export default function InventoryPage() {
                           className="h-10 w-10 rounded object-cover"
                         />
                       ) : (
-                        <div className="h-10 w-10 rounded bg-gray-100 flex items-center justify-center">
-                          <Package className="h-5 w-5 text-gray-400" />
+                        <div className="flex h-10 w-10 items-center justify-center rounded bg-default">
+                          <Package className="h-5 w-5 text-muted" />
                         </div>
                       )}
                       <div>
-                        <p className="font-medium text-gray-900 line-clamp-1">{product.name}</p>
+                        <p className="line-clamp-1 font-medium">{product.name}</p>
                         {product.productType === 'variable' && product.variationCount > 0 && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded mt-0.5">
+                          <span className="mt-0.5 inline-flex items-center rounded bg-default px-1.5 py-0.5 text-xs text-muted">
                             {product.variationCount} varyant
                           </span>
                         )}
                       </div>
                     </Link>
-                  </DataTableCell>
-                  <DataTableCell className="text-gray-500 text-sm">
-                    {product.sku || '-'}
-                  </DataTableCell>
-                  <DataTableCell className="text-gray-600 text-sm">
-                    {product.storeName}
-                  </DataTableCell>
-                  <DataTableCell className="text-center">
+                  </td>
+                  <td className="px-4 py-3 text-sm text-muted">{product.sku || '-'}</td>
+                  <td className="px-4 py-3 text-sm text-muted">{product.storeName}</td>
+                  <td className="px-4 py-3 text-center">
                     <EditableStockCell
                       value={product.stockQuantity}
                       onSave={(newStock) => handleStockUpdate(product.id, newStock)}
                       disabled={product.productType === 'variable'}
                       className="mx-auto"
                     />
-                  </DataTableCell>
-                  <DataTableCell className="text-center text-sm font-medium">
+                  </td>
+                  <td className="px-4 py-3 text-center text-sm font-medium">
                     {formatCurrency(product.price)}
-                  </DataTableCell>
-                  <DataTableCell className="text-center pr-6">
+                  </td>
+                  <td className="px-4 py-3 pr-6 text-center">
                     <EditablePriceCell
                       value={product.purchasePrice}
                       onSave={(newPrice) => handlePurchasePriceUpdate(product.id, newPrice)}
                       className="mx-auto"
                     />
-                  </DataTableCell>
-                </DataTableRow>
+                  </td>
+                </tr>
               ))
             )}
-          </DataTableBody>
-        </DataTable>
+          </tbody>
+        </table>
       </div>
 
-      {/* Pagination */}
       {productsTotalPages > 1 && (
-        <div className="flex items-center justify-between px-6 py-3 border-t bg-white">
-          <span className="text-sm text-gray-500">
-            Toplam {productsTotal} ürün
-          </span>
+        <div className="flex items-center justify-between border-t border-border bg-background px-6 py-3">
+          <span className="text-sm text-muted">Toplam {productsTotal} ürün</span>
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
-              disabled={productsPage === 1}
-              onClick={() => handlePageChange(productsPage - 1)}
+              isDisabled={productsPage === 1}
+              onPress={() => handlePageChange(productsPage - 1)}
             >
               Önceki
             </Button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-muted">
               {productsPage} / {productsTotalPages}
             </span>
             <Button
               variant="outline"
               size="sm"
-              disabled={productsPage === productsTotalPages}
-              onClick={() => handlePageChange(productsPage + 1)}
+              isDisabled={productsPage === productsTotalPages}
+              onPress={() => handlePageChange(productsPage + 1)}
             >
               Sonraki
             </Button>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SummaryCell({
+  label,
+  Icon,
+  iconTone = 'text-muted',
+  last,
+  children,
+}: {
+  label: string;
+  Icon: React.ElementType;
+  iconTone?: string;
+  last?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`px-6 py-4 ${!last ? 'border-r border-border' : ''}`}>
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-muted">{label}</span>
+        <Icon className={`h-4 w-4 ${iconTone}`} />
+      </div>
+      <p className="mt-1 text-2xl font-semibold">{children}</p>
     </div>
   );
 }

@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Check, X, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { Check, Loader2 } from 'lucide-react';
+import { Input, TextField } from '@heroui/react';
 
 interface EditableStockCellProps {
   value: number;
@@ -63,66 +62,64 @@ export function EditableStockCell({
     setIsEditing(false);
   };
 
-  const handleCancel = () => {
-    setEditValue(String(value));
-    setIsEditing(false);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
-      handleCancel();
+      setEditValue(String(value));
+      setIsEditing(false);
     }
   };
 
+  const wrapper = (extra?: string) =>
+    ['flex h-8 w-16 items-center justify-center', extra, className].filter(Boolean).join(' ');
+
   if (disabled) {
-    return (
-      <div className={cn('w-16 h-8 flex items-center justify-center text-gray-500', className)}>
-        {value}
-      </div>
-    );
+    return <div className={wrapper('text-muted')}>{value}</div>;
   }
 
   if (isSaving) {
     return (
-      <div className={cn('w-16 h-8 flex items-center justify-center', className)}>
-        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+      <div className={wrapper()}>
+        <Loader2 className="h-4 w-4 animate-spin text-accent" />
       </div>
     );
   }
 
   if (isEditing) {
     return (
-      <div className={cn('flex items-center gap-1', className)}>
-        <Input
-          ref={inputRef}
-          type="number"
+      <div className={['flex items-center gap-1', className].filter(Boolean).join(' ')}>
+        <TextField
           value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSave}
-          min={min}
-          className="w-16 h-8 text-center"
-        />
+          onChange={setEditValue}
+          type="number"
+          className="w-16"
+        >
+          <Input
+            ref={inputRef}
+            min={min}
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            className="h-8 text-center"
+          />
+        </TextField>
       </div>
     );
   }
 
   return (
     <button
+      type="button"
       onClick={() => setIsEditing(true)}
-      className={cn(
-        'w-16 h-8 flex items-center justify-center rounded border transition-all',
+      className={`flex h-8 w-16 items-center justify-center rounded border transition-all ${
         showSuccess
-          ? 'border-green-500 bg-green-50 text-green-700'
-          : 'border-gray-200 hover:border-primary hover:bg-gray-50',
-        className
-      )}
+          ? 'border-success bg-success/10 text-success'
+          : 'border-border hover:border-accent hover:bg-default'
+      } ${className ?? ''}`}
     >
       {showSuccess ? (
-        <Check className="h-4 w-4 text-green-600" />
+        <Check className="h-4 w-4 text-success" />
       ) : (
         <span className="font-medium">{value}</span>
       )}

@@ -2,8 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Check, Loader2 } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
+import { Input, TextField } from '@heroui/react';
 
 interface EditablePriceCellProps {
   value: number | null;
@@ -67,17 +66,13 @@ export function EditablePriceCell({
     setIsEditing(false);
   };
 
-  const handleCancel = () => {
-    setEditValue(value !== null ? String(value) : '');
-    setIsEditing(false);
-  };
-
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSave();
     } else if (e.key === 'Escape') {
-      handleCancel();
+      setEditValue(value !== null ? String(value) : '');
+      setIsEditing(false);
     }
   };
 
@@ -86,56 +81,55 @@ export function EditablePriceCell({
     return `${price.toLocaleString('tr-TR')} ${currency}`;
   };
 
-  if (disabled) {
-    return (
-      <div className={cn('min-w-[80px] h-8 flex items-center justify-center text-gray-500', className)}>
-        {formatPrice(value)}
-      </div>
-    );
-  }
+  const baseClass = `flex h-8 min-w-[80px] items-center justify-center ${className ?? ''}`;
+
+  if (disabled) return <div className={`${baseClass} text-muted`}>{formatPrice(value)}</div>;
 
   if (isSaving) {
     return (
-      <div className={cn('min-w-[80px] h-8 flex items-center justify-center', className)}>
-        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+      <div className={baseClass}>
+        <Loader2 className="h-4 w-4 animate-spin text-accent" />
       </div>
     );
   }
 
   if (isEditing) {
     return (
-      <div className={cn('flex items-center gap-1', className)}>
-        <Input
-          ref={inputRef}
-          type="number"
-          step="0.01"
+      <div className={`flex items-center gap-1 ${className ?? ''}`}>
+        <TextField
           value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onBlur={handleSave}
-          min={min}
-          placeholder="0.00"
-          className="w-24 h-8 text-center"
-        />
+          onChange={setEditValue}
+          type="number"
+          className="w-24"
+        >
+          <Input
+            ref={inputRef}
+            min={min}
+            step="0.01"
+            placeholder="0.00"
+            onKeyDown={handleKeyDown}
+            onBlur={handleSave}
+            className="h-8 text-center"
+          />
+        </TextField>
       </div>
     );
   }
 
   return (
     <button
+      type="button"
       onClick={() => setIsEditing(true)}
-      className={cn(
-        'min-w-[80px] h-8 px-2 flex items-center justify-center rounded border transition-all text-sm',
+      className={`flex h-8 min-w-[80px] items-center justify-center rounded border px-2 text-sm transition-all ${
         showSuccess
-          ? 'border-green-500 bg-green-50 text-green-700'
+          ? 'border-success bg-success/10 text-success'
           : value === null
-            ? 'border-dashed border-gray-300 text-gray-400 hover:border-primary hover:text-gray-600'
-            : 'border-gray-200 hover:border-primary hover:bg-gray-50',
-        className
-      )}
+            ? 'border-dashed border-border text-muted hover:border-accent hover:text-foreground'
+            : 'border-border hover:border-accent hover:bg-default'
+      } ${className ?? ''}`}
     >
       {showSuccess ? (
-        <Check className="h-4 w-4 text-green-600" />
+        <Check className="h-4 w-4 text-success" />
       ) : (
         <span className={value === null ? 'italic' : 'font-medium'}>{formatPrice(value)}</span>
       )}

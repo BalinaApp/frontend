@@ -3,83 +3,65 @@
 import { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { AppSidebar } from '@/components/layout/app-sidebar';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
-import { Separator } from '@/components/ui/separator';
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from '@/components/ui/sidebar';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
 import { UsageWarning } from '@/components/pricing/usage-warning';
 
-// Page title mappings
 const pageTitles: Record<string, string> = {
   '': 'Dashboard',
-  'stores': 'Mağazalar',
-  'inventory': 'Stok Yönetimi',
-  'orders': 'Siparişler',
-  'payments': 'Ödemeler',
-  'reports': 'Raporlar',
-  'refunds': 'İadeler',
-  'pricing': 'Planlar',
-  'settings': 'Ayarlar',
+  stores: 'Mağazalar',
+  inventory: 'Stok Yönetimi',
+  orders: 'Siparişler',
+  payments: 'Ödemeler',
+  reports: 'Raporlar',
+  refunds: 'İadeler',
+  pricing: 'Planlar',
+  settings: 'Ayarlar',
+  'product-mappings': 'Ürün Eşleştirme',
+  notifications: 'Bildirimler',
 };
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { currentCompany } = useCompanyStore();
   const { usage, fetchUsage, fetchPricingStatus } = usePricingStore();
 
-  // Fetch usage and pricing status on mount
   useEffect(() => {
     fetchUsage();
     fetchPricingStatus();
   }, [fetchUsage, fetchPricingStatus]);
 
-  // Parse current path to build breadcrumbs
-  // Path format: /[companySlug]/[module]/[subpage]
   const pathParts = pathname.split('/').filter(Boolean);
   const companySlug = pathParts[0];
   const currentModule = pathParts[1] || '';
   const currentPage = pageTitles[currentModule] || currentModule || 'Dashboard';
 
   return (
-    <SidebarProvider>
+    <div className="flex h-screen w-full">
       <AppSidebar />
-      <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b">
-          <div className="flex items-center gap-2 px-4">
-            <SidebarTrigger className="-ml-1" />
-            <Separator orientation="vertical" className="mr-2 h-4" />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbLink href={`/${companySlug}`}>
-                    {currentCompany?.name || 'Ana Sayfa'}
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator className="hidden md:block" />
-                <BreadcrumbItem>
-                  <BreadcrumbPage>{currentPage}</BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
+      <main className="flex h-screen flex-1 flex-col overflow-hidden bg-background">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+          <div className="flex items-center gap-2 pl-12 md:pl-2">
+            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
+              <span className="text-muted">
+                {currentCompany?.name || 'Ana Sayfa'}
+              </span>
+              {currentModule && (
+                <>
+                  <span className="text-muted">/</span>
+                  <span className="font-medium" aria-current="page">
+                    {currentPage}
+                  </span>
+                </>
+              )}
+              {!currentModule && companySlug && (
+                <span className="font-medium" aria-current="page">
+                  Dashboard
+                </span>
+              )}
+            </nav>
           </div>
         </header>
-        {/* Usage Warning Banner */}
         {usage && (usage.isNearLimit || usage.isAtLimit) && (
           <UsageWarning
             storeCount={usage.storeCount}
@@ -88,10 +70,8 @@ export default function DashboardLayout({
             isNearLimit={usage.isNearLimit}
           />
         )}
-        <div className="flex flex-1 flex-col">
-          {children}
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
+        <div className="flex flex-1 flex-col overflow-auto">{children}</div>
+      </main>
+    </div>
   );
 }

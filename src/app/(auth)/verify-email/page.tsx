@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
@@ -31,8 +31,16 @@ export default function VerifyEmailPage() {
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Run verifyCode at most once across StrictMode double-effects and the
+  // re-render storm that follows a successful login. Without this, the second
+  // call lands on a code the backend has already consumed and surfaces as
+  // "Doğrulama kodu bulunamadı".
+  const verifyAttemptedRef = useRef(false);
+
   const finishVerification = useCallback(
     async (targetEmail: string, codeValue: string) => {
+      if (verifyAttemptedRef.current) return;
+      verifyAttemptedRef.current = true;
       try {
         const result = await verifyCode(targetEmail, codeValue);
         sessionStorage.removeItem('verifyEmail');
@@ -45,9 +53,9 @@ export default function VerifyEmailPage() {
           router.push('/dashboard');
         }
       } catch (err: any) {
+        verifyAttemptedRef.current = false;
         toast.danger(err.message || 'Doğrulama başarısız');
         setCode('');
-        throw err;
       }
     },
     [verifyCode, router]

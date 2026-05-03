@@ -1,33 +1,48 @@
 'use client';
 
-import { useEffect } from 'react';
-
 /**
- * Suppresses a known-benign unhandled rejection that surfaces in dev when a
- * second navigation interrupts an in-flight browser View Transition. Next.js
- * triggers View Transitions for client-side routes; if router.push fires
- * twice in quick succession (e.g. AuthGuard redirect + a same-tick state
- * update from the page itself) the older transition resolves with
- * `InvalidStateError: Transition was aborted because of invalid state`.
+ * Filters out a known-benign error: when a second client-side navigation
+ * interrupts an in-flight browser View Transition, the older transition
+ * rejects with `InvalidStateError: Transition was aborted because of
+ * invalid state`. The user always lands on the final destination — the
+ * cleanup error is just dev-overlay noise.
  *
- * It's a harmless cleanup error — the user always lands on the latest
- * destination — but the dev runtime overlay/console treats it as critical.
- * Filter it out instead of papering over every individual call site.
+ * Listeners are attached at module load time (synchronously, before any
+ * useEffect) so they're already in place when the very first transition
+ * fires. We listen on both `unhandledrejection` and `error` because Next.js
+ * dev overlay reads from both.
  */
-export function SuppressBenignErrors() {
-  useEffect(() => {
-    const handler = (e: PromiseRejectionEvent) => {
-      const reason = e.reason as { name?: string; message?: string } | undefined;
-      if (
-        reason?.name === 'InvalidStateError' &&
-        reason.message?.includes('Transition was aborted')
-      ) {
-        e.preventDefault();
-      }
-    };
-    window.addEventListener('unhandledrejection', handler);
-    return () => window.removeEventListener('unhandledrejection', handler);
-  }, []);
+function isBenignTransitionAbort(reason: unknown): boolean {
+  const err = reason as { name?: string; message?: string } | undefined;
+  return (
+    err?.name === 'InvalidStateError' &&
+    !!err.message?.includes('Transition was aborted')
+  );
+}
 
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'unhandledrejection',
+    (e: PromiseRejectionEvent) => {
+      if (isBenignTransitionAbort(e.reason)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    },
+    true, // capture phase, run before Next.js dev overlay
+  );
+  window.addEventListener(
+    'error',
+    (e: ErrorEvent) => {
+      if (isBenignTransitionAbort(e.error)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    },
+    true,
+  );
+}
+
+export function SuppressBenignErrors() {
   return null;
 }

@@ -190,6 +190,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
+  // Just signed in on /login or /verify-email and waiting for the companies
+  // fetch to settle. Don't keep rendering the auth surface (the OTP form,
+  // the email entry) — show the same neutral placeholder so there's no
+  // flash of stale auth chrome before AuthGuard redirects out.
+  if (isPublicPath && isAuthenticated && !companiesFetched) {
+    return <div className="min-h-svh bg-black/[0.04]" />;
+  }
+
   // Once we know the user is authenticated but companies are still loading,
   // showing the dashboard skeleton is fine — there's no risk of bouncing
   // to /login any more.

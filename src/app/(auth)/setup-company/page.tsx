@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
 import { ChevronDown, Loader2, Trash2 } from 'lucide-react';
 import {
   Avatar,
@@ -15,6 +14,7 @@ import {
 } from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
+import { useCompanyStore } from '@/stores/companyStore';
 
 // Invitable subset of the backend CompanyRole enum (OWNER is reserved for
 // the user creating the company; everyone else is invited as one of these).
@@ -53,8 +53,12 @@ function getInitial(email: string) {
 }
 
 export default function SetupCompanyPage() {
-  const router = useRouter();
-  const { user, setUser } = useAuthStore();
+  // We don't router.push from this page on success — letting AuthGuard's
+  // "isCompanySetupPath + companies.length > 0" branch fire the single
+  // navigation avoids racing with our own push (which used to manifest as
+  // "InvalidStateError: Transition was aborted").
+  const { user } = useAuthStore();
+  const { createCompany } = useCompanyStore();
 
   const [companyName, setCompanyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
@@ -113,10 +117,10 @@ export default function SetupCompanyPage() {
 
     setIsLoading(true);
     try {
-      const companyResponse = await api.post('/company', {
-        name: companyName,
-      });
-      const company = companyResponse.data;
+      // Use the store action so companies + currentCompany + auth.user are
+      // updated atomically; AuthGuard observes companies.length > 0 and
+      // pushes us out of /setup-company.
+      const company = await createCompany(companyName);
 
       let inviteCount = 0;
       for (const member of teamMembers) {
@@ -131,14 +135,10 @@ export default function SetupCompanyPage() {
         }
       }
 
-      if (user) {
-        setUser({ ...user, currentCompanyId: company.id } as any);
-      }
-
       toast.success(
         `Şirket oluşturuldu${inviteCount > 0 ? ` ve ${inviteCount} davetiye gönderildi` : ''}`
       );
-      router.push(`/${company.slug}`);
+      // No router.push — AuthGuard handles it.
     } catch (err: any) {
       toast.danger(err.response?.data?.message || 'Bir hata oluştu');
     } finally {

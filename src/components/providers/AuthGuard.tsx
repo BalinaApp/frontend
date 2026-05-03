@@ -172,16 +172,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isCompanySetupPath = companySetupPaths.some((path) => pathname.startsWith(path));
   const isDashboardPath = !isPublicPath && !isCompanySetupPath;
 
-  // Show loading while hydrating or checking auth — only for dashboard.
-  // Public auth screens (login, verify-email, complete-profile) just render
-  // their own static content; flashing a skeleton is more jarring than the
-  // form mounting directly.
+  // While we don't know yet whether the user is authenticated, never show
+  // the dashboard chrome — it would briefly flash before the redirect to
+  // /login lands. Public auth surfaces render their own static content.
   if (!isHydrated || !authCheckDone) {
-    return isDashboardPath ? <DashboardLoadingSkeleton /> : <>{children}</>;
+    if (isDashboardPath) return <div className="min-h-svh bg-[#F3F4F6]" />;
+    return <>{children}</>;
   }
 
+  // Once we know the user is authenticated but companies are still loading,
+  // showing the dashboard skeleton is fine — there's no risk of bouncing
+  // to /login any more.
   if (!isPublicPath && (isLoading || !isAuthenticated || (isAuthenticated && !companiesFetched))) {
-    return isDashboardPath ? <DashboardLoadingSkeleton /> : <>{children}</>;
+    if (isDashboardPath) {
+      return isAuthenticated ? <DashboardLoadingSkeleton /> : <div className="min-h-svh bg-[#F3F4F6]" />;
+    }
+    return <>{children}</>;
   }
 
   return <>{children}</>;

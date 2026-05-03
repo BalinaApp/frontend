@@ -50,16 +50,15 @@ function VerifyEmailInner() {
       if (verifyAttemptedRef.current) return;
       verifyAttemptedRef.current = true;
       try {
-        const result = await verifyCode(targetEmail, codeValue);
+        await verifyCode(targetEmail, codeValue);
         sessionStorage.removeItem('verifyEmail');
         toast.success('Giriş başarılı');
-        if (result.requiresProfile) {
-          router.push('/complete-profile');
-        } else if (!result.user.currentCompanyId) {
-          router.push('/setup-company');
-        } else {
-          router.push('/dashboard');
-        }
+        // Always land on /setup-company after a successful code verify.
+        // AuthGuard already redirects authenticated users with an existing
+        // company off /setup-company into /{currentCompany.slug}, so this
+        // covers both the "first time" (team creation) and "returning user"
+        // (existing company) paths without us needing the company slug here.
+        router.push('/setup-company');
       } catch (err: any) {
         verifyAttemptedRef.current = false;
         toast.danger(err.message || 'Doğrulama başarısız');

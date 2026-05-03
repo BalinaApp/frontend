@@ -198,6 +198,18 @@ export default function SetupCompanyPage() {
                 <Input
                   placeholder="E-posta adresi"
                   className={FIELD_INPUT_CLASS}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      // Adding an invitee is the natural action when there's
+                      // text in the field; only let the form submit fire
+                      // (Tamamla) when the field is empty.
+                      if (inviteEmail.trim()) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleAddMember();
+                      }
+                    }
+                  }}
                 />
               </TextField>
               <Button

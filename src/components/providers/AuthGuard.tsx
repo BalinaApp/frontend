@@ -134,6 +134,18 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     // /invite (and friends) handles its own redirects.
     if (isSelfManagedPath) return;
 
+    // If the user has just landed on a public/auth surface but they had a
+    // pending invite (token kept in sessionStorage from a previous /invite
+    // visit), bounce them back to /invite so the acceptance flow can finish
+    // before AuthGuard sends them to /setup-company or /{slug}.
+    if (isAuthenticated) {
+      const pendingInvite = sessionStorage.getItem('pendingInviteToken');
+      if (pendingInvite) {
+        router.replace('/invite');
+        return;
+      }
+    }
+
     if (!isAuthenticated && !isPublicPath) {
       // Not authenticated and trying to access protected route
       router.push('/login');

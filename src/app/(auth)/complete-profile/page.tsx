@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 const PRIMARY_BUTTON_CLASS =
   'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
 const FIELD_INPUT_CLASS =
-  'h-9 w-[332px] rounded-xl bg-white px-3 text-sm placeholder:text-[#71717A] shadow-[0_2px_4px_0_rgba(0,0,0,0.04),0_1px_2px_0_rgba(0,0,0,0.06),0_0_1px_0_rgba(0,0,0,0.06)]';
+  'auth-field-input h-9 w-[332px] rounded-xl px-3 text-sm placeholder:text-[#71717A]';
 
 export default function CompleteProfilePage() {
   const router = useRouter();

@@ -1,2 +1,18 @@
 @import "tailwindcss";
 @import "@heroui/styles";
+
+/* Auth screens: suppress HeroUI default blue focus ring + border tone change.
+   Figma node 12107:11875 input has only the soft drop shadow, no ring/border. */
+.auth-field-input,
+.auth-field-input[data-focused="true"],
+.auth-field-input:focus,
+.auth-field-input:focus-visible {
+  --tw-ring-shadow: 0 0 transparent !important;
+  box-shadow:
+    0 2px 4px 0 rgb(0 0 0 / 0.04),
+    0 1px 2px 0 rgb(0 0 0 / 0.06),
+    0 0 1px 0 rgb(0 0 0 / 0.06) !important;
+  border-color: transparent !important;
+  background-color: #FFFFFF !important;
+  outline: none !important;
+}

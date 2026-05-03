@@ -53,12 +53,12 @@ function VerifyEmailInner() {
         await verifyCode(targetEmail, codeValue);
         sessionStorage.removeItem('verifyEmail');
         toast.success('Giriş başarılı');
-        // Always land on /setup-company after a successful code verify.
-        // AuthGuard already redirects authenticated users with an existing
-        // company off /setup-company into /{currentCompany.slug}, so this
-        // covers both the "first time" (team creation) and "returning user"
-        // (existing company) paths without us needing the company slug here.
-        router.push('/setup-company');
+        // Don't router.push from here. /verify-email is a public path; the
+        // moment the auth state flips, AuthGuard's "authenticated && public
+        // path" redirect branch picks the right destination (/setup-company
+        // for new users, /{currentCompany.slug} for returning users). Two
+        // simultaneous pushes are exactly what triggered the
+        // "InvalidStateError: Transition was aborted" overlay.
       } catch (err: any) {
         verifyAttemptedRef.current = false;
         toast.danger(err.message || 'Doğrulama başarısız');

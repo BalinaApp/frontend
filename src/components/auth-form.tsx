@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { Button, Input, TextField, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
@@ -83,18 +82,10 @@ export function AuthForm() {
         </TextField>
         <Button
           type="submit"
-          isPending={isLoading}
           isDisabled={isLoading || !email}
           className={PRIMARY_BUTTON_CLASS}
         >
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Gönderiliyor...
-            </>
-          ) : (
-            'E-posta ile ilerle'
-          )}
+          E-posta ile ilerle
         </Button>
       </form>
     </AuthShell>

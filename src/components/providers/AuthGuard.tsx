@@ -176,7 +176,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // the dashboard chrome — it would briefly flash before the redirect to
   // /login lands. Public auth surfaces render their own static content.
   if (!isHydrated || !authCheckDone) {
-    if (isDashboardPath) return <div className="min-h-svh bg-[#F3F4F6]" />;
+    if (isDashboardPath) return <div className="min-h-svh bg-black/[0.04]" />;
     return <>{children}</>;
   }
 
@@ -185,7 +185,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // to /login any more.
   if (!isPublicPath && (isLoading || !isAuthenticated || (isAuthenticated && !companiesFetched))) {
     if (isDashboardPath) {
-      return isAuthenticated ? <DashboardLoadingSkeleton /> : <div className="min-h-svh bg-[#F3F4F6]" />;
+      return isAuthenticated ? <DashboardLoadingSkeleton /> : <div className="min-h-svh bg-black/[0.04]" />;
     }
     return <>{children}</>;
   }

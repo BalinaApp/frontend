@@ -8,7 +8,7 @@ interface AuthShellProps {
 
 export function AuthShell({ title, subtitle, children }: AuthShellProps) {
   return (
-    <div className="flex min-h-svh items-center justify-center bg-[#F3F4F6] p-4 md:p-10">
+    <div className="flex min-h-svh items-center justify-center bg-black/[0.04] p-4 md:p-10">
       <div className="flex w-full max-w-[332px] flex-col items-center gap-5">
         <Image
           src="/figma/balina-logo.svg"

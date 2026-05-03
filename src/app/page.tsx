@@ -5,5 +5,5 @@
 // This page only renders a neutral placeholder until AuthGuard finishes its
 // auth check.
 export default function Home() {
-  return <div className="min-h-svh bg-[#F3F4F6]" />;
+  return <div className="min-h-svh bg-black/[0.04]" />;
 }

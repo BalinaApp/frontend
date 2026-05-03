@@ -136,7 +136,7 @@ function VerifyEmailInner() {
 
   if (isChecking || !email) {
     return (
-      <div className="flex min-h-svh items-center justify-center bg-[#F3F4F6] p-4 md:p-10">
+      <div className="flex min-h-svh items-center justify-center bg-black/[0.04] p-4 md:p-10">
         <div className="flex w-full max-w-[332px] flex-col items-center gap-5">
           <Skeleton className="h-16 w-16 rounded-lg" />
           <Skeleton className="h-7 w-48" />

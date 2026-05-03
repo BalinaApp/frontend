@@ -1,15 +1,48 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Briefcase, Loader2, X } from 'lucide-react';
-import { Button, Input, Label, ListBox, Select, TextField, toast } from '@heroui/react';
+import { ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import {
+  Avatar,
+  Button,
+  Dropdown,
+  Input,
+  Label,
+  TextField,
+  toast,
+} from '@heroui/react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
+type MemberRole = 'ADMIN' | 'MEMBER' | 'STOCKIST';
+
 interface TeamMember {
   email: string;
-  role: 'ADMIN' | 'MEMBER';
+  role: MemberRole;
+}
+
+const ROLE_LABEL: Record<MemberRole, string> = {
+  ADMIN: 'Yönetici',
+  MEMBER: 'Üye',
+  STOCKIST: 'Stokçu',
+};
+
+const PRIMARY_BUTTON_CLASS =
+  'w-full rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
+const SECONDARY_BUTTON_CLASS =
+  'rounded-3xl bg-[#EBEBEC] text-[#0485F7] hover:bg-[#dcdcde] data-[hovered=true]:bg-[#dcdcde]';
+const ROLE_BUTTON_CLASS =
+  'rounded-3xl bg-[#EBEBEC] text-[#18181B] hover:bg-[#dcdcde] data-[hovered=true]:bg-[#dcdcde]';
+const DANGER_ICON_BUTTON_CLASS =
+  'h-9 w-9 rounded-3xl bg-[#FF383C]/15 text-[#FF383C] hover:bg-[#FF383C]/25 data-[hovered=true]:bg-[#FF383C]/25';
+
+const FIELD_INPUT_CLASS =
+  'auth-field-input h-9 rounded-xl px-3 text-sm placeholder:text-[#71717A]';
+
+function getInitials(email: string) {
+  return email.substring(0, 2).toUpperCase();
 }
 
 export default function SetupCompanyPage() {
@@ -18,47 +51,40 @@ export default function SetupCompanyPage() {
 
   const [companyName, setCompanyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER'>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<MemberRole>('MEMBER');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const getInitials = (name: string | undefined, email: string) => {
-    if (name) {
-      const parts = name.split(' ');
-      if (parts.length >= 2) {
-        return (parts[0][0] + parts[1][0]).toUpperCase();
-      }
-      return name.substring(0, 2).toUpperCase();
-    }
-    return email.substring(0, 2).toUpperCase();
-  };
-
   const handleAddMember = () => {
-    if (!inviteEmail) return;
+    const email = inviteEmail.trim();
+    if (!email) return;
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(inviteEmail)) {
+    if (!emailRegex.test(email)) {
       toast.danger('Geçerli bir e-posta adresi girin');
       return;
     }
-
-    if (inviteEmail.toLowerCase() === user?.email?.toLowerCase()) {
+    if (email.toLowerCase() === user?.email?.toLowerCase()) {
       toast.danger('Kendinizi ekleyemezsiniz');
       return;
     }
-
-    if (teamMembers.some((m) => m.email.toLowerCase() === inviteEmail.toLowerCase())) {
+    if (teamMembers.some((m) => m.email.toLowerCase() === email.toLowerCase())) {
       toast.danger('Bu e-posta zaten eklendi');
       return;
     }
 
-    setTeamMembers([...teamMembers, { email: inviteEmail, role: inviteRole }]);
+    setTeamMembers([...teamMembers, { email, role: inviteRole }]);
     setInviteEmail('');
-    toast.success('Takım üyesi eklendi');
   };
 
   const handleRemoveMember = (email: string) => {
     setTeamMembers(teamMembers.filter((m) => m.email !== email));
+  };
+
+  const handleChangeRole = (email: string, role: MemberRole) => {
+    setTeamMembers(
+      teamMembers.map((m) => (m.email === email ? { ...m, role } : m))
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -70,9 +96,10 @@ export default function SetupCompanyPage() {
     }
 
     setIsLoading(true);
-
     try {
-      const companyResponse = await api.post('/company', { name: companyName });
+      const companyResponse = await api.post('/company', {
+        name: companyName,
+      });
       const company = companyResponse.data;
 
       let inviteCount = 0;
@@ -95,7 +122,7 @@ export default function SetupCompanyPage() {
       toast.success(
         `Şirket oluşturuldu${inviteCount > 0 ? ` ve ${inviteCount} davetiye gönderildi` : ''}`
       );
-      router.push('/dashboard');
+      router.push(`/${company.slug}`);
     } catch (err: any) {
       toast.danger(err.response?.data?.message || 'Bir hata oluştu');
     } finally {
@@ -104,154 +131,152 @@ export default function SetupCompanyPage() {
   };
 
   return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-background p-6 md:p-10">
-      <div className="w-full max-w-md">
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-accent text-accent-foreground">
-              <Briefcase className="h-7 w-7" />
+    <div className="flex min-h-svh items-center justify-center bg-black/[0.04] p-4 md:p-10">
+      <div className="flex w-full max-w-[448px] flex-col items-center gap-5">
+        <Image
+          src="/figma/balina-logo.svg"
+          alt="Balina"
+          width={64}
+          height={64}
+          priority
+        />
+        <div className="flex w-full max-w-[332px] flex-col items-center gap-1 text-center">
+          <h1 className="text-xl font-semibold leading-[1.4] text-black">
+            Şirket bilgileri
+          </h1>
+          <p className="text-sm leading-[1.43] text-black/80">
+            Şirketinizi oluşturun ve takım arkadaşlarınızı ekleyin.
+          </p>
+        </div>
+
+        <form
+          onSubmit={handleSubmit}
+          className="flex w-full flex-col gap-4"
+        >
+          <TextField
+            name="companyName"
+            value={companyName}
+            onChange={setCompanyName}
+            isRequired
+            isDisabled={isLoading}
+            autoFocus
+            aria-label="Şirket adı"
+          >
+            <Input placeholder="Şirket adı" className={FIELD_INPUT_CLASS} />
+          </TextField>
+
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium text-[#18181B]">
+              Takım üyeleri
+            </Label>
+            <div className="flex gap-2">
+              <TextField
+                name="inviteEmail"
+                type="email"
+                value={inviteEmail}
+                onChange={setInviteEmail}
+                isDisabled={isLoading}
+                aria-label="E-posta adresi"
+                className="flex-1"
+              >
+                <Input
+                  placeholder="E-posta adresi"
+                  className={FIELD_INPUT_CLASS}
+                />
+              </TextField>
+              <Button
+                type="button"
+                variant="secondary"
+                onPress={handleAddMember}
+                isDisabled={isLoading || !inviteEmail.trim()}
+                className={SECONDARY_BUTTON_CLASS}
+              >
+                Davet gönder
+              </Button>
             </div>
-            <h1 className="text-xl font-bold">Şirket Bilgileri ve Takım</h1>
-            <p className="text-sm text-muted">
-              Şirketinizi oluşturun ve takım arkadaşlarınızı ekleyin.
-            </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <TextField
-              name="companyName"
-              value={companyName}
-              onChange={setCompanyName}
-              isRequired
-              isDisabled={isLoading}
-            >
-              <Label>
-                Şirket Adı <span className="text-danger">*</span>
+          {teamMembers.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <Label className="text-sm font-medium text-[#18181B]">
+                Eklenen üyeler
               </Label>
-              <Input placeholder="Şirket adınızı girin" />
-            </TextField>
-
-            <div className="flex flex-col gap-2">
-              <Label>Takım Üyesi Ekle</Label>
-              <div className="flex gap-2">
-                <TextField
-                  name="inviteEmail"
-                  type="email"
-                  value={inviteEmail}
-                  onChange={setInviteEmail}
-                  isDisabled={isLoading}
-                  className="flex-1"
-                >
-                  <Input placeholder="E-posta adresi..." />
-                </TextField>
-                <Select
-                  selectedKey={inviteRole}
-                  onSelectionChange={(key) =>
-                    setInviteRole(key as 'ADMIN' | 'MEMBER')
-                  }
-                  isDisabled={isLoading}
-                  aria-label="Rol seç"
-                  className="w-[120px]"
-                >
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      <ListBox.Item id="MEMBER" textValue="Kullanıcı">
-                        Kullanıcı
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                      <ListBox.Item id="ADMIN" textValue="Admin">
-                        Admin
-                        <ListBox.ItemIndicator />
-                      </ListBox.Item>
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onPress={handleAddMember}
-                  isDisabled={isLoading || !inviteEmail}
-                >
-                  Ekle
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <Label>Erişimi olan üyeler</Label>
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between rounded-lg border border-border p-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-sm font-medium text-accent">
-                      {getInitials(user?.name, user?.email || '')}
-                    </div>
-                    <div>
-                      <p className="font-medium">
-                        {user?.name || user?.email}{' '}
-                        <span className="text-muted">(Siz)</span>
-                      </p>
-                      <p className="text-sm text-muted">{user?.email}</p>
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium text-success">Admin</span>
-                </div>
-
                 {teamMembers.map((member) => (
                   <div
                     key={member.email}
-                    className="flex items-center justify-between rounded-lg border border-border p-3"
+                    className="flex items-center gap-2"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-default text-sm font-medium">
-                        {member.email.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="font-medium">{member.email}</p>
-                        <p className="text-sm text-muted">Davet bekliyor</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted">
-                        {member.role === 'ADMIN' ? 'Admin' : 'Kullanıcı'}
-                      </span>
+                    <Avatar className="size-6 shrink-0 rounded-full bg-[#EBEBEC] text-[10px]">
+                      <Avatar.Fallback>
+                        {getInitials(member.email)}
+                      </Avatar.Fallback>
+                    </Avatar>
+                    <span className="flex-1 truncate text-sm text-[#18181B]">
+                      {member.email}
+                    </span>
+                    <Dropdown>
                       <Button
                         type="button"
-                        variant="ghost"
+                        variant="tertiary"
                         size="sm"
-                        isIconOnly
-                        aria-label="Üyeyi kaldır"
-                        onPress={() => handleRemoveMember(member.email)}
-                        isDisabled={isLoading}
+                        className={ROLE_BUTTON_CLASS}
                       >
-                        <X className="h-4 w-4" />
+                        {ROLE_LABEL[member.role]}
+                        <ChevronDown className="h-4 w-4" />
                       </Button>
-                    </div>
+                      <Dropdown.Popover>
+                        <Dropdown.Menu
+                          onAction={(key) =>
+                            handleChangeRole(member.email, key as MemberRole)
+                          }
+                        >
+                          <Dropdown.Item id="MEMBER" textValue="Üye">
+                            <Label>Üye</Label>
+                          </Dropdown.Item>
+                          <Dropdown.Item id="ADMIN" textValue="Yönetici">
+                            <Label>Yönetici</Label>
+                          </Dropdown.Item>
+                          <Dropdown.Item id="STOCKIST" textValue="Stokçu">
+                            <Label>Stokçu</Label>
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown.Popover>
+                    </Dropdown>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      isIconOnly
+                      aria-label="Üyeyi sil"
+                      onPress={() => handleRemoveMember(member.email)}
+                      isDisabled={isLoading}
+                      className={DANGER_ICON_BUTTON_CLASS}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            <Button
-              type="submit"
-              fullWidth
-              isPending={isLoading}
-              isDisabled={isLoading || !companyName.trim()}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Oluşturuluyor...
-                </>
-              ) : (
-                'Tamamla ve Başla'
-              )}
-            </Button>
-          </form>
-        </div>
+          <Button
+            type="submit"
+            isPending={isLoading}
+            isDisabled={isLoading || !companyName.trim()}
+            className={PRIMARY_BUTTON_CLASS}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Oluşturuluyor...
+              </>
+            ) : (
+              'Tamamla'
+            )}
+          </Button>
+        </form>
       </div>
     </div>
   );

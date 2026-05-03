@@ -35,7 +35,7 @@ export function AuthForm() {
       // Navigate first, surface the toast on the destination route so the
       // toast popover transition doesn't fight Next.js's view transition.
       router.push('/verify-email');
-      queueMicrotask(() => toast.info('Giriş kodu e-posta adresinize gönderildi'));
+      queueMicrotask(() => toast.success('Giriş kodu e-posta adresinize gönderildi'));
     } catch (err: any) {
       toast.danger(err.message || 'Bir hata oluştu');
     } finally {

@@ -25,7 +25,7 @@ export default function VerifyEmailPage() {
 function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { verifyCode, requestCode } = useAuthStore();
+  const { verifyCode, requestCode, isAuthenticated } = useAuthStore();
 
   const magicEmail = searchParams.get('email');
   const magicCode = searchParams.get('code');
@@ -70,6 +70,16 @@ function VerifyEmailInner() {
 
   // Magic link auto-submit
   useEffect(() => {
+    // If the user is already authenticated, /verify-email no longer applies —
+    // they likely refreshed the magic-link URL after the code was consumed,
+    // or hit Back into this page after signing in. Bounce out and let
+    // AuthGuard route to /setup-company or /{companySlug}.
+    if (isAuthenticated) {
+      sessionStorage.removeItem('verifyEmail');
+      router.replace('/');
+      return;
+    }
+
     if (magicEmail && magicCode && magicCode.length === 6) {
       setEmail(magicEmail);
       setIsChecking(false);
@@ -94,7 +104,7 @@ function VerifyEmailInner() {
       sessionStorage.removeItem('verifyEmail');
     }
     router.replace('/login');
-  }, [magicEmail, magicCode, finishVerification, router]);
+  }, [isAuthenticated, magicEmail, magicCode, finishVerification, router]);
 
   useEffect(() => {
     if (resendCooldown > 0) {

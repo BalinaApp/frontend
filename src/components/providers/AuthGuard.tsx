@@ -9,7 +9,11 @@ import { Skeleton } from '@heroui/react';
 // Paths that don't require authentication
 const publicPaths = ['/login', '/verify-email'];
 // Paths that authenticated users without a company can access
-const companySetupPaths = ['/setup-company', '/invite'];
+const companySetupPaths = ['/setup-company'];
+// Paths that handle their own auth flow — AuthGuard doesn't redirect to or
+// away from these. /invite reads a token, optionally bounces to /login,
+// then accepts the invite once the user is authenticated.
+const selfManagedPaths = ['/invite'];
 
 function DashboardLoadingSkeleton() {
   return (
@@ -125,6 +129,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
     const isCompanySetupPath = companySetupPaths.some((path) => pathname.startsWith(path));
+    const isSelfManagedPath = selfManagedPaths.some((path) => pathname.startsWith(path));
+
+    // /invite (and friends) handles its own redirects.
+    if (isSelfManagedPath) return;
 
     if (!isAuthenticated && !isPublicPath) {
       // Not authenticated and trying to access protected route
@@ -170,7 +178,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const isPublicPath = publicPaths.some((path) => pathname.startsWith(path));
   const isCompanySetupPath = companySetupPaths.some((path) => pathname.startsWith(path));
-  const isDashboardPath = !isPublicPath && !isCompanySetupPath;
+  const isSelfManagedPath = selfManagedPaths.some((path) => pathname.startsWith(path));
+  const isDashboardPath =
+    !isPublicPath && !isCompanySetupPath && !isSelfManagedPath;
 
   // While we don't know yet whether the user is authenticated, never show
   // the dashboard chrome — it would briefly flash before the redirect to

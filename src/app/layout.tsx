@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { AuthGuard } from '@/components/providers/AuthGuard';
+import { SuppressBenignErrors } from '@/components/providers/SuppressBenignErrors';
 import { Toast } from '@heroui/react';
 
 const inter = Inter({
@@ -24,6 +25,7 @@ export default function RootLayout({
   return (
     <html lang="tr" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+        <SuppressBenignErrors />
         <QueryProvider>
           <AuthGuard>{children}</AuthGuard>
           <Toast.Provider />

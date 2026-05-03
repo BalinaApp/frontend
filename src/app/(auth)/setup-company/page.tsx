@@ -41,8 +41,8 @@ const DANGER_ICON_BUTTON_CLASS =
 const FIELD_INPUT_CLASS =
   'auth-field-input h-9 rounded-xl px-3 text-sm placeholder:text-[#71717A]';
 
-function getInitials(email: string) {
-  return email.substring(0, 2).toUpperCase();
+function getInitial(email: string) {
+  return email.charAt(0).toUpperCase();
 }
 
 export default function SetupCompanyPage() {
@@ -78,7 +78,16 @@ export default function SetupCompanyPage() {
   };
 
   const handleRemoveMember = (email: string) => {
-    setTeamMembers(teamMembers.filter((m) => m.email !== email));
+    toast.danger(`${email} davetini iptal etmek istediğinize emin misiniz?`, {
+      actionProps: {
+        children: 'Sil',
+        variant: 'danger',
+        onPress: () => {
+          setTeamMembers((prev) => prev.filter((m) => m.email !== email));
+          toast.clear();
+        },
+      },
+    });
   };
 
   const handleChangeRole = (email: string, role: MemberRole) => {
@@ -207,9 +216,9 @@ export default function SetupCompanyPage() {
                     key={member.email}
                     className="flex items-center gap-2"
                   >
-                    <Avatar className="size-6 shrink-0 rounded-full bg-[#EBEBEC] text-[10px]">
-                      <Avatar.Fallback>
-                        {getInitials(member.email)}
+                    <Avatar className="size-6 shrink-0 rounded-full bg-[#EBEBEC]">
+                      <Avatar.Fallback className="text-xs font-medium text-[#18181B]">
+                        {getInitial(member.email)}
                       </Avatar.Fallback>
                     </Avatar>
                     <span className="flex-1 truncate text-sm text-[#18181B]">
@@ -225,20 +234,25 @@ export default function SetupCompanyPage() {
                         {ROLE_LABEL[member.role]}
                         <ChevronDown className="h-4 w-4" />
                       </Button>
-                      <Dropdown.Popover>
+                      <Dropdown.Popover placement="bottom end">
                         <Dropdown.Menu
+                          selectionMode="single"
+                          selectedKeys={[member.role]}
                           onAction={(key) =>
                             handleChangeRole(member.email, key as MemberRole)
                           }
                         >
                           <Dropdown.Item id="MEMBER" textValue="Üye">
                             <Label>Üye</Label>
+                            <Dropdown.ItemIndicator />
                           </Dropdown.Item>
                           <Dropdown.Item id="ADMIN" textValue="Yönetici">
                             <Label>Yönetici</Label>
+                            <Dropdown.ItemIndicator />
                           </Dropdown.Item>
                           <Dropdown.Item id="STOCKIST" textValue="Stokçu">
                             <Label>Stokçu</Label>
+                            <Dropdown.ItemIndicator />
                           </Dropdown.Item>
                         </Dropdown.Menu>
                       </Dropdown.Popover>

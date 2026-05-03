@@ -11,35 +11,6 @@ const publicPaths = ['/login', '/verify-email', '/complete-profile'];
 // Paths that authenticated users without a company can access
 const companySetupPaths = ['/setup-company', '/invite'];
 
-function AuthLoadingSkeleton() {
-  return (
-    <div className="flex h-screen w-full items-center justify-center bg-muted/30">
-      <div className="w-full max-w-sm space-y-6 p-6">
-        {/* Logo skeleton */}
-        <div className="flex justify-center mb-4">
-          <Skeleton className="h-12 w-12 rounded-lg" />
-        </div>
-        {/* Title skeleton */}
-        <Skeleton className="h-8 w-48 mx-auto mb-2" />
-        {/* Description skeleton */}
-        <Skeleton className="h-4 w-64 mx-auto mb-6" />
-        {/* Form fields skeleton */}
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <Skeleton className="h-10 w-full" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function DashboardLoadingSkeleton() {
   return (
     <div className="flex h-screen w-full bg-sidebar">
@@ -201,14 +172,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isCompanySetupPath = companySetupPaths.some((path) => pathname.startsWith(path));
   const isDashboardPath = !isPublicPath && !isCompanySetupPath;
 
-  // Show loading while hydrating or checking auth
+  // Show loading while hydrating or checking auth — only for dashboard.
+  // Public auth screens (login, verify-email, complete-profile) just render
+  // their own static content; flashing a skeleton is more jarring than the
+  // form mounting directly.
   if (!isHydrated || !authCheckDone) {
-    return isDashboardPath ? <DashboardLoadingSkeleton /> : <AuthLoadingSkeleton />;
+    return isDashboardPath ? <DashboardLoadingSkeleton /> : <>{children}</>;
   }
 
-  // Show loading for protected routes while checking auth or fetching companies
   if (!isPublicPath && (isLoading || !isAuthenticated || (isAuthenticated && !companiesFetched))) {
-    return isDashboardPath ? <DashboardLoadingSkeleton /> : <AuthLoadingSkeleton />;
+    return isDashboardPath ? <DashboardLoadingSkeleton /> : <>{children}</>;
   }
 
   return <>{children}</>;

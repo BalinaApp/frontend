@@ -295,7 +295,13 @@ export default function SetupCompanyPage() {
           <Button
             type="submit"
             isPending={isLoading}
-            isDisabled={isLoading || !companyName.trim()}
+            // Disable while there's a half-typed invite — user has to either
+            // add it via "Davet gönder" / Enter or clear the field before the
+            // form will accept submission. Prevents accidentally finalising
+            // the company without the invitee they were typing.
+            isDisabled={
+              isLoading || !companyName.trim() || !!inviteEmail.trim()
+            }
             className={PRIMARY_BUTTON_CLASS}
           >
             {isLoading ? (

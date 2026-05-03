@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
@@ -15,6 +15,14 @@ const TERTIARY_BUTTON_CLASS =
 type View = 'check-email' | 'otp';
 
 export default function VerifyEmailPage() {
+  return (
+    <Suspense fallback={null}>
+      <VerifyEmailInner />
+    </Suspense>
+  );
+}
+
+function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { verifyCode, requestCode } = useAuthStore();

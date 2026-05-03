@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Button, Input, Skeleton, TextField, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,107 +14,50 @@ const FIELD_INPUT_CLASS =
 
 export default function CompleteProfilePage() {
   const router = useRouter();
-  const { register } = useAuthStore();
+  const { user, isAuthenticated, updateProfile, isLoading: storeLoading } =
+    useAuthStore();
 
-  const [email, setEmail] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(true);
   const [name, setName] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
-    const storedData = sessionStorage.getItem('verifyEmail');
-    if (storedData) {
-      try {
-        const {
-          email: storedEmail,
-          timestamp,
-          pendingRegistration,
-        } = JSON.parse(storedData);
-        const fifteenMinutes = 15 * 60 * 1000;
-        if (
-          storedEmail &&
-          timestamp &&
-          pendingRegistration &&
-          Date.now() - timestamp < fifteenMinutes
-        ) {
-          setEmail(storedEmail);
-          setIsChecking(false);
-        } else {
-          sessionStorage.removeItem('verifyEmail');
-          router.replace('/login');
-        }
-      } catch {
-        sessionStorage.removeItem('verifyEmail');
-        router.replace('/login');
-      }
-    } else {
-      router.replace('/login');
-    }
-  }, [router]);
+    setHydrated(true);
+  }, []);
 
-  const validatePassword = (pwd: string) => {
-    if (pwd.length < 8) return 'Şifre en az 8 karakter olmalıdır';
-    if (!/[A-Z]/.test(pwd)) return 'Şifre en az bir büyük harf içermelidir';
-    if (!/[a-z]/.test(pwd)) return 'Şifre en az bir küçük harf içermelidir';
-    if (!/\d/.test(pwd)) return 'Şifre en az bir rakam içermelidir';
-    return '';
-  };
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!isAuthenticated) {
+      router.replace('/login');
+      return;
+    }
+    if (user?.name) {
+      // Already has a name — skip profile completion
+      router.replace(user.currentCompanyId ? '/dashboard' : '/setup-company');
+    }
+  }, [hydrated, isAuthenticated, user, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email) return;
-
-    const pwdError = validatePassword(password);
-    if (pwdError) {
-      toast.danger(pwdError);
+    if (!name.trim()) {
+      toast.danger('Ad ve soyad gereklidir');
       return;
     }
-    if (password !== confirmPassword) {
-      toast.danger('Şifreler eşleşmiyor');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const result = await register(email, name, password);
-      if (result.requiresVerification && result.email) {
-        // Backend may still want a fresh OTP — keep email but clear pending
-        // flag so verify-email runs the real verification path next.
-        sessionStorage.setItem(
-          'verifyEmail',
-          JSON.stringify({
-            email: result.email,
-            pendingRegistration: false,
-            timestamp: Date.now(),
-          })
-        );
-        toast.info('E-posta doğrulaması gerekiyor');
-        router.push('/verify-email');
-      } else {
-        sessionStorage.removeItem('verifyEmail');
-        toast.success('Kayıt başarılı!');
-        router.push('/dashboard');
-      }
-    } catch (err: any) {
-      toast.danger(err.message || 'Kayıt başarısız');
-    } finally {
-      setIsLoading(false);
+    const ok = await updateProfile({ name: name.trim() });
+    if (ok) {
+      toast.success('Profil tamamlandı');
+      router.push(user?.currentCompanyId ? '/dashboard' : '/setup-company');
+    } else {
+      toast.danger('Profil güncellenemedi');
     }
   };
 
-  if (isChecking || !email) {
+  if (!hydrated || !isAuthenticated || user?.name) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-[#F3F4F6] p-4 md:p-10">
         <div className="flex w-full max-w-[332px] flex-col items-center gap-5">
           <Skeleton className="h-16 w-16 rounded-lg" />
           <Skeleton className="h-7 w-40" />
           <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-full" />
         </div>
       </div>
@@ -135,64 +78,26 @@ export default function CompleteProfilePage() {
           value={name}
           onChange={setName}
           isRequired
-          isDisabled={isLoading}
+          isDisabled={storeLoading}
           autoFocus
           aria-label="Ad ve soyad"
         >
           <Input placeholder="Ad ve Soyad" className={FIELD_INPUT_CLASS} />
         </TextField>
 
-        <TextField
-          name="password"
-          type={showPassword ? 'text' : 'password'}
-          value={password}
-          onChange={setPassword}
-          isRequired
-          isDisabled={isLoading}
-          aria-label="Şifre"
-        >
-          <div className="relative">
-            <Input placeholder="Şifre" className={FIELD_INPUT_CLASS} />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-black"
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
-        </TextField>
-
-        <TextField
-          name="confirmPassword"
-          type={showPassword ? 'text' : 'password'}
-          value={confirmPassword}
-          onChange={setConfirmPassword}
-          isRequired
-          isDisabled={isLoading}
-          aria-label="Şifre tekrarı"
-        >
-          <Input placeholder="Şifre Tekrarı" className={FIELD_INPUT_CLASS} />
-        </TextField>
-
         <Button
           type="submit"
-          isPending={isLoading}
-          isDisabled={isLoading || !name || !password || !confirmPassword}
+          isPending={storeLoading}
+          isDisabled={storeLoading || !name.trim()}
           className={PRIMARY_BUTTON_CLASS}
         >
-          {isLoading ? (
+          {storeLoading ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Kayıt yapılıyor...
+              Kaydediliyor...
             </>
           ) : (
-            'Kayıt ol'
+            'Tamamla'
           )}
         </Button>
       </form>

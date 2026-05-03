@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, ChevronLeft, Loader2, Eye, EyeOff } from 'lucide-react';
+import { User, ChevronLeft, Loader2 } from 'lucide-react';
 import { Button, Input, TextField, toast } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useAuthStore } from '@/stores/authStore';
@@ -13,100 +13,19 @@ export default function ProfileSettingsPage() {
   const { user, updateProfile, isLoading } = useAuthStore();
 
   const [name, setName] = useState(user?.name || '');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    const updateData: { name?: string; currentPassword?: string; newPassword?: string } = {};
-
-    if (name !== user?.name) {
-      updateData.name = name;
-    }
-
-    if (newPassword) {
-      if (!currentPassword) {
-        toast.danger('Mevcut şifrenizi girmelisiniz');
-        return;
-      }
-      if (newPassword !== confirmPassword) {
-        toast.danger('Yeni şifreler eşleşmiyor');
-        return;
-      }
-      if (newPassword.length < 6) {
-        toast.danger('Yeni şifre en az 6 karakter olmalıdır');
-        return;
-      }
-      updateData.currentPassword = currentPassword;
-      updateData.newPassword = newPassword;
-    }
-
-    if (Object.keys(updateData).length === 0) {
+    if (name === (user?.name || '')) {
       toast.info('Değişiklik yapılmadı');
       return;
     }
-
-    const success = await updateProfile(updateData);
-    if (success) {
-      toast.success('Profil güncellendi');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } else {
-      toast.danger('Profil güncellenemedi');
-    }
+    const success = await updateProfile({ name });
+    if (success) toast.success('Profil güncellendi');
+    else toast.danger('Profil güncellenemedi');
   };
 
-  const hasChanges = name !== (user?.name || '') || !!newPassword;
-
-  const renderPasswordField = (
-    label: string,
-    value: string,
-    onChange: (v: string) => void,
-    show: boolean,
-    toggleShow: () => void,
-    placeholder: string
-  ) => (
-    <div className="border-b border-border">
-      <div className="grid grid-cols-12 items-center px-4 py-4">
-        <div className="col-span-3">
-          <label className="text-sm font-medium">{label}</label>
-        </div>
-        <div className="col-span-9">
-          <TextField
-            value={value}
-            onChange={onChange}
-            type={show ? 'text' : 'password'}
-            className="max-w-md"
-          >
-            <div className="relative">
-              <Input placeholder={placeholder} />
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                aria-label={show ? 'Şifreyi gizle' : 'Şifreyi göster'}
-                className="absolute right-1 top-1/2 -translate-y-1/2"
-                onPress={toggleShow}
-              >
-                {show ? (
-                  <EyeOff className="h-4 w-4 text-muted" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted" />
-                )}
-              </Button>
-            </div>
-          </TextField>
-        </div>
-      </div>
-    </div>
-  );
+  const hasChanges = name !== (user?.name || '');
 
   return (
     <>
@@ -151,37 +70,12 @@ export default function ProfileSettingsPage() {
           </div>
         </div>
 
-        <div className="border-b border-border bg-surface-secondary px-4 py-2">
-          <span className="text-xs font-medium text-muted">Şifre Değiştir</span>
-        </div>
-
-        {renderPasswordField(
-          'Mevcut Şifre',
-          currentPassword,
-          setCurrentPassword,
-          showCurrentPassword,
-          () => setShowCurrentPassword((v) => !v),
-          'Mevcut şifrenizi girin'
-        )}
-        {renderPasswordField(
-          'Yeni Şifre',
-          newPassword,
-          setNewPassword,
-          showNewPassword,
-          () => setShowNewPassword((v) => !v),
-          'Yeni şifrenizi girin'
-        )}
-        {renderPasswordField(
-          'Şifre Tekrar',
-          confirmPassword,
-          setConfirmPassword,
-          showConfirmPassword,
-          () => setShowConfirmPassword((v) => !v),
-          'Yeni şifrenizi tekrar girin'
-        )}
-
         <div className="px-4 py-4">
-          <Button type="submit" isDisabled={!hasChanges || isLoading} isPending={isLoading}>
+          <Button
+            type="submit"
+            isDisabled={!hasChanges || isLoading}
+            isPending={isLoading}
+          >
             {isLoading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

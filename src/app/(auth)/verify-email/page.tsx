@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
-import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
 const PRIMARY_BUTTON_CLASS =
@@ -17,10 +16,14 @@ type View = 'check-email' | 'otp';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { verifyCode, requestCode } = useAuthStore();
+
+  const magicEmail = searchParams.get('email');
+  const magicCode = searchParams.get('code');
+
   const [email, setEmail] = useState<string | null>(null);
-  const [pendingRegistration, setPendingRegistration] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-  const { setUser, setTokens } = useAuthStore();
 
   const [view, setView] = useState<View>('check-email');
   const [code, setCode] = useState('');
@@ -28,32 +31,55 @@ export default function VerifyEmailPage() {
   const [isResending, setIsResending] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  const finishVerification = useCallback(
+    async (targetEmail: string, codeValue: string) => {
+      try {
+        const result = await verifyCode(targetEmail, codeValue);
+        sessionStorage.removeItem('verifyEmail');
+        toast.success('Giriş başarılı');
+        if (result.requiresProfile) {
+          router.push('/complete-profile');
+        } else if (!result.user.currentCompanyId) {
+          router.push('/setup-company');
+        } else {
+          router.push('/dashboard');
+        }
+      } catch (err: any) {
+        toast.danger(err.message || 'Doğrulama başarısız');
+        setCode('');
+        throw err;
+      }
+    },
+    [verifyCode, router]
+  );
+
+  // Magic link auto-submit
   useEffect(() => {
+    if (magicEmail && magicCode && magicCode.length === 6) {
+      setEmail(magicEmail);
+      setIsChecking(false);
+      setIsLoading(true);
+      finishVerification(magicEmail, magicCode).finally(() => setIsLoading(false));
+      return;
+    }
+
     const storedData = sessionStorage.getItem('verifyEmail');
     if (storedData) {
       try {
-        const {
-          email: storedEmail,
-          timestamp,
-          pendingRegistration: pending,
-        } = JSON.parse(storedData);
+        const { email: storedEmail, timestamp } = JSON.parse(storedData);
         const fifteenMinutes = 15 * 60 * 1000;
         if (storedEmail && timestamp && Date.now() - timestamp < fifteenMinutes) {
           setEmail(storedEmail);
-          setPendingRegistration(!!pending);
           setIsChecking(false);
-        } else {
-          sessionStorage.removeItem('verifyEmail');
-          router.replace('/login');
+          return;
         }
       } catch {
-        sessionStorage.removeItem('verifyEmail');
-        router.replace('/login');
+        /* fall through */
       }
-    } else {
-      router.replace('/login');
+      sessionStorage.removeItem('verifyEmail');
     }
-  }, [router]);
+    router.replace('/login');
+  }, [magicEmail, magicCode, finishVerification, router]);
 
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -69,55 +95,25 @@ export default function VerifyEmailPage() {
         if (code.length !== 6) toast.danger('Lütfen 6 haneli kodu girin');
         return;
       }
-
       setIsLoading(true);
-
-      // Pending registration: backend doesn't have a user record yet, so we
-      // can't call /auth/verify-email here. Persist the verified code and
-      // route to /complete-profile, which finalises registration with name +
-      // password and submits the OTP alongside.
-      if (pendingRegistration) {
-        sessionStorage.setItem(
-          'verifyEmail',
-          JSON.stringify({
-            email,
-            pendingRegistration: true,
-            code,
-            timestamp: Date.now(),
-          })
-        );
-        router.push('/complete-profile');
-        return;
-      }
-
       try {
-        const response = await api.post('/auth/verify-email', { email, code });
-        const { user, accessToken, refreshToken } = response.data;
-        sessionStorage.removeItem('verifyEmail');
-        setUser(user);
-        setTokens(accessToken, refreshToken);
-        toast.success('E-posta başarıyla doğrulandı!');
-        if (!user.currentCompanyId) router.push('/setup-company');
-        else router.push('/dashboard');
-      } catch (err: any) {
-        toast.danger(err.response?.data?.message || 'Doğrulama başarısız');
-        setCode('');
+        await finishVerification(email, code);
       } finally {
         setIsLoading(false);
       }
     },
-    [code, email, pendingRegistration, router, setUser, setTokens]
+    [code, email, finishVerification]
   );
 
   const handleResend = async () => {
     if (resendCooldown > 0 || !email) return;
     setIsResending(true);
     try {
-      await api.post('/auth/resend-verification', { email });
+      await requestCode(email);
       setResendCooldown(60);
-      toast.success('Yeni doğrulama kodu gönderildi');
+      toast.success('Yeni giriş kodu gönderildi');
     } catch (err: any) {
-      toast.danger(err.response?.data?.message || 'Kod gönderilemedi');
+      toast.danger(err.message || 'Kod gönderilemedi');
     } finally {
       setIsResending(false);
     }
@@ -158,29 +154,25 @@ export default function VerifyEmailPage() {
     >
       {view === 'check-email' ? (
         <>
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="tertiary"
-              onPress={() => setView('otp')}
-              className={TERTIARY_BUTTON_CLASS}
-            >
-              Manuel kod gir
-            </Button>
-          </div>
+          <Button
+            variant="tertiary"
+            onPress={() => setView('otp')}
+            className={TERTIARY_BUTTON_CLASS}
+          >
+            Manuel kod gir
+          </Button>
 
           <hr className="w-8 border-t border-black/[0.12]" aria-hidden="true" />
 
-          <div className="flex flex-col gap-2">
-            <Button
-              variant="tertiary"
-              onPress={handleResend}
-              isDisabled={isResending || resendCooldown > 0}
-              isPending={isResending}
-              className={TERTIARY_BUTTON_CLASS}
-            >
-              {resendLabel}
-            </Button>
-          </div>
+          <Button
+            variant="tertiary"
+            onPress={handleResend}
+            isDisabled={isResending || resendCooldown > 0}
+            isPending={isResending}
+            className={TERTIARY_BUTTON_CLASS}
+          >
+            {resendLabel}
+          </Button>
         </>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2">

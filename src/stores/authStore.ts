@@ -18,6 +18,11 @@ interface User {
   currentCompanyId?: string;
 }
 
+interface VerifyResult {
+  requiresProfile: boolean;
+  user: User;
+}
+
 interface AuthState {
   user: User | null;
   accessToken: string | null;
@@ -29,12 +34,16 @@ interface AuthState {
   setTokens: (accessToken: string, refreshToken: string) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ requiresVerification: boolean; email?: string }>;
-  register: (email: string, name: string, password: string) => Promise<{ requiresVerification: boolean; email?: string }>;
+  requestCode: (email: string) => Promise<void>;
+  verifyCode: (
+    email: string,
+    code: string,
+    rememberMe?: boolean
+  ) => Promise<VerifyResult>;
   logout: () => Promise<void>;
   refreshTokens: () => Promise<boolean>;
   checkAuth: () => Promise<void>;
-  updateProfile: (data: { name?: string; currentPassword?: string; newPassword?: string }) => Promise<boolean>;
+  updateProfile: (data: { name?: string }) => Promise<boolean>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -48,11 +57,7 @@ export const useAuthStore = create<AuthState>()(
       error: null,
 
       setUser: (user) =>
-        set({
-          user,
-          isAuthenticated: !!user,
-          isLoading: false,
-        }),
+        set({ user, isAuthenticated: !!user, isLoading: false }),
 
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
@@ -61,54 +66,29 @@ export const useAuthStore = create<AuthState>()(
 
       setError: (error) => set({ error }),
 
-      login: async (email, password, rememberMe = false) => {
+      requestCode: async (email) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await api.post('/auth/login', {
-            email,
-            password,
-            rememberMe,
-          });
-
-          // Check if verification is required
-          if (response.data.requiresVerification) {
-            set({ isLoading: false, error: null });
-            return { requiresVerification: true, email: response.data.email };
-          }
-
-          const { user, accessToken, refreshToken } = response.data;
-          set({
-            user,
-            accessToken,
-            refreshToken,
-            isAuthenticated: true,
-            isLoading: false,
-            error: null,
-          });
-          return { requiresVerification: false };
+          await api.post('/auth/request-code', { email });
+          set({ isLoading: false });
         } catch (error: any) {
-          const message = error.response?.data?.message || 'Giriş başarısız';
+          const message =
+            error.response?.data?.message || 'Kod gönderilemedi';
           set({ isLoading: false, error: message });
           throw new Error(message);
         }
       },
 
-      register: async (email, name, password) => {
+      verifyCode: async (email, code, rememberMe = false) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await api.post('/auth/register', {
+          const response = await api.post('/auth/verify-code', {
             email,
-            name,
-            password,
+            code,
+            rememberMe,
           });
-
-          // Check if verification is required
-          if (response.data.requiresVerification) {
-            set({ isLoading: false, error: null });
-            return { requiresVerification: true, email: response.data.email };
-          }
-
-          const { user, accessToken, refreshToken } = response.data;
+          const { user, accessToken, refreshToken, requiresProfile } =
+            response.data;
           set({
             user,
             accessToken,
@@ -117,9 +97,10 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
             error: null,
           });
-          return { requiresVerification: false };
+          return { requiresProfile: !!requiresProfile, user };
         } catch (error: any) {
-          const message = error.response?.data?.message || 'Kayıt başarısız';
+          const message =
+            error.response?.data?.message || 'Doğrulama başarısız';
           set({ isLoading: false, error: message });
           throw new Error(message);
         }
@@ -131,7 +112,7 @@ export const useAuthStore = create<AuthState>()(
           if (refreshToken) {
             await api.post('/auth/logout', { refreshToken });
           }
-        } catch (error) {
+        } catch {
           // Ignore logout errors
         }
         set({
@@ -150,7 +131,11 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const response = await api.post('/auth/refresh', { refreshToken });
-          const { user, accessToken: newAccessToken, refreshToken: newRefreshToken } = response.data;
+          const {
+            user,
+            accessToken: newAccessToken,
+            refreshToken: newRefreshToken,
+          } = response.data;
           set({
             user,
             accessToken: newAccessToken,
@@ -158,7 +143,7 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
           });
           return true;
-        } catch (error) {
+        } catch {
           set({
             user: null,
             accessToken: null,
@@ -180,9 +165,12 @@ export const useAuthStore = create<AuthState>()(
 
         try {
           const response = await api.get('/auth/me');
-          set({ user: response.data, isAuthenticated: true, isLoading: false });
-        } catch (error) {
-          // Try to refresh token
+          set({
+            user: response.data,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch {
           const refreshed = await refreshTokens();
           if (!refreshed) {
             set({ isLoading: false });
@@ -194,14 +182,11 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, error: null });
         try {
           const response = await api.put('/auth/profile', data);
-          set({
-            user: response.data,
-            isLoading: false,
-            error: null,
-          });
+          set({ user: response.data, isLoading: false, error: null });
           return true;
         } catch (error: any) {
-          const message = error.response?.data?.message || 'Profil güncellenemedi';
+          const message =
+            error.response?.data?.message || 'Profil güncellenemedi';
           set({ isLoading: false, error: message });
           return false;
         }

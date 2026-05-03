@@ -7,7 +7,7 @@ import { useCompanyStore } from '@/stores/companyStore';
 import { Skeleton } from '@heroui/react';
 
 // Paths that don't require authentication
-const publicPaths = ['/login', '/register', '/forgot-password', '/reset-password', '/verify-email', '/complete-profile'];
+const publicPaths = ['/login', '/verify-email', '/complete-profile'];
 // Paths that authenticated users without a company can access
 const companySetupPaths = ['/setup-company', '/invite'];
 

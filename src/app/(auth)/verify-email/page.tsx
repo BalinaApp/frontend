@@ -127,10 +127,6 @@ export default function VerifyEmailPage() {
     }
   };
 
-  useEffect(() => {
-    if (view === 'otp' && code.length === 6 && email && !isLoading) handleSubmit();
-  }, [view, code, email, isLoading, handleSubmit]);
-
   if (isChecking || !email) {
     return (
       <div className="flex min-h-svh items-center justify-center bg-[#F3F4F6] p-4 md:p-10">

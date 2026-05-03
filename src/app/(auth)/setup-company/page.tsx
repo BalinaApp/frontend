@@ -16,18 +16,25 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type MemberRole = 'ADMIN' | 'MEMBER' | 'STOCKIST';
+// Invitable subset of the backend CompanyRole enum (OWNER is reserved for
+// the user creating the company; everyone else is invited as one of these).
+const INVITABLE_ROLES = [
+  { id: 'MEMBER', label: 'Üye' },
+  { id: 'ADMIN', label: 'Yönetici' },
+  { id: 'STOCKIST', label: 'Stokçu' },
+] as const;
+
+type MemberRole = (typeof INVITABLE_ROLES)[number]['id'];
+
+const ROLE_LABEL: Record<MemberRole, string> = INVITABLE_ROLES.reduce(
+  (acc, r) => ({ ...acc, [r.id]: r.label }),
+  {} as Record<MemberRole, string>
+);
 
 interface TeamMember {
   email: string;
   role: MemberRole;
 }
-
-const ROLE_LABEL: Record<MemberRole, string> = {
-  ADMIN: 'Yönetici',
-  MEMBER: 'Üye',
-  STOCKIST: 'Stokçu',
-};
 
 const PRIMARY_BUTTON_CLASS =
   'w-full rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
@@ -242,18 +249,16 @@ export default function SetupCompanyPage() {
                             handleChangeRole(member.email, key as MemberRole)
                           }
                         >
-                          <Dropdown.Item id="MEMBER" textValue="Üye">
-                            <Label>Üye</Label>
-                            <Dropdown.ItemIndicator />
-                          </Dropdown.Item>
-                          <Dropdown.Item id="ADMIN" textValue="Yönetici">
-                            <Label>Yönetici</Label>
-                            <Dropdown.ItemIndicator />
-                          </Dropdown.Item>
-                          <Dropdown.Item id="STOCKIST" textValue="Stokçu">
-                            <Label>Stokçu</Label>
-                            <Dropdown.ItemIndicator />
-                          </Dropdown.Item>
+                          {INVITABLE_ROLES.map((r) => (
+                            <Dropdown.Item
+                              key={r.id}
+                              id={r.id}
+                              textValue={r.label}
+                            >
+                              <Label>{r.label}</Label>
+                              <Dropdown.ItemIndicator />
+                            </Dropdown.Item>
+                          ))}
                         </Dropdown.Menu>
                       </Dropdown.Popover>
                     </Dropdown>

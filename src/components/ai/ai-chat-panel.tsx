@@ -8,6 +8,7 @@ import {
   Xmark,
   ArrowRight,
   Plus,
+  Picture,
 } from '@gravity-ui/icons';
 import { Button, Dropdown, ListBox, Select } from '@heroui/react';
 import {
@@ -305,62 +306,56 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
         <div
           className="flex flex-col gap-0 rounded-xl bg-gradient-to-b from-black/[0.04] to-black/[0.06] p-0.5"
         >
-          {/* Frames row — Figma 12203:4661 */}
-          <div className="flex items-center gap-2.5 px-3.5 py-3.5">
+          {/* Reference frames row — multi-image input (max 4) */}
+          <div className="flex flex-wrap items-center gap-2 px-3.5 py-3.5">
             <input
               ref={startInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleStartFile(file);
+                if (e.target.files && e.target.files.length > 0) {
+                  handleAddFiles(e.target.files);
+                }
                 e.target.value = '';
               }}
             />
-            <button
-              type="button"
-              onClick={() => startInputRef.current?.click()}
-              aria-label="Başlangıç görseli yükle"
-              className="group relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-transparent text-[10px] text-muted hover:border-accent/40"
-            >
-              {startFrame ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={startFrame.url} alt={startFrame.name} className="h-full w-full object-cover" />
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setStartFrame(null);
-                    }}
-                    role="button"
-                    aria-label="Görseli kaldır"
-                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                  >
-                    <Xmark className="h-3 w-3" />
-                  </span>
-                </>
-              ) : (
-                <span className="text-foreground/50">Start</span>
-              )}
-            </button>
-
-            {/* Swap chip — 32×32, bg #EBEBEC, 16px radius (Figma 12203:4662) */}
-            <span
-              aria-hidden="true"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl bg-[#EBEBEC]"
-            >
-              <ArrowRightArrowLeft className="h-4 w-4 text-foreground/70" />
-            </span>
-
-            <button
-              type="button"
-              disabled
-              aria-label="Bitiş görseli (yakında)"
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-black/10 bg-transparent text-[10px] text-muted/40"
-            >
-              End
-            </button>
+            {referenceFrames.map((frame, idx) => (
+              <div
+                key={`${frame.name}-${idx}`}
+                className="group relative h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-black/10"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={frame.url}
+                  alt={frame.name}
+                  className="h-full w-full object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleRemoveFrame(idx)}
+                  aria-label="Görseli kaldır"
+                  className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                >
+                  <Xmark className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            {referenceFrames.length < MAX_REFERENCE_FRAMES && (
+              <button
+                type="button"
+                onClick={() => startInputRef.current?.click()}
+                aria-label="Referans görsel ekle"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-dashed border-black/15 bg-transparent text-foreground/50 hover:border-accent/40 hover:text-foreground/80"
+              >
+                {referenceFrames.length === 0 ? (
+                  <Picture className="h-5 w-5" />
+                ) : (
+                  <Plus className="h-5 w-5" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Input box — white bg, 10px radius (Figma 12203:5626) */}

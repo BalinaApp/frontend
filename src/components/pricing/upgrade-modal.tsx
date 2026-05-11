@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { Check, Sparkles, Zap, Crown } from 'lucide-react';
+import { Check, Sparkles, Thunderbolt as Zap, CrownDiamond as Crown } from '@gravity-ui/icons';
 import { Button, Modal } from '@heroui/react';
 import { usePricingStore, PlanFeatures } from '@/stores/pricingStore';
 import { useCompanyStore } from '@/stores/companyStore';

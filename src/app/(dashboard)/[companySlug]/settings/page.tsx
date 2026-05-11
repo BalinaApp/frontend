@@ -1,101 +1,173 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Settings, Building2, Users, CreditCard, Bell, Key, User } from 'lucide-react';
-import { useCompany } from '@/components/providers/CompanyProvider';
+import {
+  Person,
+  Lock,
+  Briefcase,
+  Bell,
+  Sun,
+  Star,
+  Clock,
+  ChevronRight,
+} from '@gravity-ui/icons';
+import { Avatar, Button } from '@heroui/react';
+import { useEffect } from 'react';
+import { useAuthStore } from '@/stores/authStore';
+import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
+import { usePageTitle } from '@/hooks/use-page-title';
+import { userDisplayName } from '@/lib/user-display';
 
-const settingsSections = [
-  {
-    title: 'Şirket Bilgileri',
-    description: 'Şirket adı, logo ve genel ayarlar',
-    icon: Building2,
-    href: 'settings/company',
-    requiresPricing: false,
-  },
-  {
-    title: 'Takım Üyeleri',
-    description: 'Kullanıcıları ve rollerini yönetin',
-    icon: Users,
-    href: 'settings/team',
-    requiresPricing: false,
-  },
-  {
-    title: 'Profil',
-    description: 'Kişisel bilgilerinizi düzenleyin',
-    icon: User,
-    href: 'settings/profile',
-    requiresPricing: false,
-  },
-  {
-    title: 'Abonelik',
-    description: 'Plan ve ödeme bilgileriniz',
-    icon: CreditCard,
-    href: 'settings/billing',
-    requiresPricing: true,
-  },
-  {
-    title: 'Bildirimler',
-    description: 'E-posta ve uygulama bildirimleri',
-    icon: Bell,
-    href: 'settings/notifications',
-    requiresPricing: false,
-  },
-  {
-    title: 'API Erişimi',
-    description: 'Harici API anahtarları ve erişim yönetimi',
-    icon: Key,
-    href: 'settings/api',
-    requiresPricing: false,
-  },
-];
+interface SettingsItem {
+  id: string;
+  label: string;
+  href: string;
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  /** Tailwind background-color class for the icon tile. */
+  tile: string;
+  /** Hide entry when the pricing/subscription system is disabled in DB. */
+  requiresPricing?: boolean;
+}
 
-export default function SettingsPage() {
+export default function SettingsGeneralPage() {
+  usePageTitle('Genel');
+
   const router = useRouter();
-  const { company } = useCompany();
+  const { user, logout } = useAuthStore();
+  const { currentCompany } = useCompanyStore();
   const { isPricingEnabled, fetchPricingStatus } = usePricingStore();
 
   useEffect(() => {
     fetchPricingStatus();
   }, [fetchPricingStatus]);
 
-  const handleSectionClick = (href: string) => {
-    router.push(`/${company?.slug}/${href}`);
-  };
+  const slug = currentCompany?.slug ?? '';
+  const userInitial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
 
-  // Filter sections based on pricing status
-  const visibleSections = settingsSections.filter(
-    (section) => !section.requiresPricing || isPricingEnabled
-  );
+  const allItems: SettingsItem[] = [
+    {
+      id: 'profile',
+      label: 'Kişisel bilgiler',
+      href: `/${slug}/settings/profile`,
+      icon: Person,
+      tile: 'bg-zinc-500',
+    },
+    {
+      id: 'security',
+      label: 'Giriş ve güvenlik',
+      href: `/${slug}/settings/security`,
+      icon: Lock,
+      tile: 'bg-red-500',
+    },
+    {
+      id: 'company',
+      label: 'Şirket',
+      href: `/${slug}/settings/company`,
+      icon: Briefcase,
+      tile: 'bg-yellow-500',
+    },
+    {
+      id: 'notifications',
+      label: 'Bildirimler',
+      href: `/${slug}/settings/notifications`,
+      icon: Bell,
+      tile: 'bg-green-500',
+    },
+    {
+      id: 'activity-log',
+      label: 'Aktivite günlüğü',
+      href: `/${slug}/settings/activity-log`,
+      icon: Clock,
+      tile: 'bg-sky-500',
+    },
+    {
+      id: 'theme',
+      label: 'Tema',
+      href: `/${slug}/settings/theme`,
+      icon: Sun,
+      tile: 'bg-fuchsia-500',
+    },
+    {
+      id: 'subscription',
+      label: 'Abonelik',
+      href: `/${slug}/settings/billing`,
+      icon: Star,
+      tile: 'bg-violet-500',
+      requiresPricing: true,
+    },
+  ];
+
+  const items = allItems.filter((item) => !item.requiresPricing || isPricingEnabled);
+
+  const handleLogout = () => {
+    logout();
+    router.push('/login');
+  };
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <div className="flex items-center gap-2">
-          <Settings className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-lg font-semibold">Ayarlar</h1>
-        </div>
+      {/* Section header — fixed 61px to align with the back-button rows on
+          subpages (32px button + 14px padding ≈ 60.5px). */}
+      <div className="flex h-[61px] items-center border-b border-black/[0.02] px-3.5">
+        <h2 className="text-sm font-medium text-foreground">Genel</h2>
       </div>
 
-      {/* Settings Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2">
-        {visibleSections.map((section, index) => (
-          <div
-            key={section.title}
-            className={`flex items-center gap-4 px-4 py-4 cursor-pointer transition-colors hover:bg-muted/30 border-b ${index % 2 === 0 ? 'md:border-r' : ''}`}
-            onClick={() => handleSectionClick(section.href)}
-          >
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted">
-              <section.icon className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <div>
-              <p className="text-sm font-medium">{section.title}</p>
-              <p className="text-xs text-muted-foreground">{section.description}</p>
-            </div>
+      <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
+        <div className="flex w-full max-w-[616px] flex-col items-center gap-6 px-3">
+          {/* Avatar */}
+          <Avatar className="h-[116px] w-[116px] rounded-full">
+            <Avatar.Fallback className="rounded-full bg-zinc-500 text-3xl font-semibold text-white">
+              {userInitial}
+            </Avatar.Fallback>
+          </Avatar>
+
+          {/* Name + email */}
+          <div className="flex w-full flex-col items-center gap-1">
+            <h3 className="text-xl font-semibold text-foreground">
+              {userDisplayName(user)}
+            </h3>
+            <p className="text-xs text-muted">{user?.email}</p>
           </div>
-        ))}
+
+          {/* List card */}
+          <div className="flex w-full flex-col rounded-xl bg-surface">
+            {items.map((item, index) => {
+              const Icon = item.icon;
+              const isLast = index === items.length - 1;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => router.push(item.href)}
+                  className={`flex cursor-pointer items-center gap-3 px-3 py-3 text-left transition-colors ${
+                    !isLast ? 'border-b border-black/[0.02]' : ''
+                  } ${index === 0 ? 'rounded-t-xl' : ''} ${isLast ? 'rounded-b-xl' : ''}`}
+                >
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white ${item.tile}`}
+                    aria-hidden="true"
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <span className="flex-1 text-sm font-medium text-foreground/85">
+                    {item.label}
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-muted" />
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Logout button */}
+          <Button
+            variant="tertiary"
+            onPress={handleLogout}
+            className="h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+          >
+            Çıkış yap
+          </Button>
+        </div>
       </div>
     </>
   );

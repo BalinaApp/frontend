@@ -1,38 +1,27 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
-import {
-  Link2,
-  Plus,
-  Wand2,
-  Package,
-  Store,
-  Trash2,
-  ChevronDown,
-  ChevronUp,
-  X,
-  Search,
-  Check,
-  Loader2,
-} from 'lucide-react';
+import { Box as Package, ShoppingBag as Store, TrashBin as Trash2, ChevronDown, Xmark as X, Check, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
+import { Link as Link2, Plus, MagicWand as Wand2, ChevronUp, Magnifier as Search } from '@gravity-ui/icons';
 import {
   Button,
   Chip,
   Input,
   Label,
   Modal,
-  Skeleton,
   TextField,
-  toast,
-} from '@heroui/react';
+  toast } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import {
   useProductMappingStore,
   type MappingSuggestion,
   type SearchProduct,
 } from '@/stores/productMappingStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 export default function ProductMappingsPage() {
+  usePageTitle('Ürün Eşleştirme');
+
   const { currentCompany } = useCompanyStore();
   const {
     mappings,
@@ -238,13 +227,9 @@ export default function ProductMappingsPage() {
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="rounded-lg border border-border p-4">
                 <div className="flex items-center justify-between">
-                  <Skeleton className="h-5 w-40" />
-                  <Skeleton className="h-5 w-20" />
-                </div>
+                  </div>
                 <div className="mt-2 flex gap-2">
-                  <Skeleton className="h-6 w-24" />
-                  <Skeleton className="h-6 w-24" />
-                </div>
+                  </div>
               </div>
             ))}
           </div>

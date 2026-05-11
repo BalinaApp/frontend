@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, ArrowUpRight } from 'lucide-react';
+import { TriangleExclamation as AlertTriangle, ArrowUpRight } from '@gravity-ui/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { Button } from '@heroui/react';
 

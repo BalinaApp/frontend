@@ -1,6 +1,6 @@
 'use client';
 
-import { Store, ArrowUpRight } from 'lucide-react';
+import { ShoppingBag as Store, ArrowUpRight } from '@gravity-ui/icons';
 import { useRouter, useParams } from 'next/navigation';
 import { Button, Modal } from '@heroui/react';
 

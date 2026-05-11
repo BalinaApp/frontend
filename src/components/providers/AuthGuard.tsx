@@ -4,10 +4,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
-import { Skeleton } from '@heroui/react';
 
 // Paths that don't require authentication
-const publicPaths = ['/login', '/verify-email'];
+const publicPaths = ['/login', '/verify-email', '/auth/google-callback'];
 // Paths that authenticated users without a company can access
 const companySetupPaths = ['/setup-company'];
 // Paths that handle their own auth flow — AuthGuard doesn't redirect to or
@@ -16,68 +15,14 @@ const companySetupPaths = ['/setup-company'];
 const selfManagedPaths = ['/invite'];
 
 function DashboardLoadingSkeleton() {
+  // Neutral placeholder — no skeleton bars. Matches the dashboard layout's
+  // gray bg + 80-px sidebar gutter + rounded white content card so the user
+  // doesn't see a flash before AuthGuard finishes routing.
   return (
-    <div className="flex h-screen w-full bg-sidebar">
-      {/* Sidebar skeleton */}
-      <div className="hidden md:flex w-64 flex-col p-2">
-        {/* Team switcher */}
-        <div className="p-2">
-          <div className="flex items-center gap-2 p-2">
-            <Skeleton className="h-8 w-8 rounded-lg" />
-            <div className="flex-1">
-              <Skeleton className="h-4 w-20 mb-1" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-          </div>
-        </div>
-        {/* Nav items */}
-        <div className="flex-1 p-2 space-y-1">
-          {[...Array(9)].map((_, i) => (
-            <Skeleton key={i} className="h-8 w-full rounded-md" />
-          ))}
-        </div>
-        {/* User */}
-        <div className="p-2">
-          <div className="flex items-center gap-2 p-2">
-            <Skeleton className="h-8 w-8 rounded-full" />
-            <div className="flex-1">
-              <Skeleton className="h-4 w-24 mb-1" />
-              <Skeleton className="h-3 w-32" />
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* Main content skeleton - matches SidebarInset */}
-      <main className="relative flex w-full flex-1 flex-col bg-background md:m-2 md:ml-0 md:rounded-xl md:border">
-        {/* Header */}
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-          <Skeleton className="h-7 w-7 rounded-md" />
-          <Skeleton className="h-4 w-px bg-border" />
-          <Skeleton className="h-4 w-16 mr-1" />
-          <Skeleton className="h-4 w-4" />
-          <Skeleton className="h-4 w-24" />
-        </header>
-        {/* Page header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-9 w-24" />
-        </div>
-        {/* Content grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 border-b">
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className={`p-6 ${i < 2 ? 'lg:border-r' : ''} ${i === 0 ? 'md:border-r' : ''}`}>
-              <Skeleton className="h-12 w-12 mb-4" />
-              <Skeleton className="h-5 w-24 mb-2" />
-              <Skeleton className="h-4 w-32 mb-4" />
-              <Skeleton className="h-8 w-20" />
-            </div>
-          ))}
-        </div>
-        {/* Secondary section */}
-        <div className="px-4 py-3 border-b">
-          <Skeleton className="h-5 w-40" />
-        </div>
-        <div className="flex-1" />
+    <div className="flex h-screen w-full bg-background">
+      <aside className="hidden h-screen w-20 shrink-0 md:block" aria-hidden="true" />
+      <main className="flex h-screen flex-1 flex-col p-1 pl-0">
+        <div className="flex flex-1 flex-col overflow-hidden rounded-lg bg-white/40 shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]" />
       </main>
     </div>
   );
@@ -194,12 +139,17 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const isDashboardPath =
     !isPublicPath && !isCompanySetupPath && !isSelfManagedPath;
 
-  // While we don't know yet whether the user is authenticated, never show
-  // the dashboard chrome — it would briefly flash before the redirect to
-  // /login lands. Public auth surfaces render their own static content.
+  // While we don't know yet whether the user is authenticated, render a
+  // neutral placeholder for ALL paths — including public ones (/login,
+  // /verify-email). If we render the public page early, its own
+  // useEffect can fire `router.replace('/login')` based on the stale
+  // `isAuthenticated=false` value, and then once checkAuth() lands and
+  // flips it to true, this guard fires `router.push('/{slug}')` — two
+  // overlapping transitions that Next.js 16 Turbopack rejects with
+  // InvalidStateError. When there's no accessToken, authCheckDone flips
+  // synchronously (see effect above) so the placeholder is one frame.
   if (!isHydrated || !authCheckDone) {
-    if (isDashboardPath) return <div className="min-h-svh bg-black/[0.04]" />;
-    return <>{children}</>;
+    return <div className="min-h-svh bg-default/60" />;
   }
 
   // Just signed in on /login or /verify-email and waiting for the companies
@@ -207,7 +157,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // the email entry) — show the same neutral placeholder so there's no
   // flash of stale auth chrome before AuthGuard redirects out.
   if (isPublicPath && isAuthenticated && !companiesFetched) {
-    return <div className="min-h-svh bg-black/[0.04]" />;
+    return <div className="min-h-svh bg-default/60" />;
   }
 
   // Once we know the user is authenticated but companies are still loading,
@@ -215,7 +165,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // to /login any more.
   if (!isPublicPath && (isLoading || !isAuthenticated || (isAuthenticated && !companiesFetched))) {
     if (isDashboardPath) {
-      return isAuthenticated ? <DashboardLoadingSkeleton /> : <div className="min-h-svh bg-black/[0.04]" />;
+      return isAuthenticated ? <DashboardLoadingSkeleton /> : <div className="min-h-svh bg-default/60" />;
     }
     return <>{children}</>;
   }

@@ -4,6 +4,7 @@ import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { AuthGuard } from '@/components/providers/AuthGuard';
 import { SuppressBenignErrors } from '@/components/providers/SuppressBenignErrors';
+import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { Toast } from '@heroui/react';
 
 const inter = Inter({
@@ -12,9 +13,17 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'WooCommerce Analytics Dashboard',
+  title: {
+    default: 'BalinaOS',
+    template: '%s · BalinaOS',
+  },
   description:
-    'Multi-store WooCommerce analytics dashboard for e-commerce businesses',
+    'Çok mağazalı WooCommerce analitik dashboardu — BalinaOS',
+  icons: {
+    icon: [{ url: '/favicon.png', type: 'image/png' }],
+    shortcut: '/favicon.png',
+    apple: '/favicon.png',
+  },
 };
 
 export default function RootLayout({
@@ -24,12 +33,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="tr" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans antialiased`} suppressHydrationWarning>
+      <body
+        className={`${inter.variable} select-none font-sans antialiased`}
+        suppressHydrationWarning
+      >
         <SuppressBenignErrors />
-        <QueryProvider>
-          <AuthGuard>{children}</AuthGuard>
-          <Toast.Provider />
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <AuthGuard>{children}</AuthGuard>
+            <Toast.Provider />
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

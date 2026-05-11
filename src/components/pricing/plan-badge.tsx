@@ -1,6 +1,6 @@
 'use client';
 
-import { Zap, Sparkles, Building2, Crown } from 'lucide-react';
+import { Thunderbolt as Zap, Sparkles, House as Building2, CrownDiamond as Crown } from '@gravity-ui/icons';
 
 interface PlanBadgeProps {
   planName: 'FREE' | 'PRO' | 'ENTERPRISE';

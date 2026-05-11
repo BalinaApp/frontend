@@ -57,6 +57,10 @@ export const api = axios.create({
     'Content-Type': 'application/json',
   },
   withCredentials: true,
+  // Hiçbir backend çağrısı 3 dakikayı geçmesin. Görsel/video üretim
+  // endpoint'leri kendi içlerinde uzun çalıştığı için bu sınır jenerik
+  // koruma — request hung kalmasın.
+  timeout: 180_000,
 });
 
 // Request interceptor for adding auth token

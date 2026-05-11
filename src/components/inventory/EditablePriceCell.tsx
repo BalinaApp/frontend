@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
 import { Input, TextField } from '@heroui/react';
 
 interface EditablePriceCellProps {

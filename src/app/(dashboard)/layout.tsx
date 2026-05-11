@@ -1,76 +1,96 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import { AppSidebar } from '@/components/layout/app-sidebar';
-import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
 import { UsageWarning } from '@/components/pricing/usage-warning';
+import { AiChatDrawer } from '@/components/ai/ai-chat-drawer';
+import { AiChatFab } from '@/components/ai/ai-chat-fab';
+import { AiChatHistoryButton } from '@/components/ai/ai-chat-history-button';
+import { useUIStore } from '@/stores/uiStore';
+import { useAiStore } from '@/stores/aiStore';
+import { useCompanyStore } from '@/stores/companyStore';
 
-const pageTitles: Record<string, string> = {
-  '': 'Dashboard',
-  stores: 'Mağazalar',
-  inventory: 'Stok Yönetimi',
-  orders: 'Siparişler',
-  payments: 'Ödemeler',
-  reports: 'Raporlar',
-  refunds: 'İadeler',
-  pricing: 'Planlar',
-  settings: 'Ayarlar',
-  'product-mappings': 'Ürün Eşleştirme',
-  notifications: 'Bildirimler',
-};
+// Bottom strip yüksekliği — AI launcher + history button satırı.
+const BOTTOM_STRIP_HEIGHT = 40;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const { currentCompany } = useCompanyStore();
   const { usage, fetchUsage, fetchPricingStatus } = usePricingStore();
+  const isAiDrawerExpanded = useUIStore((s) => s.isAiDrawerExpanded);
+
+  // FAL entegrasyonu aktif mi? Layout'tan kendi başına fetch ediyoruz —
+  // bottom strip ve drawer bu listeye göre render edilir, panel mount'una
+  // bağlı değil (panel zaten gizli olabilir).
+  const currentCompanyId = useCompanyStore((s) => s.currentCompany?.id);
+  const fals = useAiStore((s) => s.fals);
+  const fetchFalIntegrations = useAiStore((s) => s.fetchFalIntegrations);
+  const hasActiveFal = fals.some((f) => f.isActive);
+  const stripHeight = hasActiveFal ? BOTTOM_STRIP_HEIGHT : 0;
 
   useEffect(() => {
     fetchUsage();
     fetchPricingStatus();
   }, [fetchUsage, fetchPricingStatus]);
 
-  const pathParts = pathname.split('/').filter(Boolean);
-  const companySlug = pathParts[0];
-  const currentModule = pathParts[1] || '';
-  const currentPage = pageTitles[currentModule] || currentModule || 'Dashboard';
+  useEffect(() => {
+    if (currentCompanyId) fetchFalIntegrations(currentCompanyId);
+  }, [currentCompanyId, fetchFalIntegrations]);
 
   return (
-    <div className="flex h-screen w-full">
+    <div className="bg-page flex h-screen w-full">
+      {/* Sidebar fixed; spacer flex layout'ta yer kapatır */}
       <AppSidebar />
-      <main className="flex h-screen flex-1 flex-col overflow-hidden bg-background">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-          <div className="flex items-center gap-2 pl-12 md:pl-2">
-            <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm">
-              <span className="text-muted">
-                {currentCompany?.name || 'Ana Sayfa'}
-              </span>
-              {currentModule && (
-                <>
-                  <span className="text-muted">/</span>
-                  <span className="font-medium" aria-current="page">
-                    {currentPage}
-                  </span>
-                </>
-              )}
-              {!currentModule && companySlug && (
-                <span className="font-medium" aria-current="page">
-                  Dashboard
-                </span>
-              )}
-            </nav>
+      <main className="flex h-screen min-w-0 flex-1 flex-col p-1 pl-0">
+        {/* Wrapper — drawer'ın absolute pozisyon referansı.
+            FAL aktifken: explicit height = 100vh - strip (drawer inset hesabı
+            buna bağlı, dokunma).
+            FAL pasifken: flex-1 — main'in p-1 padding'ini bozmadan doğal
+            şekilde kalan alanı doldurur (üst/sağ/alt padding görünür). */}
+        <div
+          className="relative flex flex-col"
+          style={
+            hasActiveFal
+              ? { height: `calc(100vh - ${stripHeight}px)` }
+              : { flex: '1 1 0%', minHeight: 0 }
+          }
+        >
+          {/* Content card — scale BURAYA uygulanır.
+              Drawer kardeş olduğu için scale'den etkilenmez. */}
+          <div
+            className="flex flex-1 flex-col overflow-hidden rounded-lg bg-white/[0.56] shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]"
+            style={{
+              transform: isAiDrawerExpanded ? 'scale(0.98)' : 'scale(1)',
+              transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
+              transformOrigin: 'center',
+            }}
+          >
+            {usage && (usage.isNearLimit || usage.isAtLimit) && (
+              <UsageWarning
+                storeCount={usage.storeCount}
+                storeLimit={usage.storeLimit}
+                isAtLimit={usage.isAtLimit}
+                isNearLimit={usage.isNearLimit}
+              />
+            )}
+            <div className="scrollbar-none flex flex-1 flex-col overflow-auto">
+              {children}
+            </div>
           </div>
-        </header>
-        {usage && (usage.isNearLimit || usage.isAtLimit) && (
-          <UsageWarning
-            storeCount={usage.storeCount}
-            storeLimit={usage.storeLimit}
-            isAtLimit={usage.isAtLimit}
-            isNearLimit={usage.isNearLimit}
-          />
+          {/* Drawer — wrapper'ın direkt çocuğu, content card'ın sibling'i.
+              Scale'den etkilenmez, kendi inset değerleriyle konumlanır.
+              FAL aktif değilse hiç render edilmez. */}
+          {hasActiveFal && <AiChatDrawer />}
+        </div>
+        {/* Bottom strip — sadece FAL aktif iken görünür. */}
+        {hasActiveFal && (
+          <div
+            className="flex shrink-0 items-center justify-end gap-1 px-3"
+            style={{ height: BOTTOM_STRIP_HEIGHT }}
+          >
+            <AiChatFab />
+            <AiChatHistoryButton />
+          </div>
         )}
-        <div className="flex flex-1 flex-col overflow-auto">{children}</div>
       </main>
     </div>
   );

@@ -1,6 +1,310 @@
 @import "tailwindcss";
 @import "@heroui/styles";
 
+/* ------------------------------------------------------------------
+   Page background — neutral grey by default, soft 28%-alpha gradient
+   when a theme accent is active. The dashboard wrapper consumes this
+   via `.bg-page`, so themed colour shows through every translucent
+   panel layered above it.
+   ------------------------------------------------------------------ */
+:root {
+  --page-base: oklch(93% 0 0);
+  --page-bg: var(--page-base);
+}
+html,
+body {
+  background: var(--page-bg);
+  /* Sayfa-seviyesi scroll'u kilitle — dashboard layout'u h-screen kapsayıcısı
+     içinde kendi scroll alanını yönetiyor, body scroll'una hiç gerek yok. */
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+}
+.bg-page {
+  background: var(--page-bg);
+}
+
+/* Default-mode menu pills (no theme accent active) blend into the
+   translucent backdrop via plus-darker instead of sitting on top
+   as a flat dark wash. */
+body:not([class*="theme-"]) .menu-pill {
+  mix-blend-mode: plus-darker;
+}
+
+/* Cards inside the dashboard content panes use a translucent white
+   instead of the opaque --surface token, so the page-level accent
+   gradient and underlying frosted layers bleed through. `!important`
+   guarantees we beat Tailwind v4's auto-generated utility regardless
+   of layer ordering. */
+.bg-surface {
+  background-color: oklch(1 0 0 / 0.64) !important;
+  background-image: none !important;
+}
+
+/* Modal & AlertDialog — Perplexity-style design. Backdrop is a soft
+   translucent wash over a 6 px blur, dialog is a 12-px-rounded card with
+   a 1-px hairline, tertiary bg, and an outer shadow. Padding moves off
+   the dialog and onto each section (header 12, body 12, footer 16) so
+   headings and CTA rows land on the same grid. AlertDialog reuses the
+   same chrome via the parallel `.alert-dialog__*` class names. */
+@layer components {
+  .modal__backdrop,
+  .alert-dialog__backdrop {
+    background-color: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .modal__dialog,
+  .alert-dialog__dialog {
+    border-radius: 12px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(245, 245, 245, 0.6)),
+      oklch(0.97 0 0 / 0.92);
+    box-shadow:
+      0 12px 32px -8px rgba(0, 0, 0, 0.16),
+      0 4px 12px -4px rgba(0, 0, 0, 0.08);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    padding: 0;
+    gap: 0;
+  }
+
+  .modal__header,
+  .alert-dialog__header {
+    flex-direction: column;
+    gap: 0;
+    padding: 12px;
+    margin-bottom: 0;
+  }
+
+  /* AlertDialog header — icon sits inline with the heading instead of
+     stacked above it, and the status-tinted circle behind the icon is
+     dropped so we read just the glyph next to the title. */
+  .alert-dialog__header {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+  .alert-dialog__icon {
+    width: auto;
+    height: auto;
+    background-color: transparent !important;
+    border-radius: 0;
+  }
+
+  .modal__heading,
+  .alert-dialog__heading {
+    padding: 0;
+    font-size: 14px;
+    line-height: 20px;
+    font-weight: 500;
+    color: var(--foreground);
+  }
+
+  .modal__body {
+    padding: 12px;
+    gap: 20px;
+    display: flex;
+    flex-direction: column;
+    margin-block: 0;
+    color: var(--foreground);
+  }
+
+  /* AlertDialog body — message reads tighter against the header so we
+     drop both padding and margin and rely on the parent flow gap. */
+  .alert-dialog__body {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    color: var(--foreground);
+  }
+
+  .modal__footer,
+  .alert-dialog__footer {
+    padding: 16px;
+    gap: 8px;
+    justify-content: space-between;
+    margin-top: 0;
+  }
+
+  /* Modal form-card — the hairline-bordered content frame nested inside a
+     modal body. Wrap one or more form rows with `<div className="modal-form-card">`
+     to get the 12-px-rounded card with a 1-px inset border. */
+  .modal-form-card {
+    border-radius: 12px;
+    padding: 12px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Modal & AlertDialog inputs — force the secondary variant look on every
+     form field inside a dialog so they read as soft chips on the frosted
+     bg (no per-component variant prop needed). Targets Input, Textarea,
+     SearchField group and NumberField group. */
+  .modal__dialog .input,
+  .modal__dialog .textarea,
+  .alert-dialog__dialog .input,
+  .alert-dialog__dialog .textarea {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .modal__dialog .input:hover:not(:focus):not([data-focused="true"]),
+  .modal__dialog .textarea:hover:not(:focus):not([data-focused="true"]),
+  .alert-dialog__dialog .input:hover:not(:focus):not([data-focused="true"]),
+  .alert-dialog__dialog .textarea:hover:not(:focus):not([data-focused="true"]) {
+    background-color: rgba(0, 0, 0, 0.08);
+  }
+  .modal__dialog .input[data-focused="true"],
+  .modal__dialog .textarea[data-focused="true"],
+  .alert-dialog__dialog .input[data-focused="true"],
+  .alert-dialog__dialog .textarea[data-focused="true"] {
+    background-color: rgba(0, 0, 0, 0.10);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .modal__dialog .search-field__group,
+  .modal__dialog .number-field__group,
+  .alert-dialog__dialog .search-field__group,
+  .alert-dialog__dialog .number-field__group {
+    background-color: rgba(0, 0, 0, 0.05);
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .modal__dialog .search-field__group:hover:not(:focus-within):not([data-focus-within="true"]),
+  .modal__dialog .number-field__group:hover:not(:focus-within):not([data-focus-within="true"]),
+  .alert-dialog__dialog .search-field__group:hover:not(:focus-within):not([data-focus-within="true"]),
+  .alert-dialog__dialog .number-field__group:hover:not(:focus-within):not([data-focus-within="true"]) {
+    background-color: rgba(0, 0, 0, 0.08);
+  }
+  .modal__dialog .search-field__group:focus-within,
+  .modal__dialog .search-field__group[data-focus-within="true"],
+  .modal__dialog .number-field__group:focus-within,
+  .modal__dialog .number-field__group[data-focus-within="true"],
+  .alert-dialog__dialog .search-field__group:focus-within,
+  .alert-dialog__dialog .search-field__group[data-focus-within="true"],
+  .alert-dialog__dialog .number-field__group:focus-within,
+  .alert-dialog__dialog .number-field__group[data-focus-within="true"] {
+    background-color: rgba(0, 0, 0, 0.10);
+    border-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+   Accent themes — driven by classes on <body> (set by ThemeProvider).
+
+   Each .theme-{from}-{to} only swaps --accent (used by buttons,
+   chips, focus rings). The page background stays a neutral grey so
+   contrast and active-state visibility don't drift with the theme.
+   ------------------------------------------------------------------ */
+body.theme-lime-emerald {
+  --accent: oklch(0.696 0.171 162.48);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.870 0.198 124.0 / 0.28), oklch(0.696 0.171 162.5 / 0.28)),
+    var(--page-base);
+}
+body.theme-emerald-sky {
+  --accent: oklch(0.685 0.169 237.3);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.696 0.171 162.5 / 0.28), oklch(0.685 0.169 237.3 / 0.28)),
+    var(--page-base);
+}
+body.theme-sky-indigo {
+  --accent: oklch(0.585 0.233 277.12);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.685 0.169 237.3 / 0.28), oklch(0.585 0.233 277.1 / 0.28)),
+    var(--page-base);
+}
+body.theme-indigo-purple {
+  --accent: oklch(0.627 0.265 303.9);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.585 0.233 277.1 / 0.28), oklch(0.627 0.265 303.9 / 0.28)),
+    var(--page-base);
+}
+body.theme-purple-pink {
+  --accent: oklch(0.656 0.241 354.4);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.627 0.265 303.9 / 0.28), oklch(0.656 0.241 354.4 / 0.28)),
+    var(--page-base);
+}
+body.theme-pink-orange {
+  --accent: oklch(0.705 0.213 47.6);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.656 0.241 354.4 / 0.28), oklch(0.705 0.213 47.6 / 0.28)),
+    var(--page-base);
+}
+body.theme-amber-red {
+  --accent: oklch(0.643 0.245 29.23);
+  --page-bg:
+    linear-gradient(135deg, oklch(0.770 0.180 70.0 / 0.28), oklch(0.643 0.245 29.23 / 0.28)),
+    var(--page-base);
+}
+
+body[class*="theme-"] {
+  --accent-foreground: oklch(0.9911 0 0);
+}
+
+/* Integrations page hero blob — black wash on the neutral grey page,
+   white wash whenever a theme accent class is on <body>. */
+.integrations-blob {
+  background-color: rgba(0, 0, 0, 0.10);
+}
+body[class*="theme-"] .integrations-blob {
+  background-color: rgba(255, 255, 255, 0.20);
+}
+
+/* Default focus ring for all HeroUI form fields — replace the HeroUI
+   accent (`--focus`) blue ring with a neutral black 20% so focus reads
+   the same on every backdrop. Covers Input, Textarea, SearchField and
+   NumberField groups (the four `data-focused`/`data-focus-within` hooks
+   HeroUI emits). Auth-field override below still wins via !important. */
+.input[data-focused="true"],
+.input--secondary[data-focused="true"],
+.textarea[data-focused="true"],
+.textarea--secondary[data-focused="true"],
+.search-field__group[data-focus-within="true"],
+.search-field__group:focus-within,
+.number-field__group[data-focus-within="true"],
+.number-field__group:focus-within {
+  --tw-ring-color: rgba(0, 0, 0, 0.2);
+}
+
+/* Secondary variant fills — neutral black wash so the field reads the
+   same over any backdrop. 5% rest, 8% hover, 10% focus. Tokens are the
+   same triplet HeroUI's secondary CSS already references. */
+.input--secondary,
+.textarea--secondary {
+  --input-bg: rgba(0, 0, 0, 0.05);
+  --input-bg-hover: rgba(0, 0, 0, 0.08);
+  --input-bg-focus: rgba(0, 0, 0, 0.10);
+}
+.search-field--secondary .search-field__group,
+.number-field--secondary .number-field__group {
+  --search-field-group-bg: rgba(0, 0, 0, 0.05);
+  --search-field-group-bg-hover: rgba(0, 0, 0, 0.08);
+  --search-field-group-bg-focus: rgba(0, 0, 0, 0.10);
+  --number-field-group-bg: rgba(0, 0, 0, 0.05);
+  --number-field-group-bg-hover: rgba(0, 0, 0, 0.08);
+  --number-field-group-bg-focus: rgba(0, 0, 0, 0.10);
+}
+
+/* Hidden scrollbar utility — kullanıldığı kapsayıcıda scroll çubuğu gizlenir,
+   içerik hâlâ scroll edilebilir. */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Auth screens: suppress HeroUI default blue focus ring + border tone change.
    Figma node 12107:11875 input has only the soft drop shadow, no ring/border. */
 .auth-field-input,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Zap, Crown, Lock } from 'lucide-react';
+import { Thunderbolt as Zap, CrownDiamond as Crown, Lock } from '@gravity-ui/icons';
 
 interface ProBadgeProps {
   plan: 'PRO' | 'ENTERPRISE';

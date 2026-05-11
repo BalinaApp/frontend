@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { ChevronDown, Loader2, Trash2 } from 'lucide-react';
+import { ChevronDown, ArrowsRotateRight as Loader2, TrashBin as Trash2 } from '@gravity-ui/icons';
 import {
   Avatar,
   Button,
@@ -15,21 +15,13 @@ import {
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
-// Invitable subset of the backend CompanyRole enum (OWNER is reserved for
-// the user creating the company; everyone else is invited as one of these).
-const INVITABLE_ROLES = [
-  { id: 'MEMBER', label: 'Üye' },
-  { id: 'ADMIN', label: 'Yönetici' },
-  { id: 'STOCKIST', label: 'Stokçu' },
-] as const;
+import { INVITABLE_ROLES, ROLE_LABELS, type InvitableRoleId } from '@/lib/roles';
 
-type MemberRole = (typeof INVITABLE_ROLES)[number]['id'];
+type MemberRole = InvitableRoleId;
 
-const ROLE_LABEL: Record<MemberRole, string> = INVITABLE_ROLES.reduce(
-  (acc, r) => ({ ...acc, [r.id]: r.label }),
-  {} as Record<MemberRole, string>
-);
+const ROLE_LABEL = ROLE_LABELS;
 
 interface TeamMember {
   email: string;
@@ -53,6 +45,8 @@ function getInitial(email: string) {
 }
 
 export default function SetupCompanyPage() {
+  usePageTitle('Şirket oluştur');
+
   // We don't router.push from this page on success — letting AuthGuard's
   // "isCompanySetupPath + companies.length > 0" branch fire the single
   // navigation avoids racing with our own push (which used to manifest as
@@ -151,7 +145,7 @@ export default function SetupCompanyPage() {
       <div className="flex w-full max-w-[448px] flex-col items-center gap-5">
         <Image
           src="/figma/balina-logo.svg"
-          alt="Balina"
+          alt="BalinaOS"
           width={64}
           height={64}
           priority

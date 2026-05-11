@@ -1,16 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  CreditCard,
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  Clock,
-  CheckCircle,
-  XCircle,
-  RotateCcw,
-} from 'lucide-react';
+import { CreditCard } from '@gravity-ui/icons';
+import { ChartLineArrowUp as TrendingUp, ChartLine as TrendingDown, CircleDollar as DollarSign, Clock, CircleCheck as CheckCircle, CircleXmark as XCircle, ArrowRotateLeft as RotateCcw } from '@gravity-ui/icons';
 import {
   Bar,
   BarChart,
@@ -23,11 +15,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ListBox, Select, Skeleton } from '@heroui/react';
+import { ListBox, Select } from '@heroui/react';
 import { DateRangeInput, type DateRange } from '@/components/date-range-input';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { usePaymentStore } from '@/stores/paymentStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 const periodOptions = [
   { value: 'today', label: 'Bugün' },
@@ -51,6 +44,8 @@ const getPaymentMethodColor = (method: string) =>
   PAYMENT_METHOD_COLORS[method] || '#6b7280';
 
 export default function PaymentsPage() {
+  usePageTitle('Ödemeler');
+
   const { currentCompany } = useCompanyStore();
   const { stores } = useStoreStore();
   const {
@@ -211,9 +206,7 @@ export default function PaymentsPage() {
             <span className="text-sm text-muted">Toplam Gelir</span>
             <DollarSign className="h-4 w-4 text-muted" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="mt-1 h-8 w-28" />
-          ) : (
+          {isSummaryLoading ? null : (
             <div className="mt-1 flex items-baseline gap-2">
               <p className="text-2xl font-semibold">
                 {summary ? formatCurrency(summary.completedRevenue) : '0,00 TL'}
@@ -227,9 +220,7 @@ export default function PaymentsPage() {
             <span className="text-sm text-muted">Bekleyen Ödeme</span>
             <Clock className="h-4 w-4 text-muted" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="mt-1 h-8 w-24" />
-          ) : (
+          {isSummaryLoading ? null : (
             <div className="mt-1 flex items-baseline gap-2">
               <p className="text-2xl font-semibold text-warning-foreground">
                 {summary ? formatCurrency(summary.pendingRevenue) : '0,00 TL'}
@@ -245,9 +236,7 @@ export default function PaymentsPage() {
             <span className="text-sm text-muted">Başarı Oranı</span>
             <CheckCircle className="h-4 w-4 text-muted" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="mt-1 h-8 w-20" />
-          ) : (
+          {isSummaryLoading ? null : (
             <p className="mt-1 text-2xl font-semibold text-success">
               %{summary?.successRate || 0}
             </p>
@@ -258,9 +247,7 @@ export default function PaymentsPage() {
             <span className="text-sm text-muted">Ort. Ödeme</span>
             <TrendingUp className="h-4 w-4 text-muted" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="mt-1 h-8 w-24" />
-          ) : (
+          {isSummaryLoading ? null : (
             <p className="mt-1 text-2xl font-semibold">
               {summary ? formatCurrency(summary.avgPaymentValue) : '0,00 TL'}
             </p>

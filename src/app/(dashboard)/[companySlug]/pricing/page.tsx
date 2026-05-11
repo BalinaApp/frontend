@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, X, Zap, Building2, Sparkles, Crown } from 'lucide-react';
-import { Button, Skeleton, Switch } from '@heroui/react';
+import { Check, Xmark as X, Thunderbolt as Zap, House as Building2, Sparkles, CrownDiamond as Crown } from '@gravity-ui/icons';
+import { Button, Switch } from '@heroui/react';
 import { usePricingStore, Plan } from '@/stores/pricingStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 const planIcons = {
   FREE: Zap,
@@ -142,26 +143,12 @@ function PlanColumn({
 }
 
 function PlanSkeleton() {
-  return (
-    <div className="flex flex-col border-r border-border last:border-r-0">
-      <div className="border-b border-border p-4 text-center">
-        <Skeleton className="mx-auto mb-2 h-10 w-10 rounded-full" />
-        <Skeleton className="mx-auto mb-2 h-5 w-16" />
-        <Skeleton className="mx-auto h-8 w-24" />
-      </div>
-      <div className="flex flex-1 flex-col gap-3 p-4">
-        {[...Array(8)].map((_, i) => (
-          <Skeleton key={i} className="h-5 w-full" />
-        ))}
-      </div>
-      <div className="border-t border-border p-4">
-        <Skeleton className="h-9 w-full" />
-      </div>
-    </div>
-  );
+  return null;
 }
 
 export default function PricingPage() {
+  usePageTitle('Planlar');
+
   const [isYearly, setIsYearly] = useState(false);
   const {
     plans,

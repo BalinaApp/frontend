@@ -2,26 +2,32 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
 import { Button, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
+import { usePageTitle } from '@/hooks/use-page-title';
+import { type InvitableRoleId } from '@/lib/roles';
 
 const PRIMARY_BUTTON_CLASS =
   'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
+const TERTIARY_BUTTON_CLASS =
+  'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
 
 export const PENDING_INVITE_KEY = 'pendingInviteToken';
 
 interface InvitePreview {
   email: string;
-  role: 'ADMIN' | 'MEMBER' | 'STOCKIST';
+  role: InvitableRoleId;
   company: { id: string; name: string; slug: string };
   inviterName: string | null;
 }
 
 export default function InvitePage() {
+  usePageTitle('Davet');
+
   return (
     <Suspense fallback={null}>
       <InviteInner />
@@ -235,20 +241,16 @@ function InviteInner() {
   // Preview screen — shown to anyone (authenticated or not). For unauthenticated
   // visitors clicking "Daveti Kabul Et" persists the token and routes to /login;
   // after sign-in, AuthGuard returns them here and the auto-accept effect runs.
-  const inviterPart = preview.inviterName
-    ? `${preview.inviterName} sizi`
-    : 'Sizi';
+  const inviterLabel = preview.inviterName || preview.email;
 
   return (
     <AuthShell
-      title={`${inviterPart} ${preview.company.name} takımına davet ediyor.`}
+      title="Takıma davet edildiniz."
       subtitle={
         <>
-          Daveti kabul ettiğinizde{' '}
-          <span className="font-medium text-black">{preview.email}</span>{' '}
-          adresiyle{' '}
+          <span className="font-medium text-black">{inviterLabel}</span> sizi{' '}
           <span className="font-medium text-black">{preview.company.name}</span>{' '}
-          takımına katılacaksınız.
+          takımına davet ediyor.
         </>
       }
     >
@@ -266,6 +268,14 @@ function InviteInner() {
         ) : (
           'Daveti Kabul Et'
         )}
+      </Button>
+      <Button
+        className={TERTIARY_BUTTON_CLASS}
+        variant="tertiary"
+        onPress={() => router.replace('/login')}
+        isDisabled={isAccepting}
+      >
+        Daveti Reddet
       </Button>
     </AuthShell>
   );

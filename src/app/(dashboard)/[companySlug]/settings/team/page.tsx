@@ -2,47 +2,44 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Users,
-  ChevronLeft,
-  Trash2,
-  Mail,
-  Shield,
-  Clock,
-  CheckCircle2,
-  Loader2,
-  Crown,
-  Package,
-} from 'lucide-react';
-import { AlertDialog, Button, Input, Label, ListBox, Modal, Select, Skeleton, TextField, toast } from '@heroui/react';
+import { Persons as Users, ChevronLeft, TrashBin as Trash2, ArrowsRotateRight as Loader2, CrownDiamond as Crown, Box as Package, ArrowUpFromSquare as Upload } from '@gravity-ui/icons';
+import { Envelope as Mail, Shield, Clock, CircleCheckFill as CheckCircle2 } from '@gravity-ui/icons';
+import { AlertDialog, Button, Input, Label, ListBox, Modal, Select, TextField, toast } from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { api } from '@/services/api';
+import { usePageTitle } from '@/hooks/use-page-title';
+import {
+  INVITABLE_ROLES,
+  ROLE_LABELS,
+  type CompanyRoleId,
+  type InvitableRoleId,
+} from '@/lib/roles';
 
 interface Member {
   id: string;
   email: string;
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'STOCKIST';
+  role: CompanyRoleId;
   inviteStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   joinedAt: string | null;
   invitedAt: string | null;
   user: { id: string; email: string; name: string | null } | null;
 }
 
-const roleLabels: Record<string, string> = {
-  OWNER: 'Sahip',
-  ADMIN: 'Yönetici',
-  MEMBER: 'Üye',
-  STOCKIST: 'Stokçu',
-};
+const roleLabels = ROLE_LABELS;
 
-const roleIcons: Record<string, React.ElementType> = {
+// Icons stay UI-local — keeping them out of `lib/roles.ts` so that module
+// has no `@gravity-ui/icons` dependency.
+const roleIcons: Record<CompanyRoleId, React.ElementType> = {
   OWNER: Crown,
   ADMIN: Shield,
   MEMBER: Users,
   STOCKIST: Package,
+  PRODUCT_UPLOADER: Upload,
 };
 
 export default function TeamSettingsPage() {
+  usePageTitle('Takım');
+
   const router = useRouter();
   const { company } = useCompany();
   const [members, setMembers] = useState<Member[]>([]);
@@ -50,7 +47,7 @@ export default function TeamSettingsPage() {
   const [isInviting, setIsInviting] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'ADMIN' | 'MEMBER' | 'STOCKIST'>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<InvitableRoleId>('MEMBER');
 
   const fetchMembers = async () => {
     if (!company?.id) return;
@@ -150,7 +147,7 @@ export default function TeamSettingsPage() {
                   <Select
                     selectedKey={inviteRole}
                     onSelectionChange={(key) =>
-                      setInviteRole(key as 'ADMIN' | 'MEMBER' | 'STOCKIST')
+                      setInviteRole(key as InvitableRoleId)
                     }
                     aria-label="Rol seç"
                   >
@@ -161,18 +158,16 @@ export default function TeamSettingsPage() {
                     </Select.Trigger>
                     <Select.Popover>
                       <ListBox>
-                        <ListBox.Item id="MEMBER" textValue="Üye">
-                          Üye
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="ADMIN" textValue="Yönetici">
-                          Yönetici
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                        <ListBox.Item id="STOCKIST" textValue="Stokçu">
-                          Stokçu
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
+                        {INVITABLE_ROLES.map((role) => (
+                          <ListBox.Item
+                            key={role.id}
+                            id={role.id}
+                            textValue={role.label}
+                          >
+                            {role.label}
+                            <ListBox.ItemIndicator />
+                          </ListBox.Item>
+                        ))}
                       </ListBox>
                     </Select.Popover>
                   </Select>
@@ -212,9 +207,7 @@ export default function TeamSettingsPage() {
       <div>
         {isLoading ? (
           <div className="flex flex-col gap-2 p-4">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
-            ))}
+            {[...Array(3)].map((_, i) => null)}
           </div>
         ) : members.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">

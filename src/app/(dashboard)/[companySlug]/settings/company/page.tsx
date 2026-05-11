@@ -1,245 +1,439 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, ChevronLeft, Loader2, X } from 'lucide-react';
-import { Button, Input, Skeleton, TextField, toast } from '@heroui/react';
+import {
+  ChevronLeft,
+  ChevronDown,
+  Pencil,
+  Plus,
+  ArrowsRotateRight as Loader2,
+} from '@gravity-ui/icons';
+import {
+  Avatar,
+  Button,
+  Dropdown,
+  Input,
+  Label,
+  ListBox,
+  Modal,
+  Select,
+  Switch,
+  TextField,
+  toast,
+} from '@heroui/react';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useCompanyStore } from '@/stores/companyStore';
+import { api } from '@/services/api';
+import { usePageTitle } from '@/hooks/use-page-title';
+import {
+  INVITABLE_ROLES,
+  ROLE_LABELS as ROLE_LABEL_MAP,
+  type CompanyRoleId,
+  type InvitableRoleId,
+} from '@/lib/roles';
+
+interface Member {
+  id: string;
+  email: string;
+  role: CompanyRoleId;
+  inviteStatus: 'PENDING' | 'ACCEPTED' | 'REJECTED';
+  isActive: boolean;
+  joinedAt: string | null;
+  invitedAt: string | null;
+  user: { id: string; email: string; name: string | null } | null;
+}
+
+type AssignableRole = InvitableRoleId;
+
+const ROLE_LABELS = ROLE_LABEL_MAP;
+
+const ASSIGNABLE_ROLES: AssignableRole[] = INVITABLE_ROLES.map(
+  (r) => r.id as AssignableRole,
+);
+
+function memberInitial(member: Member): string {
+  const source = member.user?.name || member.email;
+  return source.charAt(0).toUpperCase();
+}
 
 export default function CompanySettingsPage() {
+  usePageTitle('Şirket');
+
   const router = useRouter();
   const { company, refreshCompany } = useCompany();
-  const { updateCompany, isLoading: isUpdating } = useCompanyStore();
-  const [name, setName] = useState('');
-  const [logo, setLogo] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { updateCompany, isLoading: isUpdatingCompany } = useCompanyStore();
+
+  const [members, setMembers] = useState<Member[]>([]);
+  // Tracks members whose status toggle is mid-flight (so we don't fire
+  // multiple PATCHes at once and can disable the switch optimistically).
+  const [pendingMemberIds, setPendingMemberIds] = useState<Set<string>>(
+    new Set()
+  );
+
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
+  const [draftName, setDraftName] = useState('');
+
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<AssignableRole>('MEMBER');
+  const [isInviting, setIsInviting] = useState(false);
+
+  const slug = company?.slug ?? '';
+  const companyInitial = (company?.name ?? '?').charAt(0).toUpperCase();
+
+  const fetchMembers = async () => {
+    if (!company?.id) return;
+    try {
+      const res = await api.get(`/company/${company.id}/members`);
+      setMembers(res.data);
+    } catch {
+      toast.danger('Üyeler yüklenemedi');
+    }
+  };
 
   useEffect(() => {
-    if (company) {
-      setName(company.name);
-      setLogo(company.logo || null);
-      setIsLoading(false);
-    }
-  }, [company]);
+    fetchMembers();
+  }, [company?.id]);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast.danger('Lütfen geçerli bir görsel dosyası seçin');
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.danger("Dosya boyutu 2MB'dan küçük olmalıdır");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setLogo(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+  // ---- Rename ----
+  const openRename = () => {
+    setDraftName(company?.name ?? '');
+    setIsRenameOpen(true);
   };
 
-  const handleRemoveLogo = () => {
-    setLogo(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleRename = async () => {
     if (!company?.id) return;
-
-    const updateData: { name?: string; logo?: string } = {};
-
-    if (name.trim() && name !== company.name) {
-      updateData.name = name.trim();
-    }
-
-    if (logo !== (company.logo || null)) {
-      updateData.logo = logo || '';
-    }
-
-    if (Object.keys(updateData).length === 0) {
-      toast.info('Değişiklik yapılmadı');
+    const next = draftName.trim();
+    if (!next) {
+      toast.danger('Şirket adı boş olamaz');
       return;
     }
-
-    const result = await updateCompany(company.id, updateData);
-
-    if (result) {
-      toast.success('Şirket bilgileri güncellendi');
-      await refreshCompany();
-      if (result.slug !== company.slug) {
-        router.push(`/${result.slug}/settings/company`);
-      }
+    if (next === company.name) {
+      setIsRenameOpen(false);
+      return;
+    }
+    const ok = await updateCompany(company.id, { name: next });
+    if (ok) {
+      toast.success('Şirket adı güncellendi');
+      setIsRenameOpen(false);
+      refreshCompany();
     } else {
-      toast.danger('Şirket bilgileri güncellenemedi');
+      toast.danger('Güncelleme başarısız');
     }
   };
 
-  const hasChanges =
-    !!company && (name !== company.name || logo !== (company.logo || null));
+  // ---- Invite ----
+  const handleInvite = async () => {
+    if (!company?.id || !inviteEmail.trim()) return;
+    setIsInviting(true);
+    try {
+      await api.post(`/company/${company.id}/invite`, {
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      toast.success('Davet gönderildi');
+      setIsInviteOpen(false);
+      setInviteEmail('');
+      setInviteRole('MEMBER');
+      fetchMembers();
+    } catch (err: any) {
+      toast.danger(err.response?.data?.message || 'Davet gönderilemedi');
+    } finally {
+      setIsInviting(false);
+    }
+  };
+
+  // ---- Role change ----
+  const handleChangeRole = (member: Member, role: AssignableRole) => {
+    if (member.role === role) return;
+    // Backend role-update endpoint isn't wired yet; flag and revert UI.
+    toast.danger('Rol değişikliği henüz aktif değil.');
+    void role;
+  };
+
+  // ---- Active toggle ----
+  // Owners can't be deactivated. For everyone else, the switch hits
+  // PATCH /company/:id/members/:memberId/status. On success we patch the
+  // local row's isActive; on failure we revert and toast the server message.
+  const handleToggleActive = async (member: Member, isActive: boolean) => {
+    if (!company?.id) return;
+    if (member.role === 'OWNER') return;
+    if (pendingMemberIds.has(member.id)) return;
+
+    setPendingMemberIds((prev) => new Set(prev).add(member.id));
+    // Optimistic update.
+    setMembers((prev) =>
+      prev.map((m) => (m.id === member.id ? { ...m, isActive } : m))
+    );
+    try {
+      await api.patch(
+        `/company/${company.id}/members/${member.id}/status`,
+        { isActive }
+      );
+      toast.success(
+        isActive
+          ? `${member.user?.name || member.email} yeniden etkinleştirildi`
+          : `${member.user?.name || member.email} deaktif edildi`
+      );
+    } catch (err: any) {
+      // Revert.
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.id === member.id ? { ...m, isActive: !isActive } : m
+        )
+      );
+      toast.danger(err.response?.data?.message || 'İşlem başarısız');
+    } finally {
+      setPendingMemberIds((prev) => {
+        const next = new Set(prev);
+        next.delete(member.id);
+        return next;
+      });
+    }
+  };
 
   return (
     <>
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            isIconOnly
-            aria-label="Geri"
-            onPress={() => router.push(`/${company?.slug}/settings`)}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <Building2 className="h-5 w-5 text-muted" />
-          <h1 className="text-lg font-semibold">Şirket Bilgileri</h1>
+      {/* Section header */}
+      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
+        <Button
+          variant="tertiary"
+          size="sm"
+          isIconOnly
+          aria-label="Geri"
+          onPress={() => router.push(`/${slug}/settings`)}
+          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <h2 className="text-sm font-medium text-foreground">Şirket</h2>
+      </div>
+
+      <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
+        <div className="flex w-full max-w-[616px] flex-col items-center gap-6 px-3">
+          {/* Company avatar */}
+          <Avatar className="h-[116px] w-[116px] rounded-full">
+            <Avatar.Fallback className="rounded-full bg-zinc-500 text-3xl font-semibold text-white">
+              {companyInitial}
+            </Avatar.Fallback>
+          </Avatar>
+
+          {/* Name + edit */}
+          <div className="flex items-center justify-center gap-2">
+            <h3 className="text-xl font-semibold text-foreground">
+              {company?.name ?? 'Şirket Adı'}
+            </h3>
+            <Button
+              variant="tertiary"
+              size="sm"
+              isIconOnly
+              aria-label="Şirket adını düzenle"
+              onPress={openRename}
+              className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Members */}
+          <div className="flex w-full flex-col rounded-xl bg-surface">
+            {members.map((member, index) => {
+              const isLast = index === members.length - 1;
+              const display = member.user?.name || member.email;
+              const isOwner = member.role === 'OWNER';
+              return (
+                <div
+                  key={member.id}
+                  className={`flex items-center gap-3 p-3 ${
+                    !isLast ? 'border-b border-black/[0.02]' : ''
+                  }`}
+                >
+                  <div className="flex flex-1 items-center gap-3">
+                    <Avatar className="h-6 w-6 shrink-0 rounded-full">
+                      <Avatar.Fallback className="rounded-full bg-zinc-500 text-[10px] font-medium text-white">
+                        {memberInitial(member)}
+                      </Avatar.Fallback>
+                    </Avatar>
+                    <span className="truncate text-sm font-medium text-foreground/85">
+                      {display}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {/* Role chip */}
+                    {isOwner ? (
+                      <span className="flex h-8 items-center rounded-2xl px-2 text-xs font-medium text-default-foreground">
+                        {ROLE_LABELS.OWNER}
+                      </span>
+                    ) : (
+                      <Dropdown>
+                        <Button
+                          variant="tertiary"
+                          size="sm"
+                          aria-label="Rol seç"
+                          className="h-8 cursor-pointer rounded-2xl bg-transparent px-2 text-default-foreground hover:bg-default data-[hovered=true]:bg-default"
+                        >
+                          <span className="text-xs font-medium">
+                            {ROLE_LABELS[member.role]}
+                          </span>
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                        <Dropdown.Popover>
+                          <Dropdown.Menu
+                            selectionMode="single"
+                            selectedKeys={[member.role]}
+                            onAction={(key) =>
+                              handleChangeRole(member, key as AssignableRole)
+                            }
+                          >
+                            {ASSIGNABLE_ROLES.map((role) => (
+                              <Dropdown.Item key={role} id={role} textValue={ROLE_LABELS[role]}>
+                                <Label>{ROLE_LABELS[role]}</Label>
+                                <Dropdown.ItemIndicator />
+                              </Dropdown.Item>
+                            ))}
+                          </Dropdown.Menu>
+                        </Dropdown.Popover>
+                      </Dropdown>
+                    )}
+                    {/* Active switch — toggling off deactivates the account */}
+                    <Switch
+                      isSelected={
+                        member.inviteStatus === 'ACCEPTED' && member.isActive
+                      }
+                      isDisabled={
+                        isOwner ||
+                        member.inviteStatus !== 'ACCEPTED' ||
+                        pendingMemberIds.has(member.id)
+                      }
+                      onChange={(value) => handleToggleActive(member, value)}
+                      aria-label={`${display} aktif`}
+                    >
+                      <Switch.Control>
+                        <Switch.Thumb />
+                      </Switch.Control>
+                    </Switch>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* "Yeni ekle" row */}
+            <button
+              type="button"
+              onClick={() => setIsInviteOpen(true)}
+              className={`flex cursor-pointer items-center gap-3 p-3 text-left transition-colors ${
+                members.length > 0 ? 'rounded-b-xl' : 'rounded-xl'
+              } hover:bg-default/40`}
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center text-default-foreground">
+                <Plus className="h-3.5 w-3.5" />
+              </span>
+              <span className="text-sm font-medium text-foreground/85">Yeni ekle</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="border-b border-border">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Şirket Logosu</label>
-            </div>
-            <div className="col-span-9">
-              {isLoading ? (
-                <Skeleton className="h-20 w-20 rounded-lg" />
-              ) : (
-                <div className="flex items-center gap-4">
-                  <div className="relative">
-                    <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-lg border border-border bg-default">
-                      {logo ? (
-                        <img
-                          src={logo}
-                          alt="Şirket logosu"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <Building2 className="h-8 w-8 text-muted" />
-                      )}
-                    </div>
-                    {logo && (
-                      <Button
-                        type="button"
-                        variant="danger"
-                        size="sm"
-                        isIconOnly
-                        aria-label="Logoyu kaldır"
-                        className="absolute -right-2 -top-2 h-6 w-6 rounded-full"
-                        onPress={handleRemoveLogo}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onPress={() => fileInputRef.current?.click()}
-                    >
-                      Logo Yükle
-                    </Button>
-                    <p className="mt-1 text-xs text-muted">
-                      PNG, JPG veya GIF, max 2MB
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="border-b border-border">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Şirket Adı</label>
-            </div>
-            <div className="col-span-9">
-              {isLoading ? (
-                <Skeleton className="h-10 w-full max-w-md" />
-              ) : (
-                <TextField value={name} onChange={setName} className="max-w-md">
+      {/* Rename modal */}
+      <Modal isOpen={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-md">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Şirket adı</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <TextField
+                  value={draftName}
+                  onChange={setDraftName}
+                  isDisabled={isUpdatingCompany}
+                  autoFocus
+                >
+                  <Label>Şirket adı</Label>
                   <Input placeholder="Şirket adını girin" />
                 </TextField>
-              )}
-            </div>
-          </div>
-        </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button slot="close" variant="tertiary" isDisabled={isUpdatingCompany}>
+                  Vazgeç
+                </Button>
+                <Button onPress={handleRename} isPending={isUpdatingCompany}>
+                  Kaydet
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
-        <div className="border-b border-border">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Şirket URL</label>
-            </div>
-            <div className="col-span-9">
-              {isLoading ? (
-                <Skeleton className="h-5 w-48" />
-              ) : (
-                <p className="text-sm text-muted">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/
-                  {company?.slug}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="border-b border-border">
-          <div className="grid grid-cols-12 items-center px-4 py-4">
-            <div className="col-span-3">
-              <label className="text-sm font-medium">Oluşturulma Tarihi</label>
-            </div>
-            <div className="col-span-9">
-              {isLoading ? (
-                <Skeleton className="h-5 w-32" />
-              ) : (
-                <p className="text-sm text-muted">
-                  {company?.createdAt
-                    ? new Date(company.createdAt).toLocaleDateString('tr-TR', {
-                        day: 'numeric',
-                        month: 'long',
-                        year: 'numeric',
-                      })
-                    : '-'}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 py-4">
-          <Button type="submit" isDisabled={!hasChanges || isUpdating} isPending={isUpdating}>
-            {isUpdating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Kaydediliyor...
-              </>
-            ) : (
-              'Kaydet'
-            )}
-          </Button>
-        </div>
-      </form>
+      {/* Invite modal */}
+      <Modal isOpen={isInviteOpen} onOpenChange={setIsInviteOpen}>
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-md">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Yeni üye davet et</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="flex flex-col gap-4">
+                <TextField
+                  value={inviteEmail}
+                  onChange={setInviteEmail}
+                  type="email"
+                  isDisabled={isInviting}
+                  autoFocus
+                >
+                  <Label>E-posta adresi</Label>
+                  <Input placeholder="ornek@email.com" />
+                </TextField>
+                <Select
+                  selectedKey={inviteRole}
+                  onSelectionChange={(key) => setInviteRole(key as AssignableRole)}
+                  isDisabled={isInviting}
+                  aria-label="Rol"
+                >
+                  <Label>Rol</Label>
+                  <Select.Trigger>
+                    <Select.Value />
+                    <Select.Indicator />
+                  </Select.Trigger>
+                  <Select.Popover>
+                    <ListBox>
+                      {ASSIGNABLE_ROLES.map((role) => (
+                        <ListBox.Item key={role} id={role} textValue={ROLE_LABELS[role]}>
+                          {ROLE_LABELS[role]}
+                          <ListBox.ItemIndicator />
+                        </ListBox.Item>
+                      ))}
+                    </ListBox>
+                  </Select.Popover>
+                </Select>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button slot="close" variant="tertiary" isDisabled={isInviting}>
+                  Vazgeç
+                </Button>
+                <Button
+                  onPress={handleInvite}
+                  isDisabled={!inviteEmail.trim() || isInviting}
+                  isPending={isInviting}
+                >
+                  {isInviting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Gönderiliyor...
+                    </>
+                  ) : (
+                    'Davet gönder'
+                  )}
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
     </>
   );
 }

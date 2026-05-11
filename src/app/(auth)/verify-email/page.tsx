@@ -2,10 +2,11 @@
 
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
-import { Button, InputOTP, Skeleton, toast } from '@heroui/react';
+import { ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
+import { Button, InputOTP, REGEXP_ONLY_DIGITS, toast } from '@heroui/react';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 const PRIMARY_BUTTON_CLASS =
   'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
@@ -15,6 +16,8 @@ const TERTIARY_BUTTON_CLASS =
 type View = 'check-email' | 'otp';
 
 export default function VerifyEmailPage() {
+  usePageTitle('E-postayı doğrula');
+
   return (
     <Suspense fallback={null}>
       <VerifyEmailInner />
@@ -72,11 +75,13 @@ function VerifyEmailInner() {
   useEffect(() => {
     // If the user is already authenticated, /verify-email no longer applies —
     // they likely refreshed the magic-link URL after the code was consumed,
-    // or hit Back into this page after signing in. Bounce out and let
-    // AuthGuard route to /setup-company or /{companySlug}.
+    // or hit Back into this page after signing in. AuthGuard handles the
+    // redirect to /setup-company or /{companySlug}; we must NOT call
+    // router.replace here, otherwise it races AuthGuard's own push and
+    // Next.js 16 Turbopack throws "InvalidStateError: Transition was
+    // aborted because of invalid state".
     if (isAuthenticated) {
       sessionStorage.removeItem('verifyEmail');
-      router.replace('/');
       return;
     }
 
@@ -148,11 +153,7 @@ function VerifyEmailInner() {
     return (
       <div className="flex min-h-svh items-center justify-center bg-black/[0.04] p-4 md:p-10">
         <div className="flex w-full max-w-[332px] flex-col items-center gap-5">
-          <Skeleton className="h-16 w-16 rounded-lg" />
-          <Skeleton className="h-7 w-48" />
-          <Skeleton className="h-4 w-56" />
-          <Skeleton className="h-9 w-full" />
-        </div>
+          </div>
       </div>
     );
   }
@@ -202,6 +203,8 @@ function VerifyEmailInner() {
             value={code}
             onChange={setCode}
             isDisabled={isLoading}
+            pattern={REGEXP_ONLY_DIGITS}
+            inputMode="numeric"
             autoFocus
           >
             <InputOTP.Group>

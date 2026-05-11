@@ -12,7 +12,7 @@ export function AuthShell({ title, subtitle, children }: AuthShellProps) {
       <div className="flex w-full max-w-[332px] flex-col items-center gap-5">
         <Image
           src="/figma/balina-logo.svg"
-          alt="Balina"
+          alt="BalinaOS"
           width={64}
           height={64}
           priority

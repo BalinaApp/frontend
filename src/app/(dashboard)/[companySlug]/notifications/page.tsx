@@ -1,26 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  Bell,
-  Package,
-  ShoppingCart,
-  AlertTriangle,
-  TrendingDown,
-  CheckCircle2,
-  Clock,
-  Trash2,
-  Check,
-  RefreshCw,
-  XCircle,
-  ChevronLeft,
-  ChevronRight,
-  Calendar,
-  CalendarDays,
-} from 'lucide-react';
-import { Button, ListBox, Select, Skeleton } from '@heroui/react';
+import { Bell, Box as Package, TriangleExclamation as AlertTriangle, TrashBin as Trash2, Check, ChevronLeft } from '@gravity-ui/icons';
+import { ShoppingCart, ChartLine as TrendingDown, CircleCheckFill as CheckCircle2, Clock, ArrowsRotateRight as RefreshCw, CircleXmark as XCircle, ChevronRight, Calendar, Calendar as CalendarDays } from '@gravity-ui/icons';
+import { Button, ListBox, Select } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useNotificationStore, NotificationType } from '@/stores/notificationStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 const notificationIcons: Record<NotificationType, React.ElementType> = {
   NEW_ORDER: ShoppingCart,
@@ -75,6 +61,8 @@ function formatRelativeTime(dateString: string): string {
 }
 
 export default function NotificationsPage() {
+  usePageTitle('Bildirimler');
+
   const { currentCompany } = useCompanyStore();
   const {
     notifications,
@@ -235,9 +223,7 @@ export default function NotificationsPage() {
       <div>
         {isLoading ? (
           <div className="flex flex-col gap-2 p-4">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full" />
-            ))}
+            {[...Array(5)].map((_, i) => null)}
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -393,7 +379,7 @@ function KpiCell({
         <span className="text-sm font-medium text-muted">{label}</span>
         <Icon className={`h-5 w-5 ${tone}`} />
       </div>
-      {loading ? <Skeleton className="h-8 w-16" /> : children}
+      {loading ? null: children}
     </div>
   );
 }

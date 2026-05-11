@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from '@heroui/react';
 import { api } from '@/services/api';
 
 export interface ApiKeyPermissions {
@@ -10,6 +11,9 @@ export interface ApiKey {
   id: string;
   name: string;
   keyPrefix: string;
+  /** Plaintext key, available for keys created after the plaintext column
+   *  was introduced. Older rows return `null` and fall back to the prefix. */
+  keyPlain: string | null;
   permissions: ApiKeyPermissions;
   lastUsedAt: string | null;
   expiresAt: string | null;
@@ -55,6 +59,10 @@ interface ApiKeyState {
     permissions?: ApiKeyPermissions,
     expiresAt?: string
   ) => Promise<ApiKeyWithSecret | null>;
+  updateApiKey: (
+    id: string,
+    patch: { permissions?: ApiKeyPermissions; isActive?: boolean }
+  ) => Promise<boolean>;
   deleteApiKey: (id: string) => Promise<boolean>;
   revokeApiKey: (id: string) => Promise<boolean>;
   rotateApiKey: (id: string) => Promise<ApiKeyWithSecret | null>;
@@ -110,6 +118,40 @@ export const useApiKeyStore = create<ApiKeyState>((set, get) => ({
         error instanceof Error ? error.message : 'API anahtarı oluşturulamadı';
       set({ error: message, isCreating: false });
       return null;
+    }
+  },
+
+  // Update an API key (permissions and/or active flag) — optimistic.
+  updateApiKey: async (id, patch) => {
+    const prev = get().apiKeys;
+    set({
+      apiKeys: prev.map((key) =>
+        key.id === id
+          ? {
+              ...key,
+              permissions: patch.permissions ?? key.permissions,
+              isActive: patch.isActive ?? key.isActive,
+            }
+          : key
+      ),
+    });
+    try {
+      await api.patch(`/settings/api-keys/${id}`, patch);
+      return true;
+    } catch (error: unknown) {
+      // Roll back on failure and surface the reason — silent failures
+      // make a toggle look broken when it's really a backend reject.
+      set({ apiKeys: prev });
+      const axiosMessage =
+        (error as { response?: { data?: { message?: string | string[] } } })
+          ?.response?.data?.message;
+      const message = Array.isArray(axiosMessage)
+        ? axiosMessage.join(', ')
+        : axiosMessage ||
+          (error instanceof Error ? error.message : 'API anahtarı güncellenemedi');
+      set({ error: message });
+      toast.danger(message);
+      return false;
     }
   },
 

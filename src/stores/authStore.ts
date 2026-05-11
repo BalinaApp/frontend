@@ -16,6 +16,9 @@ interface User {
   role: string;
   plan?: Plan;
   currentCompanyId?: string;
+  themeMode?: 'light' | 'dark';
+  themeAccent?: string | null;
+  googleConnected?: boolean;
 }
 
 interface VerifyResult {
@@ -44,6 +47,7 @@ interface AuthState {
   refreshTokens: () => Promise<boolean>;
   checkAuth: () => Promise<void>;
   updateProfile: (data: { name?: string }) => Promise<boolean>;
+  disconnectGoogle: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -189,6 +193,19 @@ export const useAuthStore = create<AuthState>()(
             error.response?.data?.message || 'Profil güncellenemedi';
           set({ isLoading: false, error: message });
           return false;
+        }
+      },
+
+      disconnectGoogle: async () => {
+        try {
+          await api.delete('/auth/google');
+          const { user } = get();
+          if (user) set({ user: { ...user, googleConnected: false } });
+        } catch (error: any) {
+          const message =
+            error.response?.data?.message ||
+            'Google bağlantısı kaldırılamadı';
+          throw new Error(message);
         }
       },
     }),

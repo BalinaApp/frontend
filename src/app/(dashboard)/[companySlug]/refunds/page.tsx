@@ -1,17 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import {
-  RotateCcw,
-  TrendingUp,
-  TrendingDown,
-  Package,
-  AlertTriangle,
-  Store,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-} from 'lucide-react';
+import { Box as Package, TriangleExclamation as AlertTriangle, ShoppingBag as Store, ChevronLeft } from '@gravity-ui/icons';
+import { ArrowRotateLeft as RotateCcw, ChartLineArrowUp as TrendingUp, ChartLine as TrendingDown, Magnifier as Search, ChevronRight } from '@gravity-ui/icons';
 import {
   Area,
   AreaChart,
@@ -26,10 +17,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Button, Input, ListBox, Select, Skeleton, TextField } from '@heroui/react';
+import { Button, Input, ListBox, Select, TextField } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useRefundStore } from '@/stores/refundStore';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 const PERIOD_OPTIONS = [
   { value: 'today', label: 'Bugün' },
@@ -92,6 +84,8 @@ function CustomTooltip({
 }
 
 export default function RefundsPage() {
+  usePageTitle('İadeler');
+
   const { currentCompany } = useCompanyStore();
   const { stores, fetchStores } = useStoreStore();
   const {
@@ -220,9 +214,7 @@ export default function RefundsPage() {
             <span className="text-sm font-medium text-muted">Toplam İade</span>
             <Package className="h-5 w-5 text-danger" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-20" />
-          ) : (
+          {isSummaryLoading ? null : (
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold">{summary?.totalRefunds || 0}</span>
               {summary?.refundCountChange !== undefined && summary.refundCountChange !== 0 && (
@@ -249,9 +241,7 @@ export default function RefundsPage() {
             <span className="text-sm font-medium text-muted">İade Tutarı</span>
             <RotateCcw className="h-5 w-5 text-danger" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-24" />
-          ) : (
+          {isSummaryLoading ? null : (
             <div className="flex items-baseline gap-2">
               <span className="text-2xl font-bold text-danger">
                 {formatCurrency(summary?.totalRefundAmount || 0)}
@@ -282,9 +272,7 @@ export default function RefundsPage() {
               className={`h-5 w-5 ${summary ? refundRateTone(summary.refundRate) : 'text-muted'}`}
             />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-16" />
-          ) : (
+          {isSummaryLoading ? null : (
             <div className="flex items-baseline gap-2">
               <span
                 className={`text-2xl font-bold ${
@@ -305,9 +293,7 @@ export default function RefundsPage() {
             <span className="text-sm font-medium text-muted">Ort. İade Tutarı</span>
             <Store className="h-5 w-5 text-muted" />
           </div>
-          {isSummaryLoading ? (
-            <Skeleton className="h-8 w-20" />
-          ) : (
+          {isSummaryLoading ? null : (
             <span className="text-2xl font-bold">
               {formatCurrency(summary?.avgRefundAmount || 0)}
             </span>
@@ -321,9 +307,7 @@ export default function RefundsPage() {
           <h3 className="text-sm font-medium">İade Trendi</h3>
         </div>
         <div className="p-4">
-          {isTrendLoading ? (
-            <Skeleton className="h-48 w-full" />
-          ) : (
+          {isTrendLoading ? null : (
             <ResponsiveContainer width="100%" height={192}>
               <AreaChart data={trend} margin={{ left: 0, right: 0 }}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" className="stroke-border" />
@@ -362,9 +346,7 @@ export default function RefundsPage() {
             <h3 className="text-sm font-medium">İade Nedenleri</h3>
           </div>
           <div className="bg-surface-secondary/50 p-4">
-            {isReasonsLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : reasons.length === 0 ? (
+            {isReasonsLoading ? null : reasons.length === 0 ? (
               <div className="flex h-48 items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
@@ -424,9 +406,7 @@ export default function RefundsPage() {
             <h3 className="text-sm font-medium">Mağaza Karşılaştırması</h3>
           </div>
           <div className="bg-surface-secondary/50 p-4">
-            {isComparisonLoading ? (
-              <Skeleton className="h-48 w-full" />
-            ) : storeComparison.length === 0 ? (
+            {isComparisonLoading ? null : storeComparison.length === 0 ? (
               <div className="flex h-48 items-center justify-center text-muted">
                 Veri bulunamadı
               </div>
@@ -488,9 +468,7 @@ export default function RefundsPage() {
 
         {isListLoading ? (
           <div className="flex flex-col gap-2 p-4">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
+            {[...Array(5)].map((_, i) => null)}
           </div>
         ) : filteredRefunds.length === 0 ? (
           <div className="p-8 text-center text-muted">

@@ -7,6 +7,12 @@ export interface MarketplaceStore {
   id: string;
   name: string;
   url: string;
+  // Backend'in dönen platform enum'u — Shopify branding ve URL fallback'i
+  // için kullanılıyor. Eski/legacy kayıtlarda olmayabilir, optional.
+  platform?: 'WOOCOMMERCE' | 'SHOPIFY' | string;
+  // Shopify mağazaları için gerçek shop domain (`mystore.myshopify.com`).
+  // Backend henüz tüm response'larda dönmüyor olabilir — fallback'e dikkat.
+  shopDomain?: string | null;
   status: StoreStatus;
   isSyncing: boolean;
   syncStep: 'connection' | 'products' | 'variations' | 'orders' | 'saving' | null;

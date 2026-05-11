@@ -1,6 +1,42 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
 
+// Backend marketplace ID'lerini (wc_product_id, wc_variation_id) Prisma BigInt
+// olarak saklıyor. main.ts'te BigInt.prototype.toJSON = toString tanımlı,
+// dolayısıyla JSON wire'da string olarak gelir. Frontend'te native bigint'e
+// parse ediyoruz; arithmetic gerekmiyor ama Number.MAX_SAFE_INTEGER'i aşan
+// Shopify ID'leri için tip güvenliğini koruyor.
+const toBigInt = (v: unknown): bigint =>
+  typeof v === 'bigint' ? v : BigInt(v as string | number);
+
+const parseCriticalProduct = (p: CriticalProduct): CriticalProduct => ({
+  ...p,
+  wcProductId: toBigInt(p.wcProductId),
+});
+
+const parseProduct = (p: Product): Product => ({
+  ...p,
+  wcProductId: toBigInt(p.wcProductId),
+});
+
+const parseProductDetail = (d: ProductDetail): ProductDetail => ({
+  ...d,
+  wcProductId: toBigInt(d.wcProductId),
+  variations: d.variations.map((v) => ({
+    ...v,
+    wcVariationId: toBigInt(v.wcVariationId),
+  })),
+  mapping: d.mapping
+    ? {
+        ...d.mapping,
+        stores: d.mapping.stores.map((s) => ({
+          ...s,
+          wcProductId: toBigInt(s.wcProductId),
+        })),
+      }
+    : null,
+});
+
 export interface InventorySummary {
   totalStock: number;
   totalStockValue: number;
@@ -31,7 +67,7 @@ export interface CriticalProduct {
   storeId: string;
   storeName: string;
   storeUrl: string;
-  wcProductId: number;
+  wcProductId: bigint;
   productType: string;
   variationInfo?: string;
 }
@@ -47,10 +83,13 @@ export interface Product {
   purchasePrice: number | null;
   storeId: string;
   storeName: string;
-  wcProductId: number;
+  wcProductId: bigint;
   syncedAt: string;
   variationCount: number;
   isActive: boolean;
+  /** Listing endpoint'i bu alanı zaten dolduruyor — Eşleştirme kolonu için. */
+  isMapped?: boolean;
+  mappingId?: string | null;
 }
 
 export interface ProductsResponse {
@@ -63,7 +102,7 @@ export interface ProductsResponse {
 
 export interface ProductVariation {
   id: string;
-  wcVariationId: number;
+  wcVariationId: bigint;
   sku: string | null;
   price: number;
   stockQuantity: number;
@@ -77,7 +116,7 @@ export interface ProductMappingStore {
   storeName: string;
   storeUrl: string;
   productId: string;
-  wcProductId: number;
+  wcProductId: bigint;
   isSource: boolean;
   stockQuantity: number;
 }
@@ -101,7 +140,7 @@ export interface ProductDetail {
   purchasePrice: number | null;
   manageStock: boolean;
   isActive: boolean;
-  wcProductId: number;
+  wcProductId: bigint;
   syncedAt: string;
   store: {
     id: string;
@@ -147,6 +186,12 @@ interface InventoryState {
   updateVariationStock: (companyId: string, variationId: string, stockQuantity: number) => Promise<boolean>;
   updateProductPurchasePrice: (companyId: string, productId: string, purchasePrice: number) => Promise<boolean>;
   updateVariationPurchasePrice: (companyId: string, variationId: string, purchasePrice: number) => Promise<boolean>;
+  /** Inline cell editor'lerin kullandığı multi-field PATCH (name, isActive). */
+  updateProduct: (
+    companyId: string,
+    productId: string,
+    patch: Partial<Pick<Product, 'name' | 'isActive'>>
+  ) => Promise<boolean>;
   updateProductInList: (productId: string, updates: Partial<Product>) => void;
   setCriticalThreshold: (threshold: number) => void;
   clearSelectedProduct: () => void;
@@ -200,10 +245,10 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       const params = new URLSearchParams({ criticalThreshold: String(criticalThreshold) });
       if (storeId) params.append('storeId', storeId);
 
-      const response = await api.get(
+      const response = await api.get<CriticalProduct[]>(
         `/company/${companyId}/inventory/critical?${params.toString()}`
       );
-      set({ criticalProducts: response.data });
+      set({ criticalProducts: response.data.map(parseCriticalProduct) });
     } catch (error: any) {
       console.error('Critical products fetch error:', error);
     }
@@ -226,7 +271,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         `/company/${companyId}/inventory/products?${params.toString()}`
       );
       set({
-        products: response.data.products,
+        products: response.data.products.map(parseProduct),
         productsTotal: response.data.total,
         productsPage: response.data.page,
         productsTotalPages: response.data.totalPages,
@@ -250,7 +295,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       const response = await api.get<ProductDetail>(
         `/company/${companyId}/inventory/products/${productId}`
       );
-      set({ selectedProduct: response.data, isLoading: false });
+      set({ selectedProduct: parseProductDetail(response.data), isLoading: false });
     } catch (error: any) {
       set({
         error: error.response?.data?.message || 'Ürün yüklenemedi',
@@ -388,6 +433,46 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       set({
         error: error.response?.data?.message || 'Varyasyon alış fiyatı güncellenemedi',
         isUpdating: false,
+      });
+      return false;
+    }
+  },
+
+  // Inline cell editor multi-field PATCH. Optimistic — listeyi anında günceller,
+  // backend hata verirse rollback için snapshot tutuluyor.
+  updateProduct: async (companyId, productId, patch) => {
+    const before = get().products.find((p) => p.id === productId);
+    if (before) {
+      set({
+        products: get().products.map((p) =>
+          p.id === productId ? { ...p, ...patch } : p
+        ),
+      });
+    }
+    try {
+      const response = await api.patch(
+        `/company/${companyId}/inventory/products/${productId}`,
+        patch
+      );
+      const data = response.data as Partial<Product>;
+      // Backend'den dönen otoriter değerlerle senkronize et.
+      set({
+        products: get().products.map((p) =>
+          p.id === productId ? { ...p, ...data } : p
+        ),
+      });
+      return true;
+    } catch (error: any) {
+      // Hata → snapshot'a rollback.
+      if (before) {
+        set({
+          products: get().products.map((p) =>
+            p.id === productId ? before : p
+          ),
+        });
+      }
+      set({
+        error: error.response?.data?.message || 'Ürün güncellenemedi',
       });
       return false;
     }

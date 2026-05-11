@@ -6,16 +6,26 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useCompanyStore } from '@/stores/companyStore';
-import { Button, Chip, Skeleton, toast } from '@heroui/react';
+import { Button, Chip, toast } from '@heroui/react';
 import { EditableStockCell, EditablePriceCell } from '@/components/inventory';
-import { ArrowLeft, ExternalLink, Package, ImageIcon } from 'lucide-react';
+import { ArrowLeft, ArrowUpRightFromSquare as ExternalLink, Box as Package, Picture as ImageIcon } from '@gravity-ui/icons';
+import { usePageTitle } from '@/hooks/use-page-title';
 
 export default function ProductDetailPage() {
+  usePageTitle('Ürün Detayı');
+
   const params = useParams();
   const companySlug = params.companySlug as string;
   const productId = params.productId as string;
 
   const { currentCompany } = useCompanyStore();
+  // STOCKIST hem alış hem liste fiyatını görmez. PRODUCT_UPLOADER alış fiyatına
+  // (purchasePrice / Maliyet / Brüt Kar) erişemez ama liste fiyatını (₺price)
+  // görür. Bu eşik backend `assertNotLimitedRole` ile uyumlu.
+  const isStockist = currentCompany?.role === 'STOCKIST';
+  const isProductUploader = currentCompany?.role === 'PRODUCT_UPLOADER';
+  const hidePurchasePrice = isStockist || isProductUploader;
+  const hideListPrice = isStockist;
   const {
     selectedProduct,
     isLoading,
@@ -102,7 +112,7 @@ export default function ProductDetailPage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-4">
-          <Link href={`/${companySlug}/inventory`}>
+          <Link href={`/${companySlug}/products`}>
             <Button variant="ghost" size="sm" isIconOnly aria-label="Geri">
               <ArrowLeft className="h-5 w-5" />
             </Button>
@@ -167,19 +177,25 @@ export default function ProductDetailPage() {
                     </span>
                   </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  <span className="text-2xl font-semibold">
-                    ₺{selectedProduct.price.toFixed(2)}
-                  </span>
-                  <div className="mt-1 flex items-center justify-end gap-2">
-                    <span className="text-sm text-muted">Maliyet:</span>
-                    <EditablePriceCell
-                      value={selectedProduct.purchasePrice}
-                      onSave={handlePurchasePriceUpdate}
-                      placeholder="Belirtilmedi"
-                    />
+                {(!hideListPrice || !hidePurchasePrice) && (
+                  <div className="shrink-0 text-right">
+                    {!hideListPrice && (
+                      <span className="text-2xl font-semibold">
+                        ₺{selectedProduct.price.toFixed(2)}
+                      </span>
+                    )}
+                    {!hidePurchasePrice && (
+                      <div className="mt-1 flex items-center justify-end gap-2">
+                        <span className="text-sm text-muted">Maliyet:</span>
+                        <EditablePriceCell
+                          value={selectedProduct.purchasePrice}
+                          onSave={handlePurchasePriceUpdate}
+                          placeholder="Belirtilmedi"
+                        />
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
               </div>
             </div>
 
@@ -256,7 +272,7 @@ export default function ProductDetailPage() {
               </table>
             </div>
 
-            {selectedProduct.purchasePrice && (
+            {!hidePurchasePrice && selectedProduct.purchasePrice && (
               <div className="grid grid-cols-3 border-b border-border">
                 <ValueCell label="Stok Değeri">
                   ₺{(selectedProduct.purchasePrice * totalStock).toLocaleString('tr-TR')}
@@ -425,31 +441,5 @@ function ValueCell({
 }
 
 function ProductDetailSkeleton() {
-  return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b border-border px-6 py-4">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10 rounded-md" />
-          <Skeleton className="h-6 w-48" />
-        </div>
-        <Skeleton className="h-10 w-40" />
-      </div>
-      <div className="flex-1 overflow-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr,320px]">
-          <div className="border-r border-border">
-            <div className="border-b border-border px-6 py-4">
-              <div className="flex gap-4">
-                <Skeleton className="h-20 w-20 rounded-lg" />
-                <div className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-6 w-64" />
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="mt-2 h-8 w-32" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return null;
 }

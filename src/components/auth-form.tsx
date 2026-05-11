@@ -44,12 +44,18 @@ export function AuthForm() {
   };
 
   const handleGoogle = () => {
-    toast.info('Google ile giriş yakında eklenecek');
+    // Backend zaten `/api` prefix'iyle çalışıyor; NEXT_PUBLIC_API_URL bu
+    // prefix'i içerdiği için `${API_URL}/auth/google` doğrudan
+    // `<host>/api/auth/google` yapar. Tam sayfa yönlendirme — fetch ile
+    // gidersek Google OAuth akışı (popup'sız) çalışmaz.
+    const apiUrl =
+      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+    window.location.href = `${apiUrl}/auth/google`;
   };
 
   return (
     <AuthShell
-      title="Balina'ya hoş geldiniz"
+      title="BalinaOS'a hoş geldiniz"
       subtitle="Başlamak için lütfen aşağıdaki seçeneklerden birini seçin!"
     >
       <Button

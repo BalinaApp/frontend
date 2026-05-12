@@ -1000,8 +1000,8 @@ export default function StoresPage() {
     {
       key: 'customerNumber',
       label: 'Müşteri Numarası',
-      placeholder: 'MNG müşteri numaranız (ör. 915737309)',
-      description: 'MNG sözleşmenizde / portalında yer alan müşteri ID.',
+      placeholder: 'DHL müşteri numaranız',
+      description: 'DHL sözleşmenizde / portalında yer alan müşteri ID.',
       kind: 'text',
     },
     {
@@ -1013,8 +1013,8 @@ export default function StoresPage() {
     {
       key: 'password',
       label: 'Şifre',
-      placeholder: 'MNG portal şifreniz',
-      description: 'MNG portal şifrenizi girin. Sunucuda şifrelenerek saklanır.',
+      placeholder: 'DHL portal şifreniz',
+      description: 'DHL portal şifrenizi girin. Sunucuda şifrelenerek saklanır.',
       kind: 'password',
     },
   ];

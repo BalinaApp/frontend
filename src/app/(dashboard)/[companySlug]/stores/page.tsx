@@ -453,9 +453,11 @@ export default function StoresPage() {
     {
       key: 'apiKey' as const,
       label: 'API Anahtarı',
-      placeholder: 'fal-...',
+      placeholder: falDialogProvider === 'fashn' ? 'fa-...' : 'fal-...',
       description:
-        'Fal.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.',
+        falDialogProvider === 'fashn'
+          ? 'Fashn.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.'
+          : 'Fal.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.',
       isPassword: true,
     },
   ];

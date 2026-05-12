@@ -251,6 +251,13 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
                 >
                   Yeni sohbet
                 </Dropdown.Item>
+                <Dropdown.Item
+                  id="settings"
+                  textValue="AI ayarları"
+                  onAction={() => setSetupOpen(true)}
+                >
+                  AI ayarları…
+                </Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown.Popover>
           </Dropdown>

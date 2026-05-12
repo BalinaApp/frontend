@@ -602,7 +602,9 @@ export const useAiStore = create<AiState>((set, get) => ({
       }));
       const fals = falsOnly(list);
 
-      // Seçimleri doğrula — silinmiş entegrasyon seçili kalmasın.
+      // Seçim cleanup — silinmiş entegrasyonu seçili bırakma.
+      // ÖNEMLİ: Auto-fallback YOK. Kullanıcı setup modal'da explicit seçim
+      // yapana kadar null kalır; null olunca modal açılır.
       const currentImage = get().selectedImageIntegrationId;
       const currentVideo = get().selectedVideoIntegrationId;
       const currentFal = get().selectedFalId;
@@ -610,20 +612,12 @@ export const useAiStore = create<AiState>((set, get) => ({
       const imageStillValid =
         currentImage && list.some((i) => i.id === currentImage && i.isActive);
       const videoStillValid =
-        currentVideo && list.some((i) => i.id === currentVideo && i.provider === 'fal' && i.isActive);
+        currentVideo &&
+        list.some((i) => i.id === currentVideo && i.provider === 'fal' && i.isActive);
       const falStillValid = currentFal && fals.some((i) => i.id === currentFal && i.isActive);
 
-      // Default fallback'ler:
-      // - Görsel: önce aktif bir fashn, yoksa aktif bir fal.
-      // - Video: aktif bir fal (fashn video desteklemiyor).
-      const fallbackImage =
-        list.find((i) => i.provider === 'fashn' && i.isActive)?.id ??
-        list.find((i) => i.provider === 'fal' && i.isActive)?.id ??
-        null;
-      const fallbackVideo = fals.find((i) => i.isActive)?.id ?? null;
-
-      const nextImage = imageStillValid ? currentImage : fallbackImage;
-      const nextVideo = videoStillValid ? currentVideo : fallbackVideo;
+      const nextImage = imageStillValid ? currentImage : null;
+      const nextVideo = videoStillValid ? currentVideo : null;
       const nextFal = falStillValid ? currentFal : nextVideo;
 
       writeSelection(SELECTED_IMAGE_KEY, nextImage);

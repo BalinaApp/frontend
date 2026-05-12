@@ -176,6 +176,13 @@ const integrationCategories: IntegrationCategory[] = [
         logo: '',
         comingSoon: false,
       },
+      {
+        id: 'FASHN_AI',
+        name: 'Fashn.ai',
+        description: 'Sanal kıyafet deneme (VTON) — kişiye kıyafet sadık şekilde geçirir.',
+        logo: '',
+        comingSoon: false,
+      },
     ],
   },
 ];
@@ -311,20 +318,26 @@ export default function StoresPage() {
   // farklı, tek alanlı API anahtarı stepper'ı kullanıyor.
   const {
     fals,
+    integrations,
     fetchFalIntegrations,
     createFalIntegration,
+    createIntegration,
     updateFalIntegration,
     removeFalIntegration,
     testFalKey,
+    testApiKey,
     testFalIntegration,
     isSavingFal,
   } = useAiStore();
+  const fashns = integrations.filter((i) => i.provider === 'fashn');
 
-  // "Bağla" akışı (yeni hesap ekleme)
+  // "Bağla" akışı (yeni hesap ekleme) — Fal ve Fashn aynı dialog'u paylaşıyor.
   const [isFalDialogOpen, setIsFalDialogOpen] = useState(false);
+  const [falDialogProvider, setFalDialogProvider] = useState<'fal' | 'fashn'>('fal');
   const [falForm, setFalForm] = useState({ apiKey: '', name: '' });
   const [falShowKey, setFalShowKey] = useState(false);
   const [falCurrentStep, setFalCurrentStep] = useState(0);
+  const falProviderLabel = falDialogProvider === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
 
   // "Yönet" akışı (mevcut hesabı düzenle)
   const [manageFalId, setManageFalId] = useState<string | null>(null);
@@ -347,7 +360,12 @@ export default function StoresPage() {
   const [typeEditorPrompt, setTypeEditorPrompt] = useState('');
   const [typeEditorSaving, setTypeEditorSaving] = useState(false);
   const [typeEditorDragOver, setTypeEditorDragOver] = useState(false);
-  const manageFal = manageFalId ? fals.find((f) => f.id === manageFalId) ?? null : null;
+  // Manage dialog Fal + Fashn ortak; row tüm integrations'tan çekilir.
+  const manageFal = manageFalId
+    ? integrations.find((i) => i.id === manageFalId) ?? null
+    : null;
+  const manageProvider: 'fal' | 'fashn' = manageFal?.provider ?? 'fal';
+  const manageProviderLabel = manageProvider === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
 
   // E-Fatura entegrasyonları (Bizim Hesap + Paraşüt) — Fal.ai ile aynı
   // pattern: birden fazla hesap, stepper modal, "Bağlı Olanlar" listesinde
@@ -751,12 +769,16 @@ export default function StoresPage() {
       toast.danger('API Anahtarı gerekli');
       return;
     }
-    const result = await createFalIntegration(currentCompany.id, {
+    const args = {
       apiKey: falForm.apiKey.trim(),
       name: falForm.name.trim() || undefined,
-    });
+    };
+    const result =
+      falDialogProvider === 'fashn'
+        ? await createIntegration(currentCompany.id, 'fashn', args)
+        : await createFalIntegration(currentCompany.id, args);
     if (result) {
-      toast.success('Fal.ai hesabı eklendi');
+      toast.success(`${falProviderLabel} hesabı eklendi`);
       setFalForm({ apiKey: '', name: '' });
       handleFalDialogClose();
     } else {
@@ -789,9 +811,9 @@ export default function StoresPage() {
     setManageFalTestResult(null);
     const trimmed = manageFalKey.trim();
     // Yeni anahtar varsa onu test et (henüz kaydetmeden), yoksa saklanan
-    // anahtarı sunucu tarafında doğrula.
+    // anahtarı sunucu tarafında doğrula. Provider'a göre endpoint farklı.
     const result = trimmed
-      ? await testFalKey(currentCompany.id, trimmed)
+      ? await testApiKey(currentCompany.id, manageProvider, trimmed)
       : await testFalIntegration(currentCompany.id, manageFalId);
     setManageFalTestResult(result);
     setManageFalTesting(false);
@@ -1280,8 +1302,9 @@ export default function StoresPage() {
       setDhlModalOpen(true);
       return;
     }
-    // Fal.ai — tek alanlı API key formu, mağaza akışından bağımsız.
-    if (marketplace.id === 'FAL_AI') {
+    // Fal.ai / Fashn.ai — tek alanlı API key formu, mağaza akışından bağımsız.
+    if (marketplace.id === 'FAL_AI' || marketplace.id === 'FASHN_AI') {
+      setFalDialogProvider(marketplace.id === 'FASHN_AI' ? 'fashn' : 'fal');
       setFalForm({ apiKey: '', name: '' });
       setFalCurrentStep(0);
       setFalShowKey(false);
@@ -1914,6 +1937,41 @@ export default function StoresPage() {
                   </div>
                 ))}
 
+                {/* Bağlı Fashn.ai hesapları */}
+                {fashns.map((fashn) => (
+                  <div key={fashn.id} className="flex items-center gap-3 p-3">
+                    <div
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[10px] font-bold text-white"
+                      role="img"
+                      aria-label="Fashn.ai"
+                    >
+                      Fn
+                    </div>
+                    <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {fashn.name}
+                      </span>
+                      <span className="truncate text-xs text-[#737373]">
+                        Fashn.ai • <span className="font-mono">••••{fashn.apiKeyTail ?? '----'}</span>
+                      </span>
+                    </div>
+                    <Button
+                      variant="tertiary"
+                      size="sm"
+                      onPress={() => {
+                        setManageFalId(fashn.id);
+                        setManageFalKey('');
+                        setManageFalShowKey(false);
+                        setManageFalTestResult(null);
+                        setManageFalActive(fashn.isActive);
+                      }}
+                      className={pillBtnClass}
+                    >
+                      Yönet
+                    </Button>
+                  </div>
+                ))}
+
                 {/* Bağlı Bizim Hesap hesapları */}
                 {bizimhesaps.map((bh) => (
                   <div key={bh.id} className="flex items-center gap-3 p-3">
@@ -2001,6 +2059,14 @@ export default function StoresPage() {
                           role="img"
                           aria-label={item.name}
                         />
+                      ) : item.id === 'FASHN_AI' ? (
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[10px] font-bold text-white"
+                          role="img"
+                          aria-label={item.name}
+                        >
+                          Fn
+                        </div>
                       ) : item.id === 'BIZIMHESAP' ? (
                         <BizimhesapMark
                           className="h-10 w-10 shrink-0 rounded-xl"
@@ -2458,7 +2524,7 @@ export default function StoresPage() {
         </Modal.Backdrop>
       </Modal>
 
-      {/* Fal.ai bağlama modalı — Woocommerce/DHL ile aynı stepper deseni. */}
+      {/* Fal.ai / Fashn.ai bağlama modalı — Woocommerce/DHL ile aynı stepper deseni. */}
       <Modal
         isOpen={isFalDialogOpen}
         onOpenChange={(open) => !open && handleFalDialogClose()}
@@ -2469,14 +2535,20 @@ export default function StoresPage() {
               <Modal.CloseTrigger />
               <Modal.Header>
                 <Modal.Heading className="flex items-center gap-2">
-                  <FalMark className="h-6 w-6 rounded-md" />
-                  Fal.ai Bağla
+                  {falDialogProvider === 'fashn' ? (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[8px] font-bold text-white">
+                      Fn
+                    </div>
+                  ) : (
+                    <FalMark className="h-6 w-6 rounded-md" />
+                  )}
+                  {falProviderLabel} Bağla
                 </Modal.Heading>
               </Modal.Header>
               <Modal.Body>
-                {fals.length > 0 && (
+                {(falDialogProvider === 'fashn' ? fashns.length : fals.length) > 0 && (
                   <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-foreground/80">
-                    {fals.length} bağlı hesap mevcut. Yeni bir anahtar girerek ek hesap ekleyebilirsiniz.
+                    {falDialogProvider === 'fashn' ? fashns.length : fals.length} bağlı hesap mevcut. Yeni bir anahtar girerek ek hesap ekleyebilirsiniz.
                   </div>
                 )}
 

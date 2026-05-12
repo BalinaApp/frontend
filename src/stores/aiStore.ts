@@ -58,17 +58,32 @@ export interface FalIntegration {
   updatedAt: string;
 }
 
-/** UI'da gösterilen, kullanıcıya sunulacak model kataloğu. Her modelin
- * `kind` alanı bu modelin görsel mi video mu üreteceğini belirtir.
- * Liste Fal.ai'nin yaygın kullanılan endpoint'lerini kapsar — yeni eklenen
- * modeller buraya eklenmeli. */
-export const FAL_MODEL_CATALOG: Array<{
+/** Multi-provider AI entegrasyonu — `provider` ile fal/fashn ayrılır. */
+export interface AiIntegration extends FalIntegration {
+  provider: 'fal' | 'fashn';
+}
+
+export type ModelProvider = 'fal' | 'fashn';
+
+export interface ModelCatalogEntry {
   id: string;
   label: string;
   description: string;
   kind: FalGenerationKind;
+  provider: ModelProvider;
   isDefault?: boolean;
-}> = [
+}
+
+/** Provider'ı model id prefix'inden çıkar. */
+export function getModelProvider(modelId: string): ModelProvider {
+  return modelId.startsWith('fashn-ai/') ? 'fashn' : 'fal';
+}
+
+/** UI'da gösterilen, kullanıcıya sunulacak Fal.ai model kataloğu. Her modelin
+ * `kind` alanı bu modelin görsel mi video mu üreteceğini belirtir.
+ * Görsel sanal-deneme (VTON) artık Fashn.ai üzerinden yapıldığı için Fal'in
+ * VTON modelleri (idm-vton, cat-vton, leffa, kolors) bu listeden çıkarıldı. */
+export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   // ===== Görsel modelleri =====
   {
     id: 'fal-ai/nano-banana',
@@ -223,34 +238,6 @@ export const FAL_MODEL_CATALOG: Array<{
     kind: 'image',
   },
 
-  // ----- Virtual Try-On (giyim değişimi için optimize) -----
-  {
-    id: 'fal-ai/idm-vton',
-    label: 'IDM-VTON (Virtual Try-On) ⭐',
-    description:
-      'Sanal kıyafet deneme — model üzerindeki kıyafeti birebir değiştirir, arka plan ve modeli korur. Giyim üretimi için ÖNERİLİR.',
-    kind: 'image',
-  },
-  {
-    id: 'fal-ai/cat-vton',
-    label: 'CatVTON',
-    description:
-      'Hafif sanal try-on modeli — IDM-VTON alternatifi, daha hızlı.',
-    kind: 'image',
-  },
-  {
-    id: 'fal-ai/leffa',
-    label: 'Leffa Virtual Try-On',
-    description: 'Yeni nesil VTON — yüksek detay korur.',
-    kind: 'image',
-  },
-  {
-    id: 'fal-ai/kling/v1-5/kolors-virtual-try-on',
-    label: 'Kolors Virtual Try-On (Kling)',
-    description: 'Kuaishou Kolors VTON — yüksek kalite kıyafet swap.',
-    kind: 'image',
-  },
-
   // ===== Video modelleri =====
   {
     id: 'fal-ai/kling-video/v2.1/master/image-to-video',
@@ -381,7 +368,33 @@ export const FAL_MODEL_CATALOG: Array<{
   },
 ];
 
-export const DEFAULT_IMAGE_MODEL = FAL_MODEL_CATALOG.find(
+/** Fashn.ai sanal-deneme (VTON) modelleri. Tek görev: kişi + kıyafet
+ *  görselinden body-aware warp + mask-based transfer ile yeni görsel. */
+export const FASHN_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
+  {
+    id: 'fashn-ai/tryon-v1.6',
+    label: 'Fashn Tryon v1.6 ⭐',
+    description:
+      'Fashn.ai sanal kıyafet deneme — kişiyi koruyup kıyafeti sadık şekilde geçirir. Chiffon/asimetrik garment için ÖNERİLİR.',
+    kind: 'image',
+    isDefault: true,
+  },
+  {
+    id: 'fashn-ai/tryon-v1.5',
+    label: 'Fashn Tryon v1.5',
+    description: 'Önceki Fashn.ai sürümü — uyumluluk için.',
+    kind: 'image',
+  },
+];
+
+/** Tüm provider'lardan birleşik katalog — composer ve mode chip filter'ı
+ *  buradan üretilir. */
+export const MODEL_CATALOG: ModelCatalogEntry[] = [
+  ...FAL_MODEL_CATALOG.map((m) => ({ ...m, provider: 'fal' as ModelProvider })),
+  ...FASHN_MODEL_CATALOG.map((m) => ({ ...m, provider: 'fashn' as ModelProvider })),
+];
+
+export const DEFAULT_IMAGE_MODEL = FASHN_MODEL_CATALOG.find(
   (m) => m.kind === 'image' && m.isDefault,
 )?.id as FalImageModel;
 
@@ -404,7 +417,16 @@ export interface AiConversation {
 }
 
 interface AiState {
-  // Integrations
+  // Integrations (multi-provider)
+  integrations: AiIntegration[];
+  isLoadingIntegrations: boolean;
+  isSavingIntegration: boolean;
+  /** Görsel üretiminde kullanılacak entegrasyon (önerilen: fashn). */
+  selectedImageIntegrationId: string | null;
+  /** Video üretiminde kullanılacak entegrasyon (sadece fal). */
+  selectedVideoIntegrationId: string | null;
+
+  // Legacy aliases — FAL-only, yeni multi-provider state'inden türetilir.
   fals: FalIntegration[];
   isLoadingFals: boolean;
   isSavingFal: boolean;
@@ -419,7 +441,35 @@ interface AiState {
   conversations: AiConversation[];
   isLoadingConversations: boolean;
 
-  // Actions
+  // Actions — generic (multi-provider)
+  fetchIntegrations: (companyId: string) => Promise<void>;
+  createIntegration: (
+    companyId: string,
+    provider: 'fal' | 'fashn',
+    args: { name?: string; apiKey: string }
+  ) => Promise<AiIntegration | null>;
+  updateIntegration: (
+    companyId: string,
+    integrationId: string,
+    args: {
+      name?: string;
+      apiKey?: string;
+      models?: string[];
+      isActive?: boolean;
+      productTypes?: ProductType[];
+    }
+  ) => Promise<AiIntegration | null>;
+  removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
+  testApiKey: (
+    companyId: string,
+    provider: 'fal' | 'fashn',
+    apiKey: string,
+  ) => Promise<FalTestResult>;
+  testIntegration: (companyId: string, integrationId: string) => Promise<FalTestResult>;
+  setSelectedImageIntegrationId: (id: string | null) => void;
+  setSelectedVideoIntegrationId: (id: string | null) => void;
+
+  // Legacy aliases (FAL-only sarmaçlar)
   fetchFalIntegrations: (companyId: string) => Promise<void>;
   createFalIntegration: (
     companyId: string,
@@ -489,92 +539,197 @@ interface AiState {
 
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+// LocalStorage anahtarları — entegrasyon seçimleri sayfa yenilemelerinde
+// kaybolmasın. Kullanıcı zaten chat ilk açılışta seçtiği için ayrı persist
+// (Zustand persist middleware'i değil, manuel hydrate) yeterli.
+const SELECTED_IMAGE_KEY = 'ai-selected-image-integration';
+const SELECTED_VIDEO_KEY = 'ai-selected-video-integration';
+
+function readSelection(key: string): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(key) || null;
+  } catch {
+    return null;
+  }
+}
+function writeSelection(key: string, id: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (id) localStorage.setItem(key, id);
+    else localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function falsOnly(list: AiIntegration[]): FalIntegration[] {
+  // FalIntegration ile AiIntegration aynı shape — provider field'ı sade
+  // structural type için artık fazlalık. Strip etmeden döndürmek güvenli.
+  return list.filter((i) => i.provider === 'fal');
+}
+
 export const useAiStore = create<AiState>((set, get) => ({
+  integrations: [],
+  isLoadingIntegrations: false,
+  isSavingIntegration: false,
+  selectedImageIntegrationId: readSelection(SELECTED_IMAGE_KEY),
+  selectedVideoIntegrationId: readSelection(SELECTED_VIDEO_KEY),
+
   fals: [],
   isLoadingFals: false,
   isSavingFal: false,
   selectedFalId: null,
+
   messages: [],
   currentConversationId: null,
   isGenerating: false,
   conversations: [],
   isLoadingConversations: false,
 
-  fetchFalIntegrations: async (companyId) => {
-    set({ isLoadingFals: true });
+  // ----- Generic (multi-provider) integration actions -----
+
+  fetchIntegrations: async (companyId) => {
+    set({ isLoadingIntegrations: true, isLoadingFals: true });
     try {
-      const { data } = await api.get<FalIntegration[]>(
-        `/company/${companyId}/ai/integrations/fal`
+      const { data } = await api.get<AiIntegration[]>(
+        `/company/${companyId}/ai/integrations`,
       );
-      const list = data ?? [];
-      const current = get().selectedFalId;
-      const stillExists = current && list.some((i) => i.id === current);
+      const list = (data ?? []).map((i) => ({
+        ...i,
+        // Backend tarafı enum'u büyük harf gönderebilir; normalize et.
+        provider: (String(i.provider || 'fal').toLowerCase() as 'fal' | 'fashn'),
+      }));
+      const fals = falsOnly(list);
+
+      // Seçimleri doğrula — silinmiş entegrasyon seçili kalmasın.
+      const currentImage = get().selectedImageIntegrationId;
+      const currentVideo = get().selectedVideoIntegrationId;
+      const currentFal = get().selectedFalId;
+
+      const imageStillValid =
+        currentImage && list.some((i) => i.id === currentImage && i.isActive);
+      const videoStillValid =
+        currentVideo && list.some((i) => i.id === currentVideo && i.provider === 'fal' && i.isActive);
+      const falStillValid = currentFal && fals.some((i) => i.id === currentFal && i.isActive);
+
+      // Default fallback'ler:
+      // - Görsel: önce aktif bir fashn, yoksa aktif bir fal.
+      // - Video: aktif bir fal (fashn video desteklemiyor).
+      const fallbackImage =
+        list.find((i) => i.provider === 'fashn' && i.isActive)?.id ??
+        list.find((i) => i.provider === 'fal' && i.isActive)?.id ??
+        null;
+      const fallbackVideo = fals.find((i) => i.isActive)?.id ?? null;
+
+      const nextImage = imageStillValid ? currentImage : fallbackImage;
+      const nextVideo = videoStillValid ? currentVideo : fallbackVideo;
+      const nextFal = falStillValid ? currentFal : nextVideo;
+
+      writeSelection(SELECTED_IMAGE_KEY, nextImage);
+      writeSelection(SELECTED_VIDEO_KEY, nextVideo);
+
       set({
-        fals: list,
-        selectedFalId: stillExists ? current : list.find((i) => i.isActive)?.id ?? null,
+        integrations: list,
+        fals,
+        selectedImageIntegrationId: nextImage,
+        selectedVideoIntegrationId: nextVideo,
+        selectedFalId: nextFal,
+        isLoadingIntegrations: false,
         isLoadingFals: false,
       });
     } catch {
-      set({ fals: [], isLoadingFals: false });
+      set({
+        integrations: [],
+        fals: [],
+        isLoadingIntegrations: false,
+        isLoadingFals: false,
+      });
     }
   },
 
-  createFalIntegration: async (companyId, args) => {
-    set({ isSavingFal: true });
+  createIntegration: async (companyId, provider, args) => {
+    set({ isSavingIntegration: true, isSavingFal: true });
     try {
-      const { data } = await api.post<FalIntegration>(
-        `/company/${companyId}/ai/integrations/fal`,
-        args
+      const { data } = await api.post<AiIntegration>(
+        `/company/${companyId}/ai/integrations`,
+        { provider, ...args },
       );
-      set((state) => ({
-        fals: [...state.fals, data],
-        selectedFalId: state.selectedFalId ?? data.id,
-        isSavingFal: false,
-      }));
-      return data;
+      const normalized: AiIntegration = {
+        ...data,
+        provider: (String(data.provider || provider).toLowerCase() as 'fal' | 'fashn'),
+      };
+      set((state) => {
+        const integrations = [...state.integrations, normalized];
+        return {
+          integrations,
+          fals: falsOnly(integrations),
+          isSavingIntegration: false,
+          isSavingFal: false,
+        };
+      });
+      return normalized;
     } catch {
-      set({ isSavingFal: false });
+      set({ isSavingIntegration: false, isSavingFal: false });
       return null;
     }
   },
 
-  updateFalIntegration: async (companyId, integrationId, args) => {
-    set({ isSavingFal: true });
+  updateIntegration: async (companyId, integrationId, args) => {
+    set({ isSavingIntegration: true, isSavingFal: true });
     try {
-      const { data } = await api.patch<FalIntegration>(
-        `/company/${companyId}/ai/integrations/fal/${integrationId}`,
-        args
+      const { data } = await api.patch<AiIntegration>(
+        `/company/${companyId}/ai/integrations/${integrationId}`,
+        args,
       );
-      set((state) => ({
-        fals: state.fals.map((f) => (f.id === integrationId ? data : f)),
-        isSavingFal: false,
-      }));
-      return data;
+      const normalized: AiIntegration = {
+        ...data,
+        provider: (String(data.provider || 'fal').toLowerCase() as 'fal' | 'fashn'),
+      };
+      set((state) => {
+        const integrations = state.integrations.map((i) =>
+          i.id === integrationId ? normalized : i,
+        );
+        return {
+          integrations,
+          fals: falsOnly(integrations),
+          isSavingIntegration: false,
+          isSavingFal: false,
+        };
+      });
+      return normalized;
     } catch {
-      set({ isSavingFal: false });
+      set({ isSavingIntegration: false, isSavingFal: false });
       return null;
     }
   },
 
-  removeFalIntegration: async (companyId, integrationId) => {
-    await api.delete(`/company/${companyId}/ai/integrations/fal/${integrationId}`);
+  removeIntegration: async (companyId, integrationId) => {
+    await api.delete(`/company/${companyId}/ai/integrations/${integrationId}`);
     set((state) => {
-      const remaining = state.fals.filter((f) => f.id !== integrationId);
+      const integrations = state.integrations.filter((i) => i.id !== integrationId);
+      const fals = falsOnly(integrations);
+      const fixSelection = (sel: string | null) =>
+        sel === integrationId ? null : sel;
+      const nextImage = fixSelection(state.selectedImageIntegrationId);
+      const nextVideo = fixSelection(state.selectedVideoIntegrationId);
+      writeSelection(SELECTED_IMAGE_KEY, nextImage);
+      writeSelection(SELECTED_VIDEO_KEY, nextVideo);
       return {
-        fals: remaining,
-        selectedFalId:
-          state.selectedFalId === integrationId
-            ? remaining.find((f) => f.isActive)?.id ?? null
-            : state.selectedFalId,
+        integrations,
+        fals,
+        selectedImageIntegrationId: nextImage,
+        selectedVideoIntegrationId: nextVideo,
+        selectedFalId: fixSelection(state.selectedFalId),
       };
     });
   },
 
-  testFalKey: async (companyId, apiKey) => {
+  testApiKey: async (companyId, provider, apiKey) => {
     try {
       const { data } = await api.post<FalTestResult>(
-        `/company/${companyId}/ai/integrations/fal/test`,
-        { apiKey }
+        `/company/${companyId}/ai/integrations/test`,
+        { provider, apiKey },
       );
       return data;
     } catch (err) {
@@ -585,28 +740,76 @@ export const useAiStore = create<AiState>((set, get) => ({
         'Test başarısız';
       return { ok: false, error };
     }
+  },
+
+  testIntegration: async (companyId, integrationId) => {
+    try {
+      const { data } = await api.post<FalTestResult>(
+        `/company/${companyId}/ai/integrations/${integrationId}/test`,
+      );
+      return data;
+    } catch (err) {
+      const error =
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
+          ?.message ||
+        (err as Error)?.message ||
+        'Test başarısız';
+      return { ok: false, error };
+    }
+  },
+
+  setSelectedImageIntegrationId: (id) => {
+    writeSelection(SELECTED_IMAGE_KEY, id);
+    set({ selectedImageIntegrationId: id });
+  },
+
+  setSelectedVideoIntegrationId: (id) => {
+    writeSelection(SELECTED_VIDEO_KEY, id);
+    set({ selectedVideoIntegrationId: id, selectedFalId: id });
+  },
+
+  // ----- Legacy Fal-specific aliases (sarmaçlar) -----
+
+  fetchFalIntegrations: async (companyId) => {
+    await get().fetchIntegrations(companyId);
+  },
+
+  createFalIntegration: async (companyId, args) => {
+    return get().createIntegration(companyId, 'fal', args);
+  },
+
+  updateFalIntegration: async (companyId, integrationId, args) => {
+    return get().updateIntegration(companyId, integrationId, args);
+  },
+
+  removeFalIntegration: async (companyId, integrationId) => {
+    return get().removeIntegration(companyId, integrationId);
+  },
+
+  testFalKey: async (companyId, apiKey) => {
+    return get().testApiKey(companyId, 'fal', apiKey);
   },
 
   testFalIntegration: async (companyId, integrationId) => {
-    try {
-      const { data } = await api.post<FalTestResult>(
-        `/company/${companyId}/ai/integrations/fal/${integrationId}/test`
-      );
-      return data;
-    } catch (err) {
-      const error =
-        (err as { response?: { data?: { message?: string } }; message?: string })?.response?.data
-          ?.message ||
-        (err as Error)?.message ||
-        'Test başarısız';
-      return { ok: false, error };
-    }
+    return get().testIntegration(companyId, integrationId);
   },
 
-  setSelectedFalId: (id) => set({ selectedFalId: id }),
+  setSelectedFalId: (id) => {
+    // Legacy yol — video integration olarak ayarla (eski composer'da Fal
+    // hesabı seçildiğinde video bunu kullanıyordu).
+    writeSelection(SELECTED_VIDEO_KEY, id);
+    set({ selectedFalId: id, selectedVideoIntegrationId: id });
+  },
 
   generateImage: async (companyId, args) => {
-    const { messages, selectedFalId, currentConversationId } = get();
+    const {
+      messages,
+      selectedImageIntegrationId,
+      selectedFalId,
+      currentConversationId,
+    } = get();
+    const integrationId =
+      args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined;
     const userMsg: AiChatMessage = {
       id: uid(),
       role: 'user',
@@ -667,7 +870,7 @@ export const useAiStore = create<AiState>((set, get) => ({
         model: args.model,
         imageSize: args.imageSize,
         numImages: args.numImages ?? 1,
-        integrationId: args.integrationId ?? selectedFalId ?? undefined,
+        integrationId,
         imageUrls: args.imageUrls,
       });
       set((state) => ({
@@ -718,7 +921,7 @@ export const useAiStore = create<AiState>((set, get) => ({
   },
 
   generateImageRaw: async (companyId, args) => {
-    const { selectedFalId } = get();
+    const { selectedImageIntegrationId, selectedFalId } = get();
     try {
       const { data } = await api.post<{ images: AiGeneratedImage[] }>(
         `/company/${companyId}/ai/generate/image`,
@@ -727,7 +930,8 @@ export const useAiStore = create<AiState>((set, get) => ({
           model: args.model,
           imageSize: args.imageSize,
           numImages: 1,
-          integrationId: args.integrationId ?? selectedFalId ?? undefined,
+          integrationId:
+            args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined,
           imageUrls: args.imageUrls,
         },
       );
@@ -750,7 +954,7 @@ export const useAiStore = create<AiState>((set, get) => ({
   },
 
   generateVideoRaw: async (companyId, args) => {
-    const { selectedFalId } = get();
+    const { selectedVideoIntegrationId, selectedFalId } = get();
     try {
       const { data } = await api.post<{ video: { url: string } }>(
         `/company/${companyId}/ai/generate/video`,
@@ -758,7 +962,8 @@ export const useAiStore = create<AiState>((set, get) => ({
           prompt: args.prompt,
           imageUrl: args.imageUrl,
           model: args.model,
-          integrationId: args.integrationId ?? selectedFalId ?? undefined,
+          integrationId:
+            args.integrationId ?? selectedVideoIntegrationId ?? selectedFalId ?? undefined,
         },
       );
       return data.video?.url

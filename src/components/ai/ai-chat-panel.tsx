@@ -14,10 +14,11 @@ import { Button, Dropdown, ListBox, Select } from '@heroui/react';
 import {
   useAiStore,
   type FalImageSize,
-  FAL_MODEL_CATALOG,
+  MODEL_CATALOG,
 } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
+import { AiSetupModal } from './ai-setup-modal';
 
 interface AiChatPanelProps {
   /** Drawer modu — sağdan açılan kompakt panel; aksi halde full page */
@@ -27,18 +28,29 @@ interface AiChatPanelProps {
   expandHref?: string;
 }
 
-// Default model katalog — `FAL_MODEL_CATALOG`'dan türetiliyor. Seçili
-// hesabın izin verdiği modeller varsa o filtre uygulanır (aşağıda).
-const allModelOptions: Array<{ value: string; label: string; kind: 'image' | 'video' }> =
-  FAL_MODEL_CATALOG.map((m) => ({ value: m.id, label: m.label, kind: m.kind }));
+// Default model katalog — `MODEL_CATALOG`'dan türetiliyor (Fal + Fashn).
+// Seçili hesabın izin verdiği modeller varsa o filtre uygulanır (aşağıda).
+const allModelOptions: Array<{
+  value: string;
+  label: string;
+  kind: 'image' | 'video';
+  provider: 'fal' | 'fashn';
+}> = MODEL_CATALOG.map((m) => ({
+  value: m.id,
+  label: m.label,
+  kind: m.kind,
+  provider: m.provider,
+}));
 
 export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const { currentCompany } = useCompanyStore();
   const {
-    fals,
-    selectedFalId,
-    setSelectedFalId,
-    fetchFalIntegrations,
+    integrations,
+    selectedImageIntegrationId,
+    selectedVideoIntegrationId,
+    setSelectedImageIntegrationId,
+    setSelectedVideoIntegrationId,
+    fetchIntegrations,
     messages,
     isGenerating,
     generateImage,
@@ -48,7 +60,7 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const toggleAiDrawerExpanded = useUIStore((s) => s.toggleAiDrawerExpanded);
 
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>('fal-ai/nano-banana');
+  const [selectedModel, setSelectedModel] = useState<string>('fashn-ai/tryon-v1.6');
   // Output ratio sabit kalıyor — Figma'da boyut chip'i yok; gelecekte mod
   // popover'ında çıkacak.
   const imageSize: FalImageSize = 'square_hd';
@@ -61,15 +73,37 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const startInputRef = useRef<HTMLInputElement>(null);
 
-  const hasIntegration = fals.length > 0;
+  const fashnIntegrations = integrations.filter((i) => i.provider === 'fashn');
+  const falIntegrations = integrations.filter((i) => i.provider === 'fal');
+  const hasIntegration = integrations.length > 0;
+
+  // Seçili modelin provider'ından, hangi entegrasyonun kullanılacağını çıkar.
+  const selectedModelProvider: 'fal' | 'fashn' = selectedModel.startsWith('fashn-ai/')
+    ? 'fashn'
+    : 'fal';
+  const integrationListForModel =
+    selectedModelProvider === 'fashn' ? fashnIntegrations : falIntegrations;
+  const selectedIntegrationId =
+    selectedModelProvider === 'fashn'
+      ? selectedImageIntegrationId
+      : (allModelOptions.find((o) => o.value === selectedModel)?.kind === 'video'
+          ? selectedVideoIntegrationId
+          : selectedImageIntegrationId);
+  const selectedIntegration =
+    integrationListForModel.find((i) => i.id === selectedIntegrationId) ??
+    integrationListForModel[0] ??
+    null;
 
   // Seçili hesabın izin verdiği modeller. Liste boşsa tüm katalog gösterilir
   // (legacy/yeni eklenmiş ama henüz model seçilmemiş hesaplarda kırılmasın).
-  const selectedFal = fals.find((f) => f.id === selectedFalId) ?? fals[0] ?? null;
-  const allowedModels = selectedFal?.models?.length
-    ? selectedFal.models
-    : allModelOptions.map((m) => m.value);
-  const modelOptions = allModelOptions.filter((o) => allowedModels.includes(o.value));
+  // Fashn entegrasyonları için kataloga fashn modellerini, fal için fal'i.
+  const candidateOptions = allModelOptions.filter(
+    (o) => o.provider === selectedModelProvider,
+  );
+  const allowedModels = selectedIntegration?.models?.length
+    ? selectedIntegration.models
+    : candidateOptions.map((m) => m.value);
+  const modelOptions = candidateOptions.filter((o) => allowedModels.includes(o.value));
   // Seçili model artık izinli değilse otomatik ilk izinliye düş — render
   // sırasında hesaplıyoruz, useEffect+setState yerine derived value.
   const model = modelOptions.some((o) => o.value === selectedModel)
@@ -79,8 +113,25 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const currentKind = modelOptions.find((o) => o.value === model)?.kind ?? 'image';
 
   useEffect(() => {
-    if (currentCompany?.id) fetchFalIntegrations(currentCompany.id);
-  }, [currentCompany?.id, fetchFalIntegrations]);
+    if (currentCompany?.id) fetchIntegrations(currentCompany.id);
+  }, [currentCompany?.id, fetchIntegrations]);
+
+  // Chat ilk açıldığında setup modal: kullanıcı henüz görsel/video için
+  // entegrasyon seçmediyse (ve en az 1 entegrasyon mevcutsa) modal'ı aç.
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupShownOnce, setSetupShownOnce] = useState(false);
+  useEffect(() => {
+    if (setupShownOnce) return;
+    if (integrations.length === 0) return; // entegrasyon yokken modal'a gerek yok
+    if (selectedImageIntegrationId && selectedVideoIntegrationId) return;
+    setSetupOpen(true);
+    setSetupShownOnce(true);
+  }, [
+    integrations.length,
+    selectedImageIntegrationId,
+    selectedVideoIntegrationId,
+    setupShownOnce,
+  ]);
 
   useEffect(() => {
     // Yeni mesaj geldiğinde alta kaydır.
@@ -100,7 +151,7 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
       prompt: text,
       model,
       imageSize,
-      integrationId: selectedFalId ?? undefined,
+      integrationId: selectedIntegration?.id ?? undefined,
       imageUrls: urls,
     });
   };
@@ -277,12 +328,21 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
 
       {/* Composer — Figma 12203:4569 */}
       <div className="flex flex-col gap-2 p-2">
-        {/* Hesap seçici — sadece 1'den fazla bağlı hesap varsa */}
-        {fals.length > 1 && (
+        {/* Hesap seçici — seçili provider için 1'den fazla bağlı hesap varsa */}
+        {integrationListForModel.length > 1 && (
           <Select
-            selectedKey={selectedFalId ?? fals[0]?.id ?? ''}
-            onSelectionChange={(k) => setSelectedFalId(String(k))}
-            aria-label="Fal hesabı"
+            selectedKey={selectedIntegration?.id ?? integrationListForModel[0]?.id ?? ''}
+            onSelectionChange={(k) => {
+              const id = String(k);
+              if (selectedModelProvider === 'fashn') {
+                setSelectedImageIntegrationId(id);
+              } else if (currentKind === 'video') {
+                setSelectedVideoIntegrationId(id);
+              } else {
+                setSelectedImageIntegrationId(id);
+              }
+            }}
+            aria-label={selectedModelProvider === 'fashn' ? 'Fashn hesabı' : 'Fal hesabı'}
             className="w-full"
           >
             <Select.Trigger className="h-7 rounded-lg border border-border bg-surface px-2 text-[11px]">
@@ -291,7 +351,7 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
             </Select.Trigger>
             <Select.Popover className="border border-border bg-surface/85 shadow-lg backdrop-blur-xl">
               <ListBox>
-                {fals.map((f) => (
+                {integrationListForModel.map((f) => (
                   <ListBox.Item key={f.id} id={f.id} textValue={f.name}>
                     {f.name} {f.apiKeyTail && `(••••${f.apiKeyTail})`}
                     <ListBox.ItemIndicator />
@@ -465,6 +525,7 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
         </div>
 
       </div>
+      <AiSetupModal isOpen={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
   );
 }

@@ -1,9 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Modal, Button, Select, ListBox } from '@heroui/react';
-import { useAiStore, type AiIntegration } from '@/stores/aiStore';
+import { Picture, Video } from '@gravity-ui/icons';
+import {
+  Modal,
+  Button,
+  Select,
+  ListBox,
+} from '@heroui/react';
+import {
+  useAiStore,
+  MODEL_CATALOG,
+  type AiIntegration,
+  type ModelProvider,
+} from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 
 interface AiSetupModalProps {
@@ -11,46 +22,112 @@ interface AiSetupModalProps {
   onClose: () => void;
 }
 
-/** Chat ilk açıldığında veya kullanıcı entegrasyonlarını henüz seçmediyse
- *  gösterilen modal. Görsel + video için ayrı entegrasyon seçtirir. */
+type SetupTab = 'image' | 'video';
+
+/** AI üretim ayarları modalı. Üstte Görüntü/Video segmented toggle, her
+ *  sekmede o kategoriye uygun sağlayıcı chip'leri ve model dropdown'ı. */
 export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
   const { currentCompany } = useCompanyStore();
   const {
     integrations,
     selectedImageIntegrationId,
     selectedVideoIntegrationId,
+    selectedImageModelId,
+    selectedVideoModelId,
     setSelectedImageIntegrationId,
     setSelectedVideoIntegrationId,
+    setSelectedImageModelId,
+    setSelectedVideoModelId,
   } = useAiStore();
 
-  const [imageId, setImageId] = useState<string | null>(selectedImageIntegrationId);
-  const [videoId, setVideoId] = useState<string | null>(selectedVideoIntegrationId);
+  const [tab, setTab] = useState<SetupTab>('image');
+  const [imageIntegrationId, setImageIntegrationId] = useState<string | null>(
+    selectedImageIntegrationId,
+  );
+  const [videoIntegrationId, setVideoIntegrationId] = useState<string | null>(
+    selectedVideoIntegrationId,
+  );
+  const [imageModelId, setImageModelId] = useState<string | null>(selectedImageModelId);
+  const [videoModelId, setVideoModelId] = useState<string | null>(selectedVideoModelId);
 
+  // Modal her açıldığında store seçimlerine senkronize ol.
   useEffect(() => {
-    // Modal her açıldığında en güncel seçimlere senkronize ol.
-    if (isOpen) {
-      setImageId(selectedImageIntegrationId);
-      setVideoId(selectedVideoIntegrationId);
+    if (!isOpen) return;
+    setImageIntegrationId(selectedImageIntegrationId);
+    setVideoIntegrationId(selectedVideoIntegrationId);
+    setImageModelId(selectedImageModelId);
+    setVideoModelId(selectedVideoModelId);
+    setTab('image');
+  }, [
+    isOpen,
+    selectedImageIntegrationId,
+    selectedVideoIntegrationId,
+    selectedImageModelId,
+    selectedVideoModelId,
+  ]);
+
+  // Görsel için: aktif fashn + fal. Video için: sadece aktif fal.
+  const imageProviders: AiIntegration[] = useMemo(
+    () => integrations.filter((i) => i.isActive),
+    [integrations],
+  );
+  // Video tarafında Fashn de listelensin (kullanıcı isteği). Fashn şu an video
+  // üretmiyor; seçilse backend ilk aktif Fal hesabına düşer.
+  const videoProviders: AiIntegration[] = useMemo(
+    () => integrations.filter((i) => i.isActive),
+    [integrations],
+  );
+
+  // Seçili sağlayıcı objesi — provider'a göre model listesi türetilir.
+  const imageProvider = imageProviders.find((i) => i.id === imageIntegrationId) ?? null;
+  const videoProvider = videoProviders.find((i) => i.id === videoIntegrationId) ?? null;
+
+  // Model katalog filtreleri.
+  const imageModels = useMemo(
+    () =>
+      MODEL_CATALOG.filter(
+        (m) => m.kind === 'image' && m.provider === (imageProvider?.provider ?? 'fal'),
+      ),
+    [imageProvider?.provider],
+  );
+  // Video modeller — provider'a göre filtrele. Fashn seçiliyse boş döner;
+  // dropdown empty state'i gösterilir, kullanıcı yine de "kaydet" diyebilir
+  // (backend Fal'a düşer).
+  const videoModels = useMemo(
+    () =>
+      MODEL_CATALOG.filter(
+        (m) => m.kind === 'video' && m.provider === (videoProvider?.provider ?? 'fal'),
+      ),
+    [videoProvider?.provider],
+  );
+
+  // Sağlayıcı değiştiğinde model seçimi geçersizleşebilir — otomatik ilkine düş.
+  useEffect(() => {
+    if (!imageProvider) return;
+    if (!imageModelId || !imageModels.some((m) => m.id === imageModelId)) {
+      const fallback =
+        imageModels.find((m) => m.isDefault) ?? imageModels[0];
+      setImageModelId(fallback?.id ?? null);
     }
-  }, [isOpen, selectedImageIntegrationId, selectedVideoIntegrationId]);
+  }, [imageProvider, imageModelId, imageModels]);
+  useEffect(() => {
+    if (!videoProvider) return;
+    if (!videoModelId || !videoModels.some((m) => m.id === videoModelId)) {
+      const fallback =
+        videoModels.find((m) => m.isDefault) ?? videoModels[0];
+      setVideoModelId(fallback?.id ?? null);
+    }
+  }, [videoProvider, videoModelId, videoModels]);
 
-  const activeFashn = integrations.filter((i) => i.provider === 'fashn' && i.isActive);
-  const activeFal = integrations.filter((i) => i.provider === 'fal' && i.isActive);
-
-  // Görsel için: fashn + fal birlikte. Video için: sadece fal.
-  const imageOptions: AiIntegration[] = [...activeFashn, ...activeFal];
-  const videoOptions: AiIntegration[] = activeFal;
-
-  const canConfirm = !!imageId && !!videoId;
+  const canConfirm = !!imageIntegrationId && !!videoIntegrationId;
 
   const handleConfirm = () => {
-    setSelectedImageIntegrationId(imageId);
-    setSelectedVideoIntegrationId(videoId);
+    setSelectedImageIntegrationId(imageIntegrationId);
+    setSelectedVideoIntegrationId(videoIntegrationId);
+    setSelectedImageModelId(imageModelId);
+    setSelectedVideoModelId(videoModelId);
     onClose();
   };
-
-  const labelFor = (i: AiIntegration) =>
-    `${i.name} (${i.provider}${i.apiKeyTail ? ` · ••••${i.apiKeyTail}` : ''})`;
 
   return (
     <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -61,97 +138,68 @@ export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
             <Modal.Header>
               <Modal.Heading>AI üretim ayarları</Modal.Heading>
               <p className="mt-1 text-sm text-muted">
-                Sohbette görsel ve video üretirken hangi hesabın kullanılacağını
-                seç. Sonradan istediğinde değiştirebilirsin.
+                Görsel ve video için hangi sağlayıcı ve modeli kullanacağını seç.
               </p>
             </Modal.Header>
-            <Modal.Body className="space-y-5">
-              {/* Görsel sağlayıcı */}
-              <section className="space-y-2">
-                <header className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-sm font-medium text-foreground">
-                    Görsel üretimi
-                  </h3>
-                  <span className="text-xs text-muted">önerilen: Fashn.ai</span>
-                </header>
-                {imageOptions.length === 0 ? (
-                  <EmptyState companySlug={currentCompany?.slug} kind="image" />
-                ) : (
-                  <Select
-                    selectedKey={imageId ?? ''}
-                    onSelectionChange={(key) => {
-                      const v = String(key);
-                      setImageId(v || null);
-                    }}
-                    aria-label="Görsel entegrasyonu"
-                    className="w-full"
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {imageOptions.map((i) => (
-                          <ListBox.Item key={i.id} id={i.id} textValue={labelFor(i)}>
-                            {labelFor(i)}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                )}
-              </section>
+            <Modal.Body className="space-y-4">
+              {/* Segmented toggle — Görüntü / Video */}
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-secondary p-1">
+                <SegButton
+                  active={tab === 'image'}
+                  onPress={() => setTab('image')}
+                  icon={<Picture className="h-4 w-4" />}
+                  label="Görüntü"
+                />
+                <SegButton
+                  active={tab === 'video'}
+                  onPress={() => setTab('video')}
+                  icon={<Video className="h-4 w-4" />}
+                  label="Video"
+                />
+              </div>
 
-              {/* Video sağlayıcı */}
-              <section className="space-y-2">
-                <header className="flex items-baseline justify-between gap-2">
-                  <h3 className="text-sm font-medium text-foreground">
-                    Video üretimi
-                  </h3>
-                  <span className="text-xs text-muted">Fal.ai</span>
-                </header>
-                {videoOptions.length === 0 ? (
-                  <EmptyState companySlug={currentCompany?.slug} kind="video" />
-                ) : (
-                  <Select
-                    selectedKey={videoId ?? ''}
-                    onSelectionChange={(key) => {
-                      const v = String(key);
-                      setVideoId(v || null);
-                    }}
-                    aria-label="Video entegrasyonu"
-                    className="w-full"
-                  >
-                    <Select.Trigger>
-                      <Select.Value />
-                      <Select.Indicator />
-                    </Select.Trigger>
-                    <Select.Popover>
-                      <ListBox>
-                        {videoOptions.map((i) => (
-                          <ListBox.Item key={i.id} id={i.id} textValue={labelFor(i)}>
-                            {labelFor(i)}
-                            <ListBox.ItemIndicator />
-                          </ListBox.Item>
-                        ))}
-                      </ListBox>
-                    </Select.Popover>
-                  </Select>
-                )}
-              </section>
+              {tab === 'image' ? (
+                <SettingsBlock
+                  providers={imageProviders}
+                  providerId={imageIntegrationId}
+                  onProviderChange={setImageIntegrationId}
+                  models={imageModels.map((m) => ({
+                    id: m.id,
+                    label: m.label,
+                    description: m.description,
+                  }))}
+                  modelId={imageModelId}
+                  onModelChange={setImageModelId}
+                  emptyKind="image"
+                  companySlug={currentCompany?.slug}
+                />
+              ) : (
+                <SettingsBlock
+                  providers={videoProviders}
+                  providerId={videoIntegrationId}
+                  onProviderChange={setVideoIntegrationId}
+                  models={videoModels.map((m) => ({
+                    id: m.id,
+                    label: m.label,
+                    description: m.description,
+                  }))}
+                  modelId={videoModelId}
+                  onModelChange={setVideoModelId}
+                  emptyKind="video"
+                  companySlug={currentCompany?.slug}
+                />
+              )}
             </Modal.Body>
             <Modal.Footer>
               <Button variant="ghost" slot="close">
-                Daha sonra
+                İptal
               </Button>
               <Button
                 variant="primary"
                 onPress={handleConfirm}
                 isDisabled={!canConfirm}
               >
-                Devam et
+                Kaydet
               </Button>
             </Modal.Footer>
           </Modal.Dialog>
@@ -159,6 +207,161 @@ export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
       </Modal.Backdrop>
     </Modal>
   );
+}
+
+function SegButton({
+  active,
+  onPress,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onPress: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={`flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+        active
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted hover:text-foreground'
+      }`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+interface ModelOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+function SettingsBlock({
+  providers,
+  providerId,
+  onProviderChange,
+  models,
+  modelId,
+  onModelChange,
+  emptyKind,
+  companySlug,
+}: {
+  providers: AiIntegration[];
+  providerId: string | null;
+  onProviderChange: (id: string | null) => void;
+  models: ModelOption[];
+  modelId: string | null;
+  onModelChange: (id: string | null) => void;
+  emptyKind: 'image' | 'video';
+  companySlug?: string;
+}) {
+  if (providers.length === 0) {
+    return <EmptyState companySlug={companySlug} kind={emptyKind} />;
+  }
+  const activeModel = models.find((m) => m.id === modelId) ?? null;
+  return (
+    <div className="space-y-4">
+      {/* Sağlayıcı chip'leri */}
+      <section className="space-y-2">
+        <p className="text-xs font-medium text-muted">Sağlayıcı</p>
+        <div className="flex flex-wrap gap-1.5">
+          {providers.map((p) => (
+            <ProviderChip
+              key={p.id}
+              provider={p.provider}
+              label={`${providerLabel(p.provider)} · ${p.name}`}
+              active={providerId === p.id}
+              onPress={() => onProviderChange(p.id)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Model dropdown */}
+      <section className="space-y-2">
+        <p className="text-xs font-medium text-muted">Model</p>
+        {models.length === 0 ? (
+          <p className="rounded-lg bg-surface-secondary/50 p-3 text-xs text-muted">
+            Bu sağlayıcıda kullanılabilir model yok.
+          </p>
+        ) : (
+          <Select
+            selectedKey={modelId ?? ''}
+            onSelectionChange={(key) => onModelChange(String(key) || null)}
+            aria-label="Model"
+            className="w-full"
+          >
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {models.map((m) => (
+                  <ListBox.Item key={m.id} id={m.id} textValue={m.label}>
+                    <div className="flex flex-col">
+                      <span>{m.label}</span>
+                      <span className="text-[11px] text-muted">{m.description}</span>
+                    </div>
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
+        )}
+        {activeModel && (
+          <p className="text-[11px] text-muted">{activeModel.description}</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ProviderChip({
+  provider,
+  label,
+  active,
+  onPress,
+}: {
+  provider: ModelProvider;
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
+        active
+          ? 'border-accent bg-accent/10 text-foreground'
+          : 'border-border bg-surface text-muted hover:text-foreground'
+      }`}
+    >
+      <span
+        className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${
+          provider === 'fashn'
+            ? 'bg-gradient-to-br from-fuchsia-500 to-violet-600'
+            : 'bg-rose-500'
+        }`}
+        aria-hidden="true"
+      >
+        {provider === 'fashn' ? 'Fn' : 'Fa'}
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function providerLabel(p: ModelProvider): string {
+  return p === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
 }
 
 function EmptyState({

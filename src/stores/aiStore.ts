@@ -54,6 +54,9 @@ export interface FalIntegration {
   models: string[];
   productTypes: ProductType[];
   isActive: boolean;
+  /** Üretilen görsellerin SKU prefix'i (örn 'KZ'). Chat'te kullanıcı kod
+   *  girer; tam SKU `${codePrefix}-${productCode}` olur. */
+  codePrefix?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -425,6 +428,10 @@ interface AiState {
   selectedImageIntegrationId: string | null;
   /** Video üretiminde kullanılacak entegrasyon (sadece fal). */
   selectedVideoIntegrationId: string | null;
+  /** Setup modal'dan seçilen aktif görsel ve video modeli (catalog id'leri).
+   *  Boş ise integration.models[0] veya provider varsayılanı kullanılır. */
+  selectedImageModelId: string | null;
+  selectedVideoModelId: string | null;
 
   // Legacy aliases — FAL-only, yeni multi-provider state'inden türetilir.
   fals: FalIntegration[];
@@ -457,6 +464,7 @@ interface AiState {
       models?: string[];
       isActive?: boolean;
       productTypes?: ProductType[];
+      codePrefix?: string;
     }
   ) => Promise<AiIntegration | null>;
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -468,6 +476,8 @@ interface AiState {
   testIntegration: (companyId: string, integrationId: string) => Promise<FalTestResult>;
   setSelectedImageIntegrationId: (id: string | null) => void;
   setSelectedVideoIntegrationId: (id: string | null) => void;
+  setSelectedImageModelId: (id: string | null) => void;
+  setSelectedVideoModelId: (id: string | null) => void;
 
   // Legacy aliases (FAL-only sarmaçlar)
   fetchFalIntegrations: (companyId: string) => Promise<void>;
@@ -484,6 +494,7 @@ interface AiState {
       models?: string[];
       isActive?: boolean;
       productTypes?: ProductType[];
+      codePrefix?: string;
     }
   ) => Promise<FalIntegration | null>;
   removeFalIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -518,12 +529,17 @@ interface AiState {
     }
   ) => Promise<{ url: string; error?: string }>;
 
-  /** Guided akış için Kling video üretimi. */
+  /** Guided akış için Kling video üretimi.
+   *  - `imageUrl`     → start frame (1. üretilen görsel)
+   *  - `middleImageUrl` → orta frame (2. üretilen — yakın çekim)
+   *  - `endImageUrl`  → end frame (3. üretilen — uzak çekim) */
   generateVideoRaw: (
     companyId: string,
     args: {
       prompt: string;
       imageUrl?: string;
+      middleImageUrl?: string;
+      endImageUrl?: string;
       model?: string;
       integrationId?: string;
     }
@@ -544,6 +560,8 @@ const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 // (Zustand persist middleware'i değil, manuel hydrate) yeterli.
 const SELECTED_IMAGE_KEY = 'ai-selected-image-integration';
 const SELECTED_VIDEO_KEY = 'ai-selected-video-integration';
+const SELECTED_IMAGE_MODEL_KEY = 'ai-selected-image-model';
+const SELECTED_VIDEO_MODEL_KEY = 'ai-selected-video-model';
 
 function readSelection(key: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -575,6 +593,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   isSavingIntegration: false,
   selectedImageIntegrationId: readSelection(SELECTED_IMAGE_KEY),
   selectedVideoIntegrationId: readSelection(SELECTED_VIDEO_KEY),
+  selectedImageModelId: readSelection(SELECTED_IMAGE_MODEL_KEY),
+  selectedVideoModelId: readSelection(SELECTED_VIDEO_MODEL_KEY),
 
   fals: [],
   isLoadingFals: false,
@@ -760,6 +780,16 @@ export const useAiStore = create<AiState>((set, get) => ({
   setSelectedVideoIntegrationId: (id) => {
     writeSelection(SELECTED_VIDEO_KEY, id);
     set({ selectedVideoIntegrationId: id, selectedFalId: id });
+  },
+
+  setSelectedImageModelId: (id) => {
+    writeSelection(SELECTED_IMAGE_MODEL_KEY, id);
+    set({ selectedImageModelId: id });
+  },
+
+  setSelectedVideoModelId: (id) => {
+    writeSelection(SELECTED_VIDEO_MODEL_KEY, id);
+    set({ selectedVideoModelId: id });
   },
 
   // ----- Legacy Fal-specific aliases (sarmaçlar) -----
@@ -955,6 +985,8 @@ export const useAiStore = create<AiState>((set, get) => ({
         {
           prompt: args.prompt,
           imageUrl: args.imageUrl,
+          middleImageUrl: args.middleImageUrl,
+          endImageUrl: args.endImageUrl,
           model: args.model,
           integrationId:
             args.integrationId ?? selectedVideoIntegrationId ?? selectedFalId ?? undefined,

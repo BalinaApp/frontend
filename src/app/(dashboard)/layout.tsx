@@ -6,7 +6,6 @@ import { usePricingStore } from '@/stores/pricingStore';
 import { UsageWarning } from '@/components/pricing/usage-warning';
 import { AiChatDrawer } from '@/components/ai/ai-chat-drawer';
 import { AiChatFab } from '@/components/ai/ai-chat-fab';
-import { AiChatHistoryButton } from '@/components/ai/ai-chat-history-button';
 import { useUIStore } from '@/stores/uiStore';
 import { useAiStore } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -18,14 +17,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { usage, fetchUsage, fetchPricingStatus } = usePricingStore();
   const isAiDrawerExpanded = useUIStore((s) => s.isAiDrawerExpanded);
 
-  // FAL entegrasyonu aktif mi? Layout'tan kendi başına fetch ediyoruz —
-  // bottom strip ve drawer bu listeye göre render edilir, panel mount'una
-  // bağlı değil (panel zaten gizli olabilir).
+  // Fal veya Fashn aktif mi? Layout'tan fetch ediyoruz — bottom strip ve drawer
+  // bu listeye göre render edilir, panel mount'una bağlı değil.
   const currentCompanyId = useCompanyStore((s) => s.currentCompany?.id);
-  const fals = useAiStore((s) => s.fals);
-  const fetchFalIntegrations = useAiStore((s) => s.fetchFalIntegrations);
-  const hasActiveFal = fals.some((f) => f.isActive);
-  const stripHeight = hasActiveFal ? BOTTOM_STRIP_HEIGHT : 0;
+  const integrations = useAiStore((s) => s.integrations);
+  const fetchIntegrations = useAiStore((s) => s.fetchIntegrations);
+  const hasActiveAi = integrations.some((i) => i.isActive);
+  const stripHeight = hasActiveAi ? BOTTOM_STRIP_HEIGHT : 0;
 
   useEffect(() => {
     fetchUsage();
@@ -33,8 +31,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [fetchUsage, fetchPricingStatus]);
 
   useEffect(() => {
-    if (currentCompanyId) fetchFalIntegrations(currentCompanyId);
-  }, [currentCompanyId, fetchFalIntegrations]);
+    if (currentCompanyId) fetchIntegrations(currentCompanyId);
+  }, [currentCompanyId, fetchIntegrations]);
 
   return (
     <div className="bg-page flex h-screen w-full">
@@ -49,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div
           className="relative flex flex-col"
           style={
-            hasActiveFal
+            hasActiveAi
               ? { height: `calc(100vh - ${stripHeight}px)` }
               : { flex: '1 1 0%', minHeight: 0 }
           }
@@ -79,16 +77,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Drawer — wrapper'ın direkt çocuğu, content card'ın sibling'i.
               Scale'den etkilenmez, kendi inset değerleriyle konumlanır.
               FAL aktif değilse hiç render edilmez. */}
-          {hasActiveFal && <AiChatDrawer />}
+          {hasActiveAi && <AiChatDrawer />}
         </div>
         {/* Bottom strip — sadece FAL aktif iken görünür. */}
-        {hasActiveFal && (
+        {hasActiveAi && (
           <div
             className="flex shrink-0 items-center justify-end gap-1 px-3"
             style={{ height: BOTTOM_STRIP_HEIGHT }}
           >
             <AiChatFab />
-            <AiChatHistoryButton />
           </div>
         )}
       </main>

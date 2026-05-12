@@ -9,7 +9,6 @@ import { useStoreStore } from '@/stores/storeStore';
 import { useProductMappingStore } from '@/stores/productMappingStore';
 import { useAiStore, FAL_MODEL_CATALOG, type ProductType } from '@/stores/aiStore';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
-import { buildImagePrompt } from '@/stores/aiCreatorStore';
 import { FalMark } from '@/components/icons/fal-mark';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
@@ -349,17 +348,11 @@ export default function StoresPage() {
   >(null);
   // Header card switch — kapatıp Kaydet derse hesap kaldırılır.
   const [manageFalActive, setManageFalActive] = useState(true);
+  // Üretilen görsellerin SKU öneki (örn 'KZ'). Boş ise sadece kod kullanılır.
+  const [manageFalCodePrefix, setManageFalCodePrefix] = useState('');
   const [isManageSaving, setIsManageSaving] = useState(false);
   // Anahtar değiştirme alt-modalı — Yönet modalı içindeki butondan açılır.
   const [isChangeKeyOpen, setIsChangeKeyOpen] = useState(false);
-  // Ürün türü ekle/düzenle alt-modalı.
-  const [typeEditorOpen, setTypeEditorOpen] = useState(false);
-  const [typeEditorId, setTypeEditorId] = useState<string | null>(null);
-  const [typeEditorName, setTypeEditorName] = useState('');
-  const [typeEditorImage, setTypeEditorImage] = useState<string | null>(null);
-  const [typeEditorPrompt, setTypeEditorPrompt] = useState('');
-  const [typeEditorSaving, setTypeEditorSaving] = useState(false);
-  const [typeEditorDragOver, setTypeEditorDragOver] = useState(false);
   // Manage dialog Fal + Fashn ortak; row tüm integrations'tan çekilir.
   const manageFal = manageFalId
     ? integrations.find((i) => i.id === manageFalId) ?? null
@@ -796,6 +789,7 @@ export default function StoresPage() {
     setManageFalTestResult(null);
     setIsChangeKeyOpen(false);
     setManageFalActive(true);
+    setManageFalCodePrefix('');
     setIsManageSaving(false);
   };
 
@@ -863,11 +857,16 @@ export default function StoresPage() {
       handleManageClose();
       return;
     }
-    // Switch açık — durum değiştiyse güncelle, değişmediyse no-op kapat.
-    if (manageFal.isActive !== manageFalActive) {
+    // Switch veya kod öneki değiştiyse update — ikisini tek istekte yolla.
+    const nextPrefix = manageFalCodePrefix.trim();
+    const prevPrefix = (manageFal.codePrefix ?? '').trim();
+    const activeChanged = manageFal.isActive !== manageFalActive;
+    const prefixChanged = prevPrefix !== nextPrefix;
+    if (activeChanged || prefixChanged) {
       setIsManageSaving(true);
       const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
-        isActive: manageFalActive,
+        ...(activeChanged ? { isActive: manageFalActive } : {}),
+        ...(prefixChanged ? { codePrefix: nextPrefix } : {}),
       });
       setIsManageSaving(false);
       if (updated) {
@@ -879,101 +878,6 @@ export default function StoresPage() {
       return;
     }
     handleManageClose();
-  };
-
-  // ----- Ürün türleri -----
-  const handleTypeEditorOpen = (typeId?: string) => {
-    if (typeId && manageFal) {
-      const t = manageFal.productTypes?.find((p) => p.id === typeId);
-      if (t) {
-        setTypeEditorId(t.id);
-        setTypeEditorName(t.name);
-        setTypeEditorImage(t.referenceImageUrl);
-        setTypeEditorPrompt(t.prompt ?? '');
-        setTypeEditorOpen(true);
-        return;
-      }
-    }
-    setTypeEditorId(null);
-    setTypeEditorName('');
-    setTypeEditorImage(null);
-    setTypeEditorPrompt('');
-    setTypeEditorOpen(true);
-  };
-
-  const handleTypeEditorClose = () => {
-    if (typeEditorSaving) return;
-    setTypeEditorOpen(false);
-    setTypeEditorId(null);
-    setTypeEditorName('');
-    setTypeEditorImage(null);
-    setTypeEditorPrompt('');
-    setTypeEditorDragOver(false);
-  };
-
-  const handleTypeEditorImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    // Kullanıcı isteği: tür referans görseli sıkıştırılmıyor, orijinali korunuyor.
-    const reader = new FileReader();
-    reader.onload = () => setTypeEditorImage(String(reader.result));
-    reader.readAsDataURL(file);
-  };
-
-  const handleTypeEditorSave = async () => {
-    if (!currentCompany?.id || !manageFal) return;
-    const name = typeEditorName.trim();
-    if (!name) {
-      toast.danger('Tür adı gerekli');
-      return;
-    }
-    if (!typeEditorImage) {
-      toast.danger('Referans görseli gerekli');
-      return;
-    }
-    const existing = manageFal.productTypes ?? [];
-    const trimmedPrompt = typeEditorPrompt.trim();
-    const next: ProductType[] = typeEditorId
-      ? existing.map((t) =>
-          t.id === typeEditorId
-            ? {
-                ...t,
-                name,
-                referenceImageUrl: typeEditorImage,
-                prompt: trimmedPrompt || undefined,
-              }
-            : t,
-        )
-      : [
-          ...existing,
-          {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-            name,
-            referenceImageUrl: typeEditorImage,
-            prompt: trimmedPrompt || undefined,
-          },
-        ];
-    setTypeEditorSaving(true);
-    const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
-      productTypes: next,
-    });
-    setTypeEditorSaving(false);
-    if (updated) {
-      toast.success(typeEditorId ? 'Tür güncellendi' : 'Tür eklendi');
-      handleTypeEditorClose();
-    } else {
-      toast.danger('Kaydedilemedi');
-    }
-  };
-
-  const handleTypeRemove = async (typeId: string) => {
-    if (!currentCompany?.id || !manageFal) return;
-    if (!window.confirm('Bu türü kaldırmak istediğinize emin misiniz?')) return;
-    const next = (manageFal.productTypes ?? []).filter((t) => t.id !== typeId);
-    const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
-      productTypes: next,
-    });
-    if (updated) toast.success('Tür kaldırıldı');
-    else toast.danger('Kaldırılamadı');
   };
 
   const handleModelPickerOpen = () => {
@@ -1827,9 +1731,10 @@ export default function StoresPage() {
         </div>
 
         <div className="flex flex-col gap-8 px-4 pb-8 pt-8">
-          {/* Bağlı Olanlar — mağazalar + fal + e-fatura hesapları aynı şeritte */}
+          {/* Bağlı Olanlar — mağazalar + fal + fashn + e-fatura hesapları aynı şeritte */}
           {(filteredStores.length > 0 ||
             fals.length > 0 ||
+            fashns.length > 0 ||
             bizimhesaps.length > 0 ||
             parasuts.length > 0) && (
             <section className="flex flex-col gap-4">
@@ -1931,6 +1836,7 @@ export default function StoresPage() {
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(fal.isActive);
+                        setManageFalCodePrefix(fal.codePrefix ?? '');
                       }}
                       className={pillBtnClass}
                     >
@@ -1966,6 +1872,7 @@ export default function StoresPage() {
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(fashn.isActive);
+                        setManageFalCodePrefix(fashn.codePrefix ?? '');
                       }}
                       className={pillBtnClass}
                     >
@@ -2728,15 +2635,25 @@ export default function StoresPage() {
                 <div className="flex flex-col gap-4">
                   {manageFal && (
                     <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
-                      <FalMark
-                        className="h-10 w-10 shrink-0 rounded-xl"
-                        role="img"
-                        aria-label="Fal.ai"
-                      />
+                      {manageProvider === 'fashn' ? (
+                        <div
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[10px] font-bold text-white"
+                          role="img"
+                          aria-label="Fashn.ai"
+                        >
+                          Fn
+                        </div>
+                      ) : (
+                        <FalMark
+                          className="h-10 w-10 shrink-0 rounded-xl"
+                          role="img"
+                          aria-label="Fal.ai"
+                        />
+                      )}
                       <div className="flex min-w-0 flex-1 flex-col">
                         <p className="truncate text-sm font-medium">{manageFal.name}</p>
                         <p className="truncate text-xs text-muted">
-                          Fal.ai •{' '}
+                          {manageProviderLabel} •{' '}
                           <span className="font-mono">
                             ••••{manageFal.apiKeyTail ?? '----'}
                           </span>
@@ -2754,8 +2671,8 @@ export default function StoresPage() {
                     </div>
                   )}
 
-                  {/* Modeller bölümü — seçili modeller chip + Değiştir altta */}
-                  {manageFal && (
+                  {/* Modeller bölümü — sadece Fal hesabı için. Fashn'da tek model var. */}
+                  {manageFal && manageProvider === 'fal' && (
                     <div className="flex flex-col gap-2">
                       <Label>Modeller</Label>
                       <div className="flex flex-wrap gap-1.5">
@@ -2785,62 +2702,27 @@ export default function StoresPage() {
                     </div>
                   )}
 
-                  {/* Ürün türleri — guided AI üretiminde tür seçimi için kullanılır */}
+                  {/* Ürün kodu öneki — chat'te girilen koda eklenecek prefix.
+                      Örn 'KZ' + kullanıcı kodu '001' → SKU 'KZ-001'.
+                      Üretilen tüm görsel/videoların sağ-altına bu kod overlay
+                      olarak basılır ve ürün yüklemede SKU olarak kullanılır. */}
                   {manageFal && (
-                    <div className="flex flex-col gap-2">
-                      <Label>Ürün Türleri</Label>
-                      {(manageFal.productTypes ?? []).length === 0 ? (
-                        <p className="rounded-lg bg-surface-secondary/50 p-3 text-xs text-muted">
-                          Henüz tür eklenmedi. AI üretiminde kullanmak için en az bir tür
-                          tanımlayın (ör. Elbise, Kazak) ve referans görsel yükleyin.
-                        </p>
-                      ) : (
-                        <div className="flex flex-col gap-1.5">
-                          {(manageFal.productTypes ?? []).map((t) => (
-                            <div
-                              key={t.id}
-                              className="group flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-2 transition-colors hover:bg-surface-secondary"
-                            >
-                              <button
-                                type="button"
-                                onClick={() => handleTypeEditorOpen(t.id)}
-                                className="flex flex-1 items-center gap-3 text-left"
-                                aria-label={`${t.name} türünü düzenle`}
-                              >
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                  src={t.referenceImageUrl}
-                                  alt={t.name}
-                                  className="h-10 w-10 shrink-0 rounded-md object-cover"
-                                />
-                                <span className="flex-1 truncate text-sm font-medium">
-                                  {t.name}
-                                </span>
-                              </button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                isIconOnly
-                                aria-label={`${t.name} türünü kaldır`}
-                                onPress={() => handleTypeRemove(t.id)}
-                                className="text-muted opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => handleTypeEditorOpen()}
-                        className={`self-start ${pillBtnClass}`}
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Ürün kodu öneki</Label>
+                      <TextField
+                        value={manageFalCodePrefix}
+                        onChange={setManageFalCodePrefix}
+                        aria-label="Ürün kodu öneki"
                       >
-                        Yeni Tür Ekle
-                      </Button>
+                        <Input placeholder="örn. KZ" />
+                      </TextField>
+                      <p className="text-[11px] text-muted">
+                        Üretilen görsel/videoların sağ alt köşesinde gösterilir.
+                        Örn: <span className="font-mono">{manageFalCodePrefix.trim() || 'KZ'}-001</span>
+                      </p>
                     </div>
                   )}
+
 
                   {/* API Anahtarı — değiştirme alt-modalını açan satır */}
                   <div className="flex flex-col gap-2">
@@ -3033,166 +2915,6 @@ export default function StoresPage() {
                       className="flex-1"
                     >
                       {isSavingFal ? 'Kaydediliyor...' : 'Kaydet'}
-                    </Button>
-                  </div>
-                </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      {/* Tür ekle/düzenle alt-modalı — Yönet > Ürün Türleri'nden açılır. */}
-      <Modal
-        isOpen={typeEditorOpen}
-        onOpenChange={(open) => {
-          if (!open) handleTypeEditorClose();
-        }}
-      >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
-                  {typeEditorId ? 'Türü Düzenle' : 'Yeni Tür Ekle'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
-                <div className="flex flex-col gap-4">
-                  <TextField
-                    value={typeEditorName}
-                    onChange={setTypeEditorName}
-                    isRequired
-                  >
-                    <Label>Tür Adı</Label>
-                    <Input placeholder="ör. Elbise, Kazak, Pantolon" autoFocus />
-                  </TextField>
-
-                  <div className="flex flex-col gap-2">
-                    <Label>Referans Görseli</Label>
-                    <p className="text-xs text-muted">
-                      Bu tür için kullanılacak model/manken görseli. Kullanıcı ürün
-                      görselini yüklediğinde bu referansa göre üretim yapılacak.
-                    </p>
-                    <label
-                      onDragEnter={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setTypeEditorDragOver(true);
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!typeEditorDragOver) setTypeEditorDragOver(true);
-                      }}
-                      onDragLeave={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setTypeEditorDragOver(false);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setTypeEditorDragOver(false);
-                        const file = e.dataTransfer.files?.[0];
-                        if (file) handleTypeEditorImageFile(file);
-                      }}
-                      className={`group flex cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-dashed transition-colors ${
-                        typeEditorImage ? 'aspect-[3/4]' : 'h-40'
-                      } ${
-                        typeEditorDragOver
-                          ? 'border-accent bg-accent/5'
-                          : 'border-border bg-surface-secondary/30 hover:border-accent/40'
-                      }`}
-                    >
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleTypeEditorImageFile(file);
-                          e.target.value = '';
-                        }}
-                      />
-                      {typeEditorImage ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={typeEditorImage}
-                          alt="Referans"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-center text-sm text-muted">
-                          {typeEditorDragOver
-                            ? 'Bırakın'
-                            : 'Görsel yüklemek için tıklayın veya buraya sürükleyin'}
-                        </span>
-                      )}
-                    </label>
-                    {typeEditorImage && (
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => setTypeEditorImage(null)}
-                        className={`self-start ${pillBtnClass}`}
-                      >
-                        Görseli Kaldır
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* Tür-bazlı özel prompt */}
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Üretim Prompt'u</Label>
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => {
-                          const name = typeEditorName.trim() || 'ürün';
-                          setTypeEditorPrompt(buildImagePrompt(name));
-                        }}
-                        className={pillBtnClass}
-                        isDisabled={!typeEditorName.trim()}
-                      >
-                        Önerilen Prompt'u Üret
-                      </Button>
-                    </div>
-                    <p className="text-xs text-muted">
-                      Bu tür için görsel üretilirken kullanılacak prompt. Boş
-                      bırakırsanız sistem varsayılan prompt'u kullanır. Önerilen
-                      Prompt'u Üret ile başlatıp serbestçe düzenleyebilirsiniz.
-                    </p>
-                    <textarea
-                      value={typeEditorPrompt}
-                      onChange={(e) => setTypeEditorPrompt(e.target.value)}
-                      placeholder={
-                        typeEditorName.trim()
-                          ? 'Boş — sistem varsayılan prompt kullanılır.'
-                          : 'Önce tür adını girin, sonra prompt yazın.'
-                      }
-                      rows={8}
-                      className="resize-y rounded-lg border border-border bg-surface-secondary/30 p-3 font-mono text-xs text-foreground placeholder:text-muted focus:border-accent/40 focus:outline-none"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onPress={handleTypeEditorClose}
-                      isDisabled={typeEditorSaving}
-                    >
-                      Vazgeç
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onPress={handleTypeEditorSave}
-                      isDisabled={typeEditorSaving}
-                      isPending={typeEditorSaving}
-                    >
-                      {typeEditorSaving ? 'Kaydediliyor...' : 'Kaydet'}
                     </Button>
                   </div>
                 </div>

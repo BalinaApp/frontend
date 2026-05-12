@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useUIStore } from '@/stores/uiStore';
 import { useAiCreatorStore } from '@/stores/aiCreatorStore';
 import { GuidedAiChatPanel } from './guided-ai-chat-panel';
@@ -9,10 +9,26 @@ import { GuidedAiChatPanel } from './guided-ai-chat-panel';
  * AI chat paneli — content card'ın içinde floating card olarak konumlanır.
  * Linear / Apple stilinde: sağ-altta küçük pencere, expand butonuyla içerik
  * alanını kaplar. FAB konumundan büyüyerek açılır (transform-origin bottom-right).
+ *
+ * Mobile (<640px): drawer her zaman full-screen modunda — küçültme/genişletme
+ * butonları gizli, content %100. isAiDrawerExpanded mobile'da ignore edilir.
  */
 export function AiChatDrawer() {
   const { isAiDrawerOpen, isAiDrawerExpanded, setAiDrawerOpen } = useUIStore();
   const { reset } = useAiCreatorStore();
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Mobile detection — drawer-internal layout için. matchMedia ile reaktif.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(max-width: 640px)');
+    const update = () => setIsMobile(mql.matches);
+    update();
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+
+  const showExpanded = isMobile || isAiDrawerExpanded;
 
   // Kapat → akışı sıfırla, sonra panel'i kapat. Yeniden açılınca temiz başlar.
   const handleClose = () => {
@@ -44,10 +60,10 @@ export function AiChatDrawer() {
         // Expanded: sıfıra sıfır, sadece top:16 — content arkada hafif görünsün.
         // Inset (top/right/bottom/left) ile hesaplanan boyut animate olur;
         // width/height set etmiyoruz, calc() ile auto-compute.
-        top: isAiDrawerExpanded ? '16px' : 'calc(100% - 696px)',
-        right: isAiDrawerExpanded ? '0px' : '16px',
-        bottom: isAiDrawerExpanded ? '0px' : '16px',
-        left: isAiDrawerExpanded ? '0px' : 'calc(100% - 456px)',
+        top: showExpanded ? (isMobile ? '0px' : '16px') : 'calc(100% - 696px)',
+        right: showExpanded ? '0px' : '16px',
+        bottom: showExpanded ? '0px' : '16px',
+        left: showExpanded ? '0px' : 'calc(100% - 456px)',
         transformOrigin: 'bottom right',
         // Kapalıyken FAB konumundan büyüyerek açılır.
         transform: isAiDrawerOpen ? 'scale(1)' : 'scale(0.6)',

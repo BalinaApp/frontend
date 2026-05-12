@@ -1,8 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import { Xmark } from '@gravity-ui/icons';
 import { useUIStore } from '@/stores/uiStore';
+import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 /**
  * AI launcher — bottom strip içinde inline buton.
@@ -19,6 +19,8 @@ export function AiChatFab() {
       aria-pressed={isAiDrawerOpen}
       onClick={() => toggleAiDrawer()}
       className={[
+        // chroma-border sürekli akan renkli kenar — Composer ile aynı stil.
+        'chroma-border',
         'flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-1.5 pr-2.5',
         'text-xs font-medium transition-colors',
         isAiDrawerOpen
@@ -26,14 +28,7 @@ export function AiChatFab() {
           : 'text-foreground/80 hover:bg-black/[0.04] hover:text-foreground',
       ].join(' ')}
     >
-      <Image
-        src="/figma/ai/balina-ai-button.png"
-        alt=""
-        width={20}
-        height={20}
-        priority
-        className="h-5 w-5 shrink-0 rounded-full object-cover"
-      />
+      <BalinaOsMark className="h-5 w-5 shrink-0 text-foreground" aria-hidden="true" />
       <span>BalinaOS AI</span>
     </button>
   );

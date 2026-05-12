@@ -957,32 +957,65 @@ export default function StoresPage() {
   const [deleteConfirmStoreId, setDeleteConfirmStoreId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // DHL bağlantısı — DHL Express API credentials sistem tarafında sabit;
-  // her şirket sadece kendi kullanıcı adı + şifresini veriyor, backend bu
-  // ikisini token alış-verişi için kullanıyor. UI WooCommerce modal'ı ile
-  // aynı dikey stepper pattern'ini kullanıyor.
+  // DHL (MNG Kargo) bağlantısı — MNG portal müşteri numarası + kimlik tipi
+  // + şifre alınıyor. IBM API Gateway client_id/secret sunucu .env'sinde
+  // sabit; frontend yalnızca müşteri kimliklerini gönderiyor.
   const [dhlModalOpen, setDhlModalOpen] = useState(false);
   const [dhlCurrentStep, setDhlCurrentStep] = useState(0);
-  const [dhlForm, setDhlForm] = useState({
-    apiUsername: '',
-    apiPassword: '',
+  const [dhlForm, setDhlForm] = useState<{
+    customerNumber: string;
+    password: string;
+    identityType: 1 | 2;
+  }>({
+    customerNumber: '',
+    password: '',
+    identityType: 1,
   });
   const [dhlShowPassword, setDhlShowPassword] = useState(false);
   const [isDhlSaving, setIsDhlSaving] = useState(false);
 
-  const dhlSteps = [
+  type DhlStep =
+    | {
+        key: 'customerNumber';
+        label: string;
+        placeholder: string;
+        description: string;
+        kind: 'text';
+      }
+    | {
+        key: 'identityType';
+        label: string;
+        description: string;
+        kind: 'choice';
+      }
+    | {
+        key: 'password';
+        label: string;
+        placeholder: string;
+        description: string;
+        kind: 'password';
+      };
+
+  const dhlSteps: DhlStep[] = [
     {
-      key: 'apiUsername' as const,
-      label: 'Kullanıcı Adı',
-      placeholder: 'DHL kullanıcı adınız',
-      description: 'DHL hesabınızın kullanıcı adını girin.',
+      key: 'customerNumber',
+      label: 'Müşteri Numarası',
+      placeholder: 'MNG müşteri numaranız (ör. 915737309)',
+      description: 'MNG sözleşmenizde / portalında yer alan müşteri ID.',
+      kind: 'text',
     },
     {
-      key: 'apiPassword' as const,
+      key: 'identityType',
+      label: 'Kimlik Tipi',
+      description: 'Hesap bireysel mi (TC kimlik) yoksa kurumsal mı (vergi numarası)?',
+      kind: 'choice',
+    },
+    {
+      key: 'password',
       label: 'Şifre',
-      placeholder: 'DHL şifreniz',
-      description: 'DHL hesabınızın şifresini girin.',
-      isPassword: true,
+      placeholder: 'MNG portal şifreniz',
+      description: 'MNG portal şifrenizi girin. Sunucuda şifrelenerek saklanır.',
+      kind: 'password',
     },
   ];
   const dhlTotalSteps = dhlSteps.length;
@@ -1202,7 +1235,7 @@ export default function StoresPage() {
     // DHL'in kendi stepper'ı — alanlar farklı olduğu için Marketplace
     // stepper'ından ayrı bir akış kullanıyor ama görsel olarak aynı.
     if (marketplace.id === 'DHL') {
-      setDhlForm({ apiUsername: '', apiPassword: '' });
+      setDhlForm({ customerNumber: '', password: '', identityType: 1 });
       setDhlShowPassword(false);
       setDhlCurrentStep(0);
       setDhlModalOpen(true);
@@ -1281,6 +1314,11 @@ export default function StoresPage() {
   const handleDhlNext = () => {
     const step = dhlSteps[dhlCurrentStep];
     if (!step) return;
+    if (step.kind === 'choice') {
+      // identityType'ın her zaman bir değeri var (default = 1).
+      setDhlCurrentStep((prev) => prev + 1);
+      return;
+    }
     const value = dhlForm[step.key];
     if (!value.trim()) {
       toast.danger(`${step.label} gerekli`);
@@ -1290,18 +1328,20 @@ export default function StoresPage() {
   };
 
   const handleSaveDhl = async () => {
-    if (!dhlForm.apiUsername.trim() || !dhlForm.apiPassword.trim()) {
+    if (!dhlForm.customerNumber.trim() || !dhlForm.password.trim()) {
       toast.danger('Tüm alanları doldurun');
       return;
     }
     setIsDhlSaving(true);
     try {
-      // Cargo module konvansiyonu (`/cargo/hepsijet/test`, vb.) ile aynı
-      // hizada — backend bu endpoint'te kullanıcı adı + şifreyi alıp
-      // kendi tarafında DHL access token akışını yürütüyor.
-      await api.post('/cargo/dhl/connect', {
-        apiUsername: dhlForm.apiUsername.trim(),
-        apiPassword: dhlForm.apiPassword,
+      // POST /api/cargo/mng/connect — backend, IBM API Gateway client
+      // bilgilerini .env'den (MNG_CLIENT_ID/SECRET) okur. Bu uçtan müşteri
+      // numarası + şifre + identityType ile MNG token endpoint'i denenir,
+      // başarılıysa ShippingProvider kaydı upsert edilir.
+      await api.post('/cargo/mng/connect', {
+        customerNumber: dhlForm.customerNumber.trim(),
+        password: dhlForm.password,
+        identityType: dhlForm.identityType,
       });
       toast.success('DHL bağlandı');
       handleDhlDialogClose();
@@ -2300,46 +2340,91 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isDhlLastStep ? (
                             <div className="flex flex-col gap-3">
-                              <TextField
-                                value={dhlForm[step.key]}
-                                onChange={(value) =>
-                                  setDhlForm((prev) => ({ ...prev, [step.key]: value }))
-                                }
-                                type={
-                                  step.isPassword
-                                    ? dhlShowPassword
-                                      ? 'text'
-                                      : 'password'
-                                    : 'text'
-                                }
-                                autoFocus
-                              >
-                                <Label>{step.label}</Label>
-                                {step.isPassword ? (
-                                  <div className="relative w-full">
-                                    <Input
-                                      placeholder={step.placeholder}
-                                      className="w-full pr-10"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => setDhlShowPassword((v) => !v)}
-                                      aria-label={
-                                        dhlShowPassword ? 'Şifreyi gizle' : 'Şifreyi göster'
+                              {step.kind === 'choice' ? (
+                                <>
+                                  <Label>{step.label}</Label>
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                      variant={
+                                        dhlForm.identityType === 1
+                                          ? 'primary'
+                                          : 'tertiary'
                                       }
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                      onPress={() =>
+                                        setDhlForm((prev) => ({
+                                          ...prev,
+                                          identityType: 1,
+                                        }))
+                                      }
+                                      fullWidth
                                     >
-                                      {dhlShowPassword ? (
-                                        <EyeOff className="h-4 w-4" />
-                                      ) : (
-                                        <Eye className="h-4 w-4" />
-                                      )}
-                                    </button>
+                                      TC Kimlik
+                                    </Button>
+                                    <Button
+                                      variant={
+                                        dhlForm.identityType === 2
+                                          ? 'primary'
+                                          : 'tertiary'
+                                      }
+                                      onPress={() =>
+                                        setDhlForm((prev) => ({
+                                          ...prev,
+                                          identityType: 2,
+                                        }))
+                                      }
+                                      fullWidth
+                                    >
+                                      Vergi No
+                                    </Button>
                                   </div>
-                                ) : (
-                                  <Input placeholder={step.placeholder} />
-                                )}
-                              </TextField>
+                                </>
+                              ) : (
+                                <TextField
+                                  value={dhlForm[step.key]}
+                                  onChange={(value) =>
+                                    setDhlForm((prev) => ({
+                                      ...prev,
+                                      [step.key]: value,
+                                    }))
+                                  }
+                                  type={
+                                    step.kind === 'password'
+                                      ? dhlShowPassword
+                                        ? 'text'
+                                        : 'password'
+                                      : 'text'
+                                  }
+                                  autoFocus
+                                >
+                                  <Label>{step.label}</Label>
+                                  {step.kind === 'password' ? (
+                                    <div className="relative w-full">
+                                      <Input
+                                        placeholder={step.placeholder}
+                                        className="w-full pr-10"
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => setDhlShowPassword((v) => !v)}
+                                        aria-label={
+                                          dhlShowPassword
+                                            ? 'Şifreyi gizle'
+                                            : 'Şifreyi göster'
+                                        }
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                      >
+                                        {dhlShowPassword ? (
+                                          <EyeOff className="h-4 w-4" />
+                                        ) : (
+                                          <Eye className="h-4 w-4" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <Input placeholder={step.placeholder} />
+                                  )}
+                                </TextField>
+                              )}
                               <p className="text-sm text-muted">{step.description}</p>
                               <Button onPress={handleDhlNext} fullWidth>
                                 İleri
@@ -2355,14 +2440,21 @@ export default function StoresPage() {
                               }`}
                             >
                               <span className="text-sm text-muted">{step.label}</span>
-                              {isCompleted && step.key === 'apiUsername' && (
+                              {isCompleted && step.key === 'customerNumber' && (
                                 <p className="mt-0.5 truncate text-xs text-muted/70">
-                                  {dhlForm[step.key]}
+                                  {dhlForm.customerNumber}
                                 </p>
                               )}
-                              {isCompleted && step.key === 'apiPassword' && (
+                              {isCompleted && step.key === 'identityType' && (
                                 <p className="mt-0.5 truncate text-xs text-muted/70">
-                                  {'•'.repeat(Math.min(dhlForm.apiPassword.length, 8))}
+                                  {dhlForm.identityType === 1
+                                    ? 'TC Kimlik'
+                                    : 'Vergi Numarası'}
+                                </p>
+                              )}
+                              {isCompleted && step.key === 'password' && (
+                                <p className="mt-0.5 truncate text-xs text-muted/70">
+                                  {'•'.repeat(Math.min(dhlForm.password.length, 8))}
                                 </p>
                               )}
                             </button>

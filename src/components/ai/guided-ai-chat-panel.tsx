@@ -599,26 +599,24 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
-              variant="flat"
-              radius="full"
+              variant="tertiary"
               onPress={() => {
                 setMode('image');
                 setComposerText('Yeni bir ürün görseli oluştur');
               }}
-              className="h-8 gap-1.5 text-xs font-medium"
+              className="h-8 gap-1.5 rounded-full text-xs font-medium"
             >
               <Picture className="h-3.5 w-3.5 text-muted" />
               Yeni bir ürün görseli oluştur
             </Button>
             <Button
               size="sm"
-              variant="flat"
-              radius="full"
+              variant="tertiary"
               onPress={() => {
                 setMode('video');
                 setComposerText('Ürün videosu oluştur');
               }}
-              className="h-8 gap-1.5 text-xs font-medium"
+              className="h-8 gap-1.5 rounded-full text-xs font-medium"
             >
               <Play className="h-3.5 w-3.5 text-muted" />
               Ürün videosu oluştur
@@ -805,10 +803,9 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
                 isIconOnly
                 aria-label="Dosya ekle"
                 onPress={() => fileInputRef.current?.click()}
-                variant="light"
+                variant="ghost"
                 size="sm"
-                radius="lg"
-                className="h-8 w-8 min-w-8"
+                className="h-8 w-8 min-w-8 rounded-lg"
               >
                 <Paperclip
                   className="h-4 w-4"
@@ -952,12 +949,11 @@ function SendButton({
     <Button
       isIconOnly
       size="sm"
-      radius="full"
-      variant="solid"
+      variant="primary"
       aria-label="Gönder"
       onPress={onPress}
       isDisabled={isDisabled}
-      className={`h-8 w-8 min-w-8 shrink-0 ${isActive ? 'chroma-bg' : ''}`}
+      className={`h-8 w-8 min-w-8 shrink-0 rounded-full ${isActive ? 'chroma-bg' : ''}`}
       style={
         isActive ? undefined : { background: 'var(--balinaos-bg-dark-faint)' }
       }

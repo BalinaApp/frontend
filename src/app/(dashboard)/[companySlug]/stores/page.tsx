@@ -49,11 +49,12 @@ const woocommerce: Marketplace = {
   logo: '/figma/integrations/woocommerce.png',
   comingSoon: false,
   platform: 'WOOCOMMERCE',
+  // One-click OAuth akışı: kullanıcı sadece isim + URL girer, sonraki adım
+  // WP admin'e yönlendirip Approve almak. Consumer Key/Secret artık otomatik
+  // alınıyor — bkz. handleWoocommerceStart + /integrations/woocommerce/return.
   steps: [
     { key: 'name', label: 'Mağaza Adı', placeholder: 'Mağaza adınız', description: 'Mağazanızı tanıyacağınız bir isim girin.' },
-    { key: 'url', label: 'Site URL', placeholder: 'https://example.com', description: 'WooCommerce sitenizin URL adresini girin.' },
-    { key: 'consumerKey', label: 'Consumer Key', placeholder: 'ck_xxxxxxxx', description: 'WooCommerce REST API Consumer Key bilginizi girin.' },
-    { key: 'consumerSecret', label: 'Consumer Secret', placeholder: 'cs_xxxxxxxx', type: 'password', description: 'WooCommerce REST API Consumer Secret bilginizi girin.' },
+    { key: 'url', label: 'Site URL', placeholder: 'https://example.com', description: 'WooCommerce sitenizin URL adresini girin. https:// ile başlamalı.' },
   ],
   helpUrl: 'https://woocommerce.com/document/woocommerce-rest-api/',
 };
@@ -367,13 +368,10 @@ export default function StoresPage() {
     bizimhesaps,
     parasuts,
     fetchInvoiceIntegrations,
-    createBizimhesap,
-    updateBizimhesap,
-    removeBizimhesap,
+    connectBizimhesap,
+    connectParasut,
+    disconnectProvider,
     testBizimhesapCredentials,
-    createParasut,
-    updateParasut,
-    removeParasut,
     testParasutCredentials,
     isSaving: isSavingInvoice,
   } = useInvoiceIntegrationStore();
@@ -442,6 +440,153 @@ export default function StoresPage() {
     if (currentCompany?.id) fetchFalIntegrations(currentCompany.id);
   }, [currentCompany?.id, fetchFalIntegrations]);
 
+  type CargoConnection = {
+    id: string;
+    provider: string;
+    apiUsername: string | null;
+    customerNumber: string | null;
+    identityType: number | null;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+  };
+  const [cargoConnections, setCargoConnections] = useState<CargoConnection[]>(
+    [],
+  );
+
+  // Backend cargo controller'ı `company/:companyId/cargo` altında — tüm cargo
+  // çağrılarında bu prefix gerekiyor. currentCompany yoksa fetch atlanır.
+  const fetchCargoConnections = async () => {
+    if (!currentCompany?.id) {
+      setCargoConnections([]);
+      return;
+    }
+    try {
+      const res = await api.get<CargoConnection[]>(
+        `/company/${currentCompany.id}/cargo/connections`,
+      );
+      setCargoConnections(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setCargoConnections([]);
+    }
+  };
+
+  // Kargo bağlantısı yönet akışı — Yönet butonundan açılır.
+  // identityType MNG entegrasyonunda sabit 1 (TC Kimlik); doc'a göre tek geçerli
+  // değer. UI'da seçenek tutmuyoruz, payload'ta her zaman 1 gönderiyoruz.
+  const [manageCargoId, setManageCargoId] = useState<string | null>(null);
+  const [manageCargoForm, setManageCargoForm] = useState<{
+    customerNumber: string;
+    password: string;
+  }>({ customerNumber: '', password: '' });
+  const [manageCargoActive, setManageCargoActive] = useState(true);
+  const [manageCargoShowPassword, setManageCargoShowPassword] = useState(false);
+  const [isManagingCargo, setIsManagingCargo] = useState(false);
+  const manageCargo = manageCargoId
+    ? cargoConnections.find((c) => c.id === manageCargoId) ?? null
+    : null;
+
+  const handleManageCargoClose = () => {
+    if (isManagingCargo) return;
+    setManageCargoId(null);
+    setManageCargoShowPassword(false);
+  };
+
+  const handleManageCargoSave = async () => {
+    if (!manageCargo) return;
+    if (!manageCargoForm.customerNumber.trim()) {
+      toast.danger('Müşteri numarası boş olamaz');
+      return;
+    }
+    setIsManagingCargo(true);
+    try {
+      const payload: {
+        customerNumber?: string;
+        password?: string;
+        isActive?: boolean;
+      } = {};
+      if (
+        manageCargoForm.customerNumber.trim() !==
+        (manageCargo.customerNumber ?? '')
+      ) {
+        payload.customerNumber = manageCargoForm.customerNumber.trim();
+      }
+      if (manageCargoForm.password) {
+        payload.password = manageCargoForm.password;
+      }
+      if (manageCargoActive !== manageCargo.isActive) {
+        payload.isActive = manageCargoActive;
+      }
+      if (Object.keys(payload).length === 0) {
+        setManageCargoId(null);
+        return;
+      }
+      if (!currentCompany?.id) return;
+      await api.patch(
+        `/company/${currentCompany.id}/cargo/connections/${manageCargo.id}`,
+        payload,
+      );
+      await fetchCargoConnections();
+      toast.success('Kargo bağlantısı güncellendi');
+      setManageCargoId(null);
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { status?: number; data?: { message?: string | string[] } };
+      };
+      const apiMessage = err.response?.data?.message;
+      let message: string;
+      if (err.response?.status === 403) {
+        message =
+          'Kargo bağlantısını değiştirme yetkiniz yok. Stokçu/ürün yükleyici rolündeki kullanıcılar bu işlemi yapamaz.';
+      } else {
+        message = Array.isArray(apiMessage)
+          ? apiMessage.join(', ')
+          : apiMessage ||
+            (error instanceof Error
+              ? error.message
+              : 'Kargo bağlantısı güncellenemedi');
+      }
+      toast.danger(message);
+    } finally {
+      setIsManagingCargo(false);
+    }
+  };
+
+  const handleManageCargoDelete = async () => {
+    if (!manageCargo) return;
+    if (!window.confirm('Bu kargo bağlantısı silinsin mi?')) return;
+    setIsManagingCargo(true);
+    try {
+      if (!currentCompany?.id) return;
+      await api.delete(
+        `/company/${currentCompany.id}/cargo/connections/${manageCargo.id}`,
+      );
+      await fetchCargoConnections();
+      toast.success('Kargo bağlantısı silindi');
+      setManageCargoId(null);
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { status?: number; data?: { message?: string } };
+      };
+      const apiMessage = err.response?.data?.message;
+      const message =
+        err.response?.status === 403
+          ? 'Kargo bağlantısını silme yetkiniz yok. Stokçu/ürün yükleyici rolündeki kullanıcılar bu işlemi yapamaz.'
+          : apiMessage || 'Silme işlemi başarısız';
+      toast.danger(message);
+    } finally {
+      setIsManagingCargo(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentCompany?.id) fetchCargoConnections();
+    // currentCompany switch'inde tekrar çekiyoruz; fetch fonksiyonu component
+    // içinde tanımlı olduğu için dep listesine eklemiyoruz (her render'da
+    // yeniden yaratılıyor).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCompany?.id]);
+
   const falSteps = [
     {
       key: 'apiKey' as const,
@@ -469,22 +614,25 @@ export default function StoresPage() {
     {
       key: 'firmId' as const,
       label: 'Firma ID',
-      placeholder: 'Bizim Hesap firma ID',
-      description: 'Bizim Hesap üzerindeki firma kimlik numarasını girin.',
+      placeholder: 'Örn. 12345',
+      description:
+        'Bizim Hesap B2B paneli veya entegrasyon dokümanında bulunan firma kimlik numarası. Fatura kesme isteklerinde kullanılır — formda göstermediğimiz tüm fatura çağrıları bu kaydı kullanır.',
       isPassword: false,
     },
     {
       key: 'apiKey' as const,
-      label: 'API Key',
-      placeholder: 'Bizim Hesap API Key',
-      description: 'Bizim Hesap addinvoice API Key bilgisi (boş bırakılırsa varsayılan kullanılır).',
+      label: 'API Key (opsiyonel)',
+      placeholder: 'Bizim Hesap B2B Key',
+      description:
+        'Hesabınıza özel bir B2B Key varsa girin. Boş bırakılırsa Bizim Hesap dokümantasyonundaki varsayılan B2B Key kullanılır.',
       isPassword: true,
     },
     {
       key: 'token' as const,
       label: 'Token',
-      placeholder: 'Bizim Hesap Token',
-      description: 'Bizim Hesap addinvoice Token bilginizi girin. Token şifreli saklanır.',
+      placeholder: 'Bizim Hesap B2B Token',
+      description:
+        'Bizim Hesap B2B panelinizden aldığınız Token değeri. Sunucuda AES-GCM ile şifrelenerek saklanır.',
       isPassword: true,
     },
   ];
@@ -512,17 +660,18 @@ export default function StoresPage() {
 
   const handleBizimhesapTest = async () => {
     if (!currentCompany?.id) return;
-    if (!bizimhesapForm.token.trim() || !bizimhesapForm.firmId.trim()) {
-      toast.danger('Token ve Firma ID gerekli');
+    if (!bizimhesapForm.token.trim()) {
+      toast.danger('Token gerekli');
       return;
     }
     setIsTestingBizimhesap(true);
     setBizimhesapTestResult(null);
+    // Test DTO doc'taki BizimhesapTestConnectionDto ile birebir: sadece
+    // {token?, apiKey?}. firmId test aşamasında sorulmaz (auth doğrulaması
+    // firma id'sini gerektirmez).
     const result = await testBizimhesapCredentials(currentCompany.id, {
-      name: bizimhesapForm.name.trim() || undefined,
-      apiKey: bizimhesapForm.apiKey.trim() || undefined,
       token: bizimhesapForm.token.trim(),
-      firmId: bizimhesapForm.firmId.trim(),
+      apiKey: bizimhesapForm.apiKey.trim() || undefined,
     });
     setBizimhesapTestResult({ success: result.ok, error: result.error });
     setIsTestingBizimhesap(false);
@@ -534,18 +683,40 @@ export default function StoresPage() {
       toast.danger('Token ve Firma ID gerekli');
       return;
     }
-    const result = await createBizimhesap(currentCompany.id, {
-      name: bizimhesapForm.name.trim() || undefined,
-      apiKey: bizimhesapForm.apiKey.trim() || undefined,
-      token: bizimhesapForm.token.trim(),
-      firmId: bizimhesapForm.firmId.trim(),
-    });
-    if (result) {
+    // ConnectBizimhesapDto — name yerine label kullanılır. Backend ilk önce
+    // token'ı test edip başarılıysa AES-GCM ile şifreleyip per-company upsert
+    // yapar. Aynı şirkette ikinci bir BizimHesap bağlantısı yoktur; bu çağrı
+    // mevcudu override eder.
+    try {
+      await connectBizimhesap(currentCompany.id, {
+        token: bizimhesapForm.token.trim(),
+        firmId: bizimhesapForm.firmId.trim(),
+        apiKey: bizimhesapForm.apiKey.trim() || undefined,
+        label: bizimhesapForm.name.trim() || undefined,
+      });
       toast.success('Bizim Hesap bağlandı');
       setBizimhesapForm({ name: '', firmId: '', apiKey: '', token: '' });
       handleBizimhesapDialogClose();
-    } else {
-      toast.danger('Bizim Hesap kaydedilemedi');
+    } catch (error: unknown) {
+      // Doc §6 + §7: 400 → backend mesajı (yanlış token, BH erişim hatası);
+      // 403 → STOCKIST/PRODUCT_UPLOADER rolü bu işlemi yapamaz.
+      const err = error as {
+        response?: {
+          status?: number;
+          data?: { message?: string | string[]; error?: string };
+        };
+      };
+      let text: string;
+      if (err.response?.status === 403) {
+        text =
+          'Bizim Hesap bağlantısı kurma yetkiniz yok. Stokçu/ürün yükleyici rolündeki kullanıcılar bu işlemi yapamaz — şirket sahibi veya yöneticisiyle iletişime geçin.';
+      } else {
+        const msg = err.response?.data?.message;
+        text = Array.isArray(msg)
+          ? msg.join(', ')
+          : msg || err.response?.data?.error || 'Bizim Hesap kaydedilemedi';
+      }
+      toast.danger(text);
     }
   };
 
@@ -557,28 +728,32 @@ export default function StoresPage() {
 
   const handleManageBizimhesapSave = async () => {
     if (!currentCompany?.id || !manageBizimhesap) return;
+    // Backend'de "isActive false" diye bir update yolu yok — bağlantı ya
+    // vardır ya yoktur. Kullanıcı switch'i kapadıysa kaydı tamamen siliyoruz.
     if (!manageBizimhesapActive) {
-      if (!window.confirm('Hesap pasif durumda kaydedilirse kaldırılacaktır. Devam edilsin mi?')) {
+      if (
+        !window.confirm(
+          'Hesap pasif durumda kaydedilirse kaldırılacaktır. Devam edilsin mi?',
+        )
+      ) {
         return;
       }
       setIsManagingBizimhesap(true);
-      await removeBizimhesap(currentCompany.id, manageBizimhesap.id);
-      setIsManagingBizimhesap(false);
-      toast.success('Bizim Hesap kaldırıldı');
-      handleManageBizimhesapClose();
-      return;
-    }
-    if (manageBizimhesap.isActive !== manageBizimhesapActive) {
-      setIsManagingBizimhesap(true);
-      const updated = await updateBizimhesap(currentCompany.id, manageBizimhesap.id, {
-        isActive: manageBizimhesapActive,
-      });
-      setIsManagingBizimhesap(false);
-      if (updated) {
-        toast.success('Ayarlar kaydedildi');
+      try {
+        await disconnectProvider(currentCompany.id, 'BIZIMHESAP');
+        toast.success('Bizim Hesap kaldırıldı');
         handleManageBizimhesapClose();
-      } else {
-        toast.danger('Kaydedilemedi');
+      } catch (error: unknown) {
+        const err = error as {
+          response?: { data?: { message?: string; error?: string } };
+        };
+        toast.danger(
+          err.response?.data?.message ||
+            err.response?.data?.error ||
+            'Kaldırılamadı',
+        );
+      } finally {
+        setIsManagingBizimhesap(false);
       }
       return;
     }
@@ -598,14 +773,16 @@ export default function StoresPage() {
       key: 'parasutCompanyId' as const,
       label: 'Paraşüt Şirket ID',
       placeholder: 'Örn. 123456',
-      description: 'Paraşüt panelindeki şirketinizin kimlik numarasını girin.',
+      description:
+        'Paraşüt API URL\'sindeki firma id (/v4/{şirket_id}/...). Panel adres çubuğundan da kopyalayabilirsiniz.',
       isPassword: false,
     },
     {
       key: 'username' as const,
-      label: 'Kullanıcı Adı',
-      placeholder: 'paraşüt@e-mail.com',
-      description: 'Paraşüt giriş kullanıcı adınızı (e-posta) girin.',
+      label: 'Kullanıcı Adı (e-posta)',
+      placeholder: 'muhasebe@firma.com',
+      description:
+        'Paraşüt hesabınıza giriş yaptığınız e-posta adresi. OAuth2 password grant\'ta kullanılır.',
       isPassword: false,
     },
     {
@@ -656,13 +833,15 @@ export default function StoresPage() {
     if (!currentCompany?.id) return;
     setIsTestingParasut(true);
     setParasutTestResult(null);
+    // ParasutTestConnectionDto: {email?, password?, clientId?, clientSecret?}.
+    // parasutCompanyId test'te kullanılmaz (OAuth token alma adımı şirket
+    // id'sini ister değil). Username form'da `username` olarak toplanıyor
+    // ama backend `email` key'ini bekliyor — burada map'liyoruz.
     const result = await testParasutCredentials(currentCompany.id, {
-      name: parasutForm.name.trim() || undefined,
-      clientId: parasutForm.clientId.trim(),
-      clientSecret: parasutForm.clientSecret.trim(),
-      username: parasutForm.username.trim(),
-      password: parasutForm.password,
-      parasutCompanyId: parasutForm.parasutCompanyId.trim(),
+      email: parasutForm.username.trim() || undefined,
+      password: parasutForm.password || undefined,
+      clientId: parasutForm.clientId.trim() || undefined,
+      clientSecret: parasutForm.clientSecret.trim() || undefined,
     });
     setParasutTestResult({ success: result.ok, error: result.error });
     setIsTestingParasut(false);
@@ -681,15 +860,17 @@ export default function StoresPage() {
       toast.danger('Tüm alanları doldurun');
       return;
     }
-    const result = await createParasut(currentCompany.id, {
-      name: parasutForm.name.trim() || undefined,
-      clientId: parasutForm.clientId.trim(),
-      clientSecret: parasutForm.clientSecret.trim(),
-      username: parasutForm.username.trim(),
-      password: parasutForm.password,
-      parasutCompanyId: parasutForm.parasutCompanyId.trim(),
-    });
-    if (result) {
+    // ConnectParasutDto — backend OAuth2 password grant ile token alır,
+    // başarılıysa credential'ları AES-GCM ile şifreleyip upsert eder.
+    try {
+      await connectParasut(currentCompany.id, {
+        clientId: parasutForm.clientId.trim(),
+        clientSecret: parasutForm.clientSecret.trim(),
+        username: parasutForm.username.trim(),
+        password: parasutForm.password,
+        parasutCompanyId: parasutForm.parasutCompanyId.trim(),
+        label: parasutForm.name.trim() || undefined,
+      });
       toast.success('Paraşüt bağlandı');
       setParasutForm({
         name: '',
@@ -700,8 +881,26 @@ export default function StoresPage() {
         password: '',
       });
       handleParasutDialogClose();
-    } else {
-      toast.danger('Paraşüt kaydedilemedi');
+    } catch (error: unknown) {
+      // Doc §7: 400 connect → "yanlış şifre, client id, veya Paraşüt erişim
+      // hatası". 403 → STOCKIST/PRODUCT_UPLOADER rolü bu işlemi yapamaz.
+      const err = error as {
+        response?: {
+          status?: number;
+          data?: { message?: string | string[]; error?: string };
+        };
+      };
+      let text: string;
+      if (err.response?.status === 403) {
+        text =
+          'Paraşüt bağlantısı kurma yetkiniz yok. Stokçu/ürün yükleyici rolündeki kullanıcılar bu işlemi yapamaz — şirket sahibi veya yöneticisiyle iletişime geçin.';
+      } else {
+        const msg = err.response?.data?.message;
+        text = Array.isArray(msg)
+          ? msg.join(', ')
+          : msg || err.response?.data?.error || 'Paraşüt kaydedilemedi';
+      }
+      toast.danger(text);
     }
   };
 
@@ -713,28 +912,32 @@ export default function StoresPage() {
 
   const handleManageParasutSave = async () => {
     if (!currentCompany?.id || !manageParasut) return;
+    // BizimHesap manage flow ile aynı: backend update endpoint'i yok, sadece
+    // disconnect var. Pasif toggle = kaldır.
     if (!manageParasutActive) {
-      if (!window.confirm('Hesap pasif durumda kaydedilirse kaldırılacaktır. Devam edilsin mi?')) {
+      if (
+        !window.confirm(
+          'Hesap pasif durumda kaydedilirse kaldırılacaktır. Devam edilsin mi?',
+        )
+      ) {
         return;
       }
       setIsManagingParasut(true);
-      await removeParasut(currentCompany.id, manageParasut.id);
-      setIsManagingParasut(false);
-      toast.success('Paraşüt kaldırıldı');
-      handleManageParasutClose();
-      return;
-    }
-    if (manageParasut.isActive !== manageParasutActive) {
-      setIsManagingParasut(true);
-      const updated = await updateParasut(currentCompany.id, manageParasut.id, {
-        isActive: manageParasutActive,
-      });
-      setIsManagingParasut(false);
-      if (updated) {
-        toast.success('Ayarlar kaydedildi');
+      try {
+        await disconnectProvider(currentCompany.id, 'PARASUT');
+        toast.success('Paraşüt kaldırıldı');
         handleManageParasutClose();
-      } else {
-        toast.danger('Kaydedilemedi');
+      } catch (error: unknown) {
+        const err = error as {
+          response?: { data?: { message?: string; error?: string } };
+        };
+        toast.danger(
+          err.response?.data?.message ||
+            err.response?.data?.error ||
+            'Kaldırılamadı',
+        );
+      } finally {
+        setIsManagingParasut(false);
       }
       return;
     }
@@ -962,14 +1165,14 @@ export default function StoresPage() {
   // sabit; frontend yalnızca müşteri kimliklerini gönderiyor.
   const [dhlModalOpen, setDhlModalOpen] = useState(false);
   const [dhlCurrentStep, setDhlCurrentStep] = useState(0);
+  // identityType MNG connect DTO'sunda sabit 1 — doc'a göre tek geçerli değer.
+  // Form'da kullanıcıya sormuyoruz, payload'da her zaman 1 gönderiyoruz.
   const [dhlForm, setDhlForm] = useState<{
     customerNumber: string;
     password: string;
-    identityType: 1 | 2;
   }>({
     customerNumber: '',
     password: '',
-    identityType: 1,
   });
   const [dhlShowPassword, setDhlShowPassword] = useState(false);
   const [isDhlSaving, setIsDhlSaving] = useState(false);
@@ -981,12 +1184,6 @@ export default function StoresPage() {
         placeholder: string;
         description: string;
         kind: 'text';
-      }
-    | {
-        key: 'identityType';
-        label: string;
-        description: string;
-        kind: 'choice';
       }
     | {
         key: 'password';
@@ -1003,12 +1200,6 @@ export default function StoresPage() {
       placeholder: 'DHL müşteri numaranız',
       description: 'DHL sözleşmenizde / portalında yer alan müşteri ID.',
       kind: 'text',
-    },
-    {
-      key: 'identityType',
-      label: 'Kimlik Tipi',
-      description: 'Hesap bireysel mi (TC kimlik) yoksa kurumsal mı (vergi numarası)?',
-      kind: 'choice',
     },
     {
       key: 'password',
@@ -1038,6 +1229,13 @@ export default function StoresPage() {
     connecting: false,
     disconnecting: false,
   });
+
+  // Trendyol settings tab — Webhook'u yeniden kur / Son siparişleri çek
+  // butonlarının yükleme durumları.
+  const [trendyolActionState, setTrendyolActionState] = useState<{
+    webhookSetup: boolean;
+    recentOrders: boolean;
+  }>({ webhookSetup: false, recentOrders: false });
 
   const totalSteps = selectedMarketplace?.steps?.length || 0;
   const isLastStep = currentStep === totalSteps;
@@ -1225,6 +1423,56 @@ export default function StoresPage() {
     }
   };
 
+  // Trendyol panelinde aboneliği yenile — satıcı başına 15 webhook limiti var,
+  // backend gerekirse eski kaydı silip yeni kuruyor.
+  const handleTrendyolWebhookSetup = async () => {
+    if (!currentCompany?.id || !settingsModalStoreId) return;
+    setTrendyolActionState((prev) => ({ ...prev, webhookSetup: true }));
+    try {
+      await api.post(
+        `/company/${currentCompany.id}/stores/${settingsModalStoreId}/trendyol/webhook/setup`,
+      );
+      toast.success('Trendyol webhook aboneliği yenilendi');
+      await fetchStores(currentCompany.id);
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      toast.danger(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          'Webhook kurulamadı',
+      );
+    } finally {
+      setTrendyolActionState((prev) => ({ ...prev, webhookSetup: false }));
+    }
+  };
+
+  // Sipariş pull yedek — webhook bir süredir gelmiyorsa veya son siparişler
+  // dashboard'a düşmediyse kullanıcı buradan tetikler. Doc §5'e göre üst sınır
+  // 720 saat (30 gün), default 2 saat; biz 24 saatlik pencereyi seçtik.
+  const handleTrendyolSyncRecentOrders = async () => {
+    if (!currentCompany?.id || !settingsModalStoreId) return;
+    setTrendyolActionState((prev) => ({ ...prev, recentOrders: true }));
+    try {
+      await api.post(
+        `/company/${currentCompany.id}/stores/${settingsModalStoreId}/trendyol/sync-recent-orders?sinceHours=24`,
+      );
+      toast.success('Son 24 saatin siparişleri senkronize edildi');
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string; error?: string } };
+      };
+      toast.danger(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          'Sipariş senkronizasyonu başarısız',
+      );
+    } finally {
+      setTrendyolActionState((prev) => ({ ...prev, recentOrders: false }));
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success('Panoya kopyalandı');
@@ -1235,7 +1483,7 @@ export default function StoresPage() {
     // DHL'in kendi stepper'ı — alanlar farklı olduğu için Marketplace
     // stepper'ından ayrı bir akış kullanıyor ama görsel olarak aynı.
     if (marketplace.id === 'DHL') {
-      setDhlForm({ customerNumber: '', password: '', identityType: 1 });
+      setDhlForm({ customerNumber: '', password: '' });
       setDhlShowPassword(false);
       setDhlCurrentStep(0);
       setDhlModalOpen(true);
@@ -1314,11 +1562,6 @@ export default function StoresPage() {
   const handleDhlNext = () => {
     const step = dhlSteps[dhlCurrentStep];
     if (!step) return;
-    if (step.kind === 'choice') {
-      // identityType'ın her zaman bir değeri var (default = 1).
-      setDhlCurrentStep((prev) => prev + 1);
-      return;
-    }
     const value = dhlForm[step.key];
     if (!value.trim()) {
       toast.danger(`${step.label} gerekli`);
@@ -1334,27 +1577,44 @@ export default function StoresPage() {
     }
     setIsDhlSaving(true);
     try {
-      // POST /api/cargo/mng/connect — backend, IBM API Gateway client
-      // bilgilerini .env'den (MNG_CLIENT_ID/SECRET) okur. Bu uçtan müşteri
-      // numarası + şifre + identityType ile MNG token endpoint'i denenir,
-      // başarılıysa ShippingProvider kaydı upsert edilir.
-      await api.post('/cargo/mng/connect', {
+      // POST /api/company/:companyId/cargo/mng/connect — backend, IBM API
+      // Gateway client bilgilerini .env'den (MNG_CLIENT_ID/SECRET) okur. Bu
+      // uçtan müşteri numarası + şifre + identityType ile MNG token endpoint'i
+      // denenir, başarılıysa ShippingProvider kaydı upsert edilir.
+      if (!currentCompany?.id) {
+        toast.danger('Aktif şirket seçili değil');
+        setIsDhlSaving(false);
+        return;
+      }
+      await api.post(`/company/${currentCompany.id}/cargo/mng/connect`, {
         customerNumber: dhlForm.customerNumber.trim(),
         password: dhlForm.password,
-        identityType: dhlForm.identityType,
+        identityType: 1,
       });
+      await fetchCargoConnections();
       toast.success('DHL bağlandı');
       handleDhlDialogClose();
     } catch (error: unknown) {
-      const apiMessage = (
-        error as { response?: { data?: { message?: string | string[] } } }
-      )?.response?.data?.message;
-      const message = Array.isArray(apiMessage)
-        ? apiMessage.join(', ')
-        : apiMessage ||
-          (error instanceof Error
-            ? error.message
-            : 'DHL bağlantısı kaydedilemedi');
+      const err = error as {
+        response?: { status?: number; data?: { message?: string | string[] } };
+      };
+      const apiMessage = err.response?.data?.message;
+      const status = err.response?.status;
+      // Doc §"Yetki": STOCKIST ve PRODUCT_UPLOADER 403 alır. Backend mesajı
+      // genelde "Bu işlem için yetkiniz yok" gibi soyut bir şey döner — net
+      // bir yönerge gösteriyoruz.
+      let message: string;
+      if (status === 403) {
+        message =
+          'DHL bağlantısı kurmak için yetkiniz yok. Stokçu/ürün yükleyici rolündeki kullanıcılar bu işlemi yapamaz — şirket sahibi veya yöneticisiyle iletişime geçin.';
+      } else {
+        message = Array.isArray(apiMessage)
+          ? apiMessage.join(', ')
+          : apiMessage ||
+            (error instanceof Error
+              ? error.message
+              : 'DHL bağlantısı kaydedilemedi');
+      }
       toast.danger(message);
     } finally {
       setIsDhlSaving(false);
@@ -1379,12 +1639,12 @@ export default function StoresPage() {
       toast.danger(`${step.label} gerekli`);
       return false;
     }
-    if (step.key === 'consumerKey' && value.length < 32) {
-      toast.danger('Consumer Key en az 32 karakter olmalı');
-      return false;
-    }
-    if (step.key === 'consumerSecret' && value.length < 32) {
-      toast.danger('Consumer Secret en az 32 karakter olmalı');
+    if (
+      selectedMarketplace?.platform === 'WOOCOMMERCE' &&
+      step.key === 'url' &&
+      !/^https:\/\/.+/i.test(value)
+    ) {
+      toast.danger('URL https:// ile başlamalı');
       return false;
     }
     if (
@@ -1484,26 +1744,6 @@ export default function StoresPage() {
             error: response.data.error || 'Bağlantı kurulamadı',
           });
         }
-      } else if (selectedMarketplace.platform === 'WOOCOMMERCE') {
-        // WooCommerce de Shopify/Trendyol gibi unified marketplace endpoint'i
-        // kullanır. `url` provider tarafında `credentials.url` ya da
-        // `config.url`'den okunur; biz credentials içinde gönderiyoruz.
-        const response = await api.post(
-          `/company/${currentCompany.id}/stores/marketplace/WOOCOMMERCE/test`,
-          {
-            credentials: {
-              url: formData.url.trim(),
-              consumerKey: formData.consumerKey.trim(),
-              consumerSecret: formData.consumerSecret.trim(),
-            },
-          }
-        );
-        if (response.data.success) setTestResult({ success: true });
-        else
-          setTestResult({
-            success: false,
-            error: response.data.error || 'Bağlantı kurulamadı',
-          });
       } else {
         setTestResult({
           success: false,
@@ -1511,10 +1751,18 @@ export default function StoresPage() {
         });
       }
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Bağlantı testi başarısız';
+      const status = error.response?.status;
+      const apiMessage =
+        error.response?.data?.error || error.response?.data?.message;
+      // Trendyol 403'ü genelde ya çıkış IP'si Trendyol panelinde beyaz listede
+      // değildir ya da apiKey/secret çiftini stage modunda oluşturup prod'a
+      // (veya tersi) bağlanılmaya çalışılmıştır — kullanıcıya açıkça söyle.
+      const trendyol403 =
+        selectedMarketplace?.platform === 'TRENDYOL' && status === 403;
+      const errorMessage = trendyol403
+        ? apiMessage ||
+          'Trendyol bağlantısı reddedildi (403). Olası nedenler: API anahtarınız stage/prod ortamıyla uyumsuz ya da Balina sunucusunun IP adresi Trendyol satıcı panelinde beyaz listeye eklenmemiş.'
+        : apiMessage || 'Bağlantı testi başarısız';
       setTestResult({ success: false, error: errorMessage });
     } finally {
       setIsTesting(false);
@@ -1540,6 +1788,9 @@ export default function StoresPage() {
         newStoreId = response.data?.id ?? null;
         await fetchStores(currentCompany.id);
       } else if (selectedMarketplace.platform === 'TRENDYOL') {
+        // sellerId hem credentials hem config içinde gönderilmeli — backend
+        // ikisini birleştiriyor ama eksik kalırsa upsert sırasında satıcı no
+        // bulunamayıp create başarısız olabiliyor (doc §3.1).
         const response = await api.post(
           `/company/${currentCompany.id}/stores/marketplace/TRENDYOL`,
           {
@@ -1550,6 +1801,7 @@ export default function StoresPage() {
               sellerId: formData.sellerId.trim(),
             },
             config: {
+              sellerId: formData.sellerId.trim(),
               environment: formData.environment,
               storeFrontCode: 'TR',
               integrationLabel: 'SelfIntegration',
@@ -1575,29 +1827,19 @@ export default function StoresPage() {
         );
         newStoreId = response.data?.id ?? null;
         await fetchStores(currentCompany.id);
-      } else if (selectedMarketplace.platform === 'WOOCOMMERCE') {
-        // Unified marketplace endpoint — frontend artık eski `/stores`
-        // endpoint'ine gitmiyor, böylece formData içindeki diğer platform
-        // field'ları (shopDomain, apiKey, vb.) backend'in whitelist
-        // validation'ına takılmıyor.
-        const response = await api.post(
-          `/company/${currentCompany.id}/stores/marketplace/WOOCOMMERCE`,
-          {
-            name: formData.name,
-            url: formData.url.trim(),
-            credentials: {
-              consumerKey: formData.consumerKey.trim(),
-              consumerSecret: formData.consumerSecret.trim(),
-            },
-          }
-        );
-        newStoreId = response.data?.id ?? null;
-        await fetchStores(currentCompany.id);
       } else {
         toast.danger('Bu pazaryeri için bağlantı henüz desteklenmiyor');
         return;
       }
-      toast.success('Mağaza başarıyla bağlandı');
+      if (selectedMarketplace.platform === 'TRENDYOL') {
+        // Trendyol kayıttan sonra arka planda webhook kurulumu + ürün/sipariş
+        // çekimi başlatır; kullanıcıya bekleme süresinin normal olduğunu söyle.
+        toast.success(
+          'Mağaza bağlandı. Webhook arka planda kuruluyor, ürünler ve son siparişler birkaç dakika içinde senkronize edilecek.',
+        );
+      } else {
+        toast.success('Mağaza başarıyla bağlandı');
+      }
       handleDialogClose();
 
       // Shopify shopDomain'i lokal cache'e yaz — backend response'da henüz
@@ -1629,10 +1871,15 @@ export default function StoresPage() {
         await fetchStores(currentCompany.id);
       }
     } catch (error: any) {
-      const errorMessage =
-        error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Mağaza bağlanamadı';
+      const status = error.response?.status;
+      const apiMessage =
+        error.response?.data?.error || error.response?.data?.message;
+      const trendyol403 =
+        selectedMarketplace?.platform === 'TRENDYOL' && status === 403;
+      const errorMessage = trendyol403
+        ? apiMessage ||
+          'Trendyol bağlantısı reddedildi (403). API anahtarınızın stage/prod uyumunu ve Balina IP adresinin Trendyol panelinde beyaz listede olduğunu kontrol edin.'
+        : apiMessage || 'Mağaza bağlanamadı';
       if (errorMessage.includes('limit') || errorMessage.includes('Limit')) {
         handleDialogClose();
         setShowUpgradeDialog(true);
@@ -1640,6 +1887,45 @@ export default function StoresPage() {
         toast.danger(errorMessage);
       }
     } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // WooCommerce one-click OAuth — kullanıcıyı WP admin'in `/wc-auth/v1/authorize`
+  // ekranına yollar. Backend, callback'i alıp store + webhook'ları otomatik
+  // oluşturur. Return URL `/integrations/woocommerce/return?state=...` —
+  // sayfa state'i sessionStorage'dan okuyup status polling yapar.
+  const handleWoocommerceStart = async () => {
+    if (!currentCompany?.id) return;
+    setIsSubmitting(true);
+    try {
+      const response = await api.post(
+        `/company/${currentCompany.id}/stores/woocommerce/auth/start`,
+        { name: formData.name, url: formData.url.trim() }
+      );
+      const { authorizeUrl, state } = response.data as {
+        authorizeUrl: string;
+        state: string;
+        expiresAt: string;
+      };
+      // Return sayfası companyId + state'i buradan okur — WP roundtrip'i sırasında
+      // currentCompany değişmiş olsa bile akış doğru şirkete bağlı kalır.
+      sessionStorage.setItem('wcAuthCompanyId', currentCompany.id);
+      sessionStorage.setItem('wcAuthState', state);
+      window.location.href = authorizeUrl;
+      // Redirect başlattık — finally setIsSubmitting(false) çalışmasın diye
+      // erken return etmiyoruz; sayfa unmount olacak.
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'WooCommerce bağlantısı başlatılamadı';
+      if (errorMessage.includes('limit') || errorMessage.includes('Limit')) {
+        handleDialogClose();
+        setShowUpgradeDialog(true);
+      } else {
+        toast.danger(errorMessage);
+      }
       setIsSubmitting(false);
     }
   };
@@ -1776,7 +2062,8 @@ export default function StoresPage() {
             fals.length > 0 ||
             fashns.length > 0 ||
             bizimhesaps.length > 0 ||
-            parasuts.length > 0) && (
+            parasuts.length > 0 ||
+            cargoConnections.length > 0) && (
             <section className="flex flex-col gap-4">
               <h2 className="text-sm font-medium text-foreground">Bağlı Olanlar</h2>
               <div
@@ -1931,10 +2218,10 @@ export default function StoresPage() {
                     />
                     <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {bh.name}
+                        {bh.label || 'Bizim Hesap'}
                       </span>
                       <span className="truncate text-xs text-[#737373]">
-                        Bizim Hesap • Firma {bh.firmId}
+                        Bizim Hesap • Firma {bh.config.firmId || '—'}
                       </span>
                     </div>
                     <Button
@@ -1961,10 +2248,10 @@ export default function StoresPage() {
                     />
                     <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
                       <span className="truncate text-sm font-medium text-foreground">
-                        {ps.name}
+                        {ps.label || 'Paraşüt'}
                       </span>
                       <span className="truncate text-xs text-[#737373]">
-                        Paraşüt • {ps.username}
+                        Paraşüt • Şirket {ps.config.parasutCompanyId || '—'}
                       </span>
                     </div>
                     <Button
@@ -1980,6 +2267,54 @@ export default function StoresPage() {
                     </Button>
                   </div>
                 ))}
+
+                {/* Bağlı kargo hesapları — backend tarafında provider 'MNG'
+                olarak saklanır; UI'da DHL adıyla bağlandığı için "DHL" diye
+                gösteriyoruz. */}
+                {cargoConnections.map((cn) => {
+                  const label = cn.provider === 'MNG' ? 'DHL' : cn.provider;
+                  const meta = cn.customerNumber
+                    ? `Müşteri No: ${cn.customerNumber}`
+                    : cn.apiUsername || cn.provider;
+                  return (
+                    <div
+                      key={cn.id}
+                      className="flex items-center gap-3 p-3"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_0_0.5px_rgba(0,0,0,0.07)]">
+                        <img
+                          src="/figma/integrations/dhl.png"
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {label}
+                        </span>
+                        <span className="truncate text-xs text-[#737373]">
+                          {meta}
+                        </span>
+                      </div>
+                      <Button
+                        variant="tertiary"
+                        size="sm"
+                        onPress={() => {
+                          setManageCargoId(cn.id);
+                          setManageCargoForm({
+                            customerNumber: cn.customerNumber ?? '',
+                            password: '',
+                          });
+                          setManageCargoActive(cn.isActive);
+                          setManageCargoShowPassword(false);
+                        }}
+                        className={pillBtnClass}
+                      >
+                        Yönet
+                      </Button>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -2168,107 +2503,149 @@ export default function StoresPage() {
                     </div>
                     <div className="flex-1">
                       {isLastStep ? (
-                        <div className="flex flex-col gap-3">
-                          <Label>Bağlantı Testi</Label>
-                          <p className="text-sm text-muted">
-                            Girdiğiniz bilgilerle bağlantıyı test edin.
-                          </p>
-                          <Card>
-                            <Card.Content className="flex flex-col gap-1 text-sm">
-                              <p>
-                                <span className="text-muted">Mağaza:</span>{' '}
-                                {formData.name}
-                              </p>
-                              {selectedMarketplace?.platform === 'SHOPIFY' ? (
+                        selectedMarketplace?.platform === 'WOOCOMMERCE' ? (
+                          <div className="flex flex-col gap-3">
+                            <Label>WooCommerce'a Yönlendir</Label>
+                            <p className="text-sm text-muted">
+                              Sonraki adımda WooCommerce sitenize gideceksiniz. WP admin'e
+                              giriş yapıp <strong>Approve</strong> butonuna tıkladıktan sonra
+                              otomatik olarak geri döneceksiniz.
+                            </p>
+                            <Card>
+                              <Card.Content className="flex flex-col gap-1 text-sm">
                                 <p>
-                                  <span className="text-muted">Domain:</span>{' '}
-                                  {formData.shopDomain}
+                                  <span className="text-muted">Mağaza:</span>{' '}
+                                  {formData.name}
                                 </p>
-                              ) : selectedMarketplace?.platform === 'TRENDYOL' ? (
-                                <>
-                                  <p>
-                                    <span className="text-muted">Satıcı ID:</span>{' '}
-                                    {formData.sellerId}
-                                  </p>
-                                  <p>
-                                    <span className="text-muted">Ortam:</span>{' '}
-                                    {formData.environment === 'prod' ? 'Prod' : 'Stage'}
-                                  </p>
-                                </>
-                              ) : selectedMarketplace?.platform === 'HEPSIBURADA' ? (
-                                <>
-                                  <p>
-                                    <span className="text-muted">Merchant ID:</span>{' '}
-                                    {formData.merchantId}
-                                  </p>
-                                  <p>
-                                    <span className="text-muted">Kullanıcı:</span>{' '}
-                                    {formData.hbUsername}
-                                  </p>
-                                </>
-                              ) : (
                                 <p>
                                   <span className="text-muted">URL:</span>{' '}
                                   {formData.url}
                                 </p>
-                              )}
-                            </Card.Content>
-                          </Card>
-                          <Button
-                            onPress={handleTestConnection}
-                            isDisabled={isTesting}
-                            isPending={isTesting}
-                            variant="outline"
-                            fullWidth
-                          >
-                            {isTesting ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Test ediliyor...
-                              </>
-                            ) : (
-                              'Bağlantıyı Test Et'
-                            )}
-                          </Button>
-                          {testResult && (
-                            <Alert
-                              status={testResult.success ? 'success' : 'danger'}
+                              </Card.Content>
+                            </Card>
+                            <Button
+                              onPress={handleWoocommerceStart}
+                              isDisabled={isSubmitting}
+                              isPending={isSubmitting}
+                              fullWidth
                             >
-                              <Alert.Indicator />
-                              <Alert.Content>
-                                <Alert.Title>
-                                  {testResult.success
-                                    ? testResult.meta?.shopName
-                                      ? `Bağlandı: ${testResult.meta.shopName}${
-                                          testResult.meta.currency
-                                            ? ` (${testResult.meta.currency})`
-                                            : ''
-                                        }`
-                                      : 'Bağlantı başarılı!'
-                                    : testResult.error}
-                                </Alert.Title>
-                              </Alert.Content>
-                            </Alert>
-                          )}
-                          <Button
-                            onPress={handleConnect}
-                            isDisabled={isSubmitting || !testResult?.success}
-                            isPending={isSubmitting}
-                            fullWidth
-                          >
-                            {isSubmitting ? (
-                              <>
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Bağlanıyor...
-                              </>
-                            ) : (
-                              'Mağazayı Bağla'
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Yönlendiriliyor...
+                                </>
+                              ) : (
+                                "WooCommerce'a Git"
+                              )}
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-3">
+                            <Label>Bağlantı Testi</Label>
+                            <p className="text-sm text-muted">
+                              Girdiğiniz bilgilerle bağlantıyı test edin.
+                            </p>
+                            <Card>
+                              <Card.Content className="flex flex-col gap-1 text-sm">
+                                <p>
+                                  <span className="text-muted">Mağaza:</span>{' '}
+                                  {formData.name}
+                                </p>
+                                {selectedMarketplace?.platform === 'SHOPIFY' ? (
+                                  <p>
+                                    <span className="text-muted">Domain:</span>{' '}
+                                    {formData.shopDomain}
+                                  </p>
+                                ) : selectedMarketplace?.platform === 'TRENDYOL' ? (
+                                  <>
+                                    <p>
+                                      <span className="text-muted">Satıcı ID:</span>{' '}
+                                      {formData.sellerId}
+                                    </p>
+                                    <p>
+                                      <span className="text-muted">Ortam:</span>{' '}
+                                      {formData.environment === 'prod' ? 'Prod' : 'Stage'}
+                                    </p>
+                                  </>
+                                ) : selectedMarketplace?.platform === 'HEPSIBURADA' ? (
+                                  <>
+                                    <p>
+                                      <span className="text-muted">Merchant ID:</span>{' '}
+                                      {formData.merchantId}
+                                    </p>
+                                    <p>
+                                      <span className="text-muted">Kullanıcı:</span>{' '}
+                                      {formData.hbUsername}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <p>
+                                    <span className="text-muted">URL:</span>{' '}
+                                    {formData.url}
+                                  </p>
+                                )}
+                              </Card.Content>
+                            </Card>
+                            <Button
+                              onPress={handleTestConnection}
+                              isDisabled={isTesting}
+                              isPending={isTesting}
+                              variant="outline"
+                              fullWidth
+                            >
+                              {isTesting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Test ediliyor...
+                                </>
+                              ) : (
+                                'Bağlantıyı Test Et'
+                              )}
+                            </Button>
+                            {testResult && (
+                              <Alert
+                                status={testResult.success ? 'success' : 'danger'}
+                              >
+                                <Alert.Indicator />
+                                <Alert.Content>
+                                  <Alert.Title>
+                                    {testResult.success
+                                      ? testResult.meta?.shopName
+                                        ? `Bağlandı: ${testResult.meta.shopName}${
+                                            testResult.meta.currency
+                                              ? ` (${testResult.meta.currency})`
+                                              : ''
+                                          }`
+                                        : 'Bağlantı başarılı!'
+                                      : testResult.error}
+                                  </Alert.Title>
+                                </Alert.Content>
+                              </Alert>
                             )}
-                          </Button>
-                        </div>
+                            <Button
+                              onPress={handleConnect}
+                              isDisabled={isSubmitting || !testResult?.success}
+                              isPending={isSubmitting}
+                              fullWidth
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Bağlanıyor...
+                                </>
+                              ) : (
+                                'Mağazayı Bağla'
+                              )}
+                            </Button>
+                          </div>
+                        )
                       ) : (
                         <div className="pt-1.5">
-                          <span className="text-sm text-muted">Bağlantı Testi</span>
+                          <span className="text-sm text-muted">
+                            {selectedMarketplace?.platform === 'WOOCOMMERCE'
+                              ? "WooCommerce'a Yönlendir"
+                              : 'Bağlantı Testi'}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -2340,46 +2717,7 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isDhlLastStep ? (
                             <div className="flex flex-col gap-3">
-                              {step.kind === 'choice' ? (
-                                <>
-                                  <Label>{step.label}</Label>
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <Button
-                                      variant={
-                                        dhlForm.identityType === 1
-                                          ? 'primary'
-                                          : 'tertiary'
-                                      }
-                                      onPress={() =>
-                                        setDhlForm((prev) => ({
-                                          ...prev,
-                                          identityType: 1,
-                                        }))
-                                      }
-                                      fullWidth
-                                    >
-                                      TC Kimlik
-                                    </Button>
-                                    <Button
-                                      variant={
-                                        dhlForm.identityType === 2
-                                          ? 'primary'
-                                          : 'tertiary'
-                                      }
-                                      onPress={() =>
-                                        setDhlForm((prev) => ({
-                                          ...prev,
-                                          identityType: 2,
-                                        }))
-                                      }
-                                      fullWidth
-                                    >
-                                      Vergi No
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : (
-                                <TextField
+                              <TextField
                                   value={dhlForm[step.key]}
                                   onChange={(value) =>
                                     setDhlForm((prev) => ({
@@ -2424,7 +2762,6 @@ export default function StoresPage() {
                                     <Input placeholder={step.placeholder} />
                                   )}
                                 </TextField>
-                              )}
                               <p className="text-sm text-muted">{step.description}</p>
                               <Button onPress={handleDhlNext} fullWidth>
                                 İleri
@@ -2443,13 +2780,6 @@ export default function StoresPage() {
                               {isCompleted && step.key === 'customerNumber' && (
                                 <p className="mt-0.5 truncate text-xs text-muted/70">
                                   {dhlForm.customerNumber}
-                                </p>
-                              )}
-                              {isCompleted && step.key === 'identityType' && (
-                                <p className="mt-0.5 truncate text-xs text-muted/70">
-                                  {dhlForm.identityType === 1
-                                    ? 'TC Kimlik'
-                                    : 'Vergi Numarası'}
                                 </p>
                               )}
                               {isCompleted && step.key === 'password' && (
@@ -2809,7 +3139,7 @@ export default function StoresPage() {
                         <Input placeholder="örn. KZ" />
                       </TextField>
                       <p className="text-[11px] text-muted">
-                        Üretilen görsel/videoların sağ alt köşesinde gösterilir.
+                        Üretilen görsel/videoların sol alt köşesinde gösterilir.
                         Örn: <span className="font-mono">{manageFalCodePrefix.trim() || 'KZ'}-001</span>
                       </p>
                     </div>
@@ -3303,6 +3633,14 @@ export default function StoresPage() {
                   (() => {
                     const currentStore = stores.find((s) => s.id === settingsModalStoreId);
                     const isConnected = currentStore?.hasWcscPlugin;
+                    // WCSC sadece WooCommerce için anlamlı (WordPress plugin
+                    // bazlı). Trendyol/Shopify mağazalarında tab'ı gizliyoruz.
+                    // Legacy kayıtlarda platform undefined olabilir — onları
+                    // WooCommerce kabul ediyoruz.
+                    const isWoocommerce =
+                      !currentStore?.platform ||
+                      currentStore.platform === 'WOOCOMMERCE';
+                    const isTrendyol = currentStore?.platform === 'TRENDYOL';
                     return (
                       <Tabs defaultSelectedKey="general">
                         <Tabs.ListContainer>
@@ -3311,10 +3649,18 @@ export default function StoresPage() {
                               Genel
                               <Tabs.Indicator />
                             </Tabs.Tab>
-                            <Tabs.Tab id="wcsc">
-                              Stok Sync
-                              <Tabs.Indicator />
-                            </Tabs.Tab>
+                            {isWoocommerce && (
+                              <Tabs.Tab id="wcsc">
+                                Stok Sync
+                                <Tabs.Indicator />
+                              </Tabs.Tab>
+                            )}
+                            {isTrendyol && (
+                              <Tabs.Tab id="trendyol">
+                                Trendyol
+                                <Tabs.Indicator />
+                              </Tabs.Tab>
+                            )}
                           </Tabs.List>
                         </Tabs.ListContainer>
                         <Tabs.Panel
@@ -3467,6 +3813,7 @@ export default function StoresPage() {
                             </Button>
                           </div>
                         </Tabs.Panel>
+                        {isWoocommerce && (
                         <Tabs.Panel
                           id="wcsc"
                           className="mt-4 flex flex-col gap-4"
@@ -3664,6 +4011,85 @@ export default function StoresPage() {
                             </>
                           )}
                         </Tabs.Panel>
+                        )}
+                        {isTrendyol && (
+                          <Tabs.Panel
+                            id="trendyol"
+                            className="mt-4 flex flex-col gap-4"
+                          >
+                            <div className="rounded-lg border border-default/60 bg-surface-secondary/50 p-4">
+                              <div className="flex items-start gap-3">
+                                <Plug className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
+                                <div className="flex flex-col gap-1">
+                                  <p className="text-sm font-medium">
+                                    Webhook aboneliği
+                                  </p>
+                                  <p className="text-xs text-muted">
+                                    Trendyol siparişleri webhook üzerinden anlık iletilir.
+                                    Abonelik düşerse veya bağlantı testinde hata alırsanız
+                                    yenileyebilirsiniz. (Satıcı başına 15 webhook limiti
+                                    geçerlidir; mevcut Balina kaydı gerekirse otomatik silinir.)
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                onPress={handleTrendyolWebhookSetup}
+                                isDisabled={trendyolActionState.webhookSetup}
+                                isPending={trendyolActionState.webhookSetup}
+                                variant="outline"
+                                fullWidth
+                                className="mt-3"
+                              >
+                                {trendyolActionState.webhookSetup ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Yenileniyor...
+                                  </>
+                                ) : (
+                                  "Webhook'u yeniden kur"
+                                )}
+                              </Button>
+                            </div>
+
+                            <div className="rounded-lg border border-default/60 bg-surface-secondary/50 p-4">
+                              <div className="flex items-start gap-3">
+                                <RefreshCw className="mt-0.5 h-5 w-5 shrink-0 text-muted" />
+                                <div className="flex flex-col gap-1">
+                                  <p className="text-sm font-medium">
+                                    Son siparişleri çek
+                                  </p>
+                                  <p className="text-xs text-muted">
+                                    Trendyol API'sinden son 24 saatin siparişlerini çekip
+                                    eşitler. Webhook gecikmesi veya gözden kaçan paket
+                                    olduğunu düşünüyorsanız tetikleyin.
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                onPress={handleTrendyolSyncRecentOrders}
+                                isDisabled={trendyolActionState.recentOrders}
+                                isPending={trendyolActionState.recentOrders}
+                                variant="outline"
+                                fullWidth
+                                className="mt-3"
+                              >
+                                {trendyolActionState.recentOrders ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Senkronize ediliyor...
+                                  </>
+                                ) : (
+                                  'Son 24 saati senkronize et'
+                                )}
+                              </Button>
+                            </div>
+
+                            <p className="text-center text-xs text-muted">
+                              Tam senkron için Genel sekmesindeki <strong>Senkronize Et</strong>
+                              {' '}butonunu kullanabilirsiniz (son 30 günü kapsar).
+                            </p>
+                          </Tabs.Panel>
+                        )}
                       </Tabs>
                     );
                   })()}
@@ -3745,8 +4171,10 @@ export default function StoresPage() {
               </Modal.Header>
               <Modal.Body>
                 {bizimhesaps.length > 0 && (
-                  <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-foreground/80">
-                    {bizimhesaps.length} bağlı hesap mevcut. Yeni bilgiler girerek ek hesap ekleyebilirsiniz.
+                  <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground/80">
+                    Mevcut bir Bizim Hesap bağlantınız zaten var. Bu form'u doldurup
+                    kaydederseniz mevcut bağlantı yeni bilgilerle değiştirilir
+                    (şirket başına tek aktif bağlantı tutuluyor).
                   </div>
                 )}
 
@@ -3966,13 +4394,10 @@ export default function StoresPage() {
                       />
                       <div className="flex min-w-0 flex-1 flex-col">
                         <p className="truncate text-sm font-medium">
-                          {manageBizimhesap.name}
+                          {manageBizimhesap.label || 'Bizim Hesap'}
                         </p>
                         <p className="truncate text-xs text-muted">
-                          Bizim Hesap • Firma {manageBizimhesap.firmId}
-                          {manageBizimhesap.tokenTail
-                            ? ` • Token ••••${manageBizimhesap.tokenTail}`
-                            : ''}
+                          Bizim Hesap • Firma {manageBizimhesap.config.firmId || '—'}
                         </p>
                       </div>
                       <Switch
@@ -4027,8 +4452,10 @@ export default function StoresPage() {
               </Modal.Header>
               <Modal.Body>
                 {parasuts.length > 0 && (
-                  <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-foreground/80">
-                    {parasuts.length} bağlı hesap mevcut. Yeni bilgiler girerek ek hesap ekleyebilirsiniz.
+                  <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground/80">
+                    Mevcut bir Paraşüt bağlantınız zaten var. Bu form'u doldurup
+                    kaydederseniz mevcut bağlantı yeni bilgilerle değiştirilir
+                    (şirket başına tek aktif bağlantı tutuluyor).
                   </div>
                 )}
 
@@ -4247,9 +4674,11 @@ export default function StoresPage() {
                         aria-label="Paraşüt"
                       />
                       <div className="flex min-w-0 flex-1 flex-col">
-                        <p className="truncate text-sm font-medium">{manageParasut.name}</p>
+                        <p className="truncate text-sm font-medium">
+                          {manageParasut.label || 'Paraşüt'}
+                        </p>
                         <p className="truncate text-xs text-muted">
-                          Paraşüt • {manageParasut.username} • Şirket {manageParasut.parasutCompanyId}
+                          Paraşüt • Şirket {manageParasut.config.parasutCompanyId || '—'}
                         </p>
                       </div>
                       <Switch
@@ -4279,6 +4708,136 @@ export default function StoresPage() {
                     >
                       Kaydet
                     </Button>
+                  </div>
+                </div>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {/* Kargo (DHL/MNG) yönet modalı — şifre rotasyonu + müşteri no / kimlik
+      türü güncellemesi için. Şifre alanı boş bırakılırsa mevcut şifre korunur;
+      diğer alanlar değişirse backend mevcut şifreyle re-test eder. */}
+      <Modal
+        isOpen={manageCargoId !== null}
+        onOpenChange={(open) => !open && handleManageCargoClose()}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-lg">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Kargo Hesabı Ayarları</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body style={{ marginTop: 0 }}>
+                <div className="flex flex-col gap-4">
+                  {manageCargo && (
+                    <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_0_0_0.5px_rgba(0,0,0,0.07)]">
+                        <img
+                          src="/figma/integrations/dhl.png"
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                      <div className="flex min-w-0 flex-1 flex-col">
+                        <p className="truncate text-sm font-medium">
+                          {manageCargo.provider === 'MNG'
+                            ? 'DHL'
+                            : manageCargo.provider}
+                        </p>
+                        <p className="truncate text-xs text-muted">
+                          {manageCargo.customerNumber
+                            ? `Müşteri No: ${manageCargo.customerNumber}`
+                            : manageCargo.apiUsername || manageCargo.provider}
+                        </p>
+                      </div>
+                      <Switch
+                        isSelected={manageCargoActive}
+                        onChange={setManageCargoActive}
+                        aria-label="Aktif"
+                      >
+                        <Switch.Control>
+                          <Switch.Thumb />
+                        </Switch.Control>
+                      </Switch>
+                    </div>
+                  )}
+
+                  <TextField
+                    value={manageCargoForm.customerNumber}
+                    onChange={(v) =>
+                      setManageCargoForm((p) => ({ ...p, customerNumber: v }))
+                    }
+                  >
+                    <Label>Müşteri Numarası</Label>
+                    <Input placeholder="DHL müşteri numaranız" />
+                  </TextField>
+
+                  <TextField
+                    value={manageCargoForm.password}
+                    onChange={(v) =>
+                      setManageCargoForm((p) => ({ ...p, password: v }))
+                    }
+                    type={manageCargoShowPassword ? 'text' : 'password'}
+                  >
+                    <Label>Yeni Şifre (opsiyonel)</Label>
+                    <div className="relative w-full">
+                      <Input
+                        placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                        className="w-full pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setManageCargoShowPassword((v) => !v)
+                        }
+                        aria-label={
+                          manageCargoShowPassword
+                            ? 'Şifreyi gizle'
+                            : 'Şifreyi göster'
+                        }
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                      >
+                        {manageCargoShowPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </TextField>
+                  <p className="text-xs text-muted">
+                    Müşteri no veya kimlik tipi değişirse, mevcut şifreyle MNG
+                    portal üzerinden tekrar test edilir. Hata alırsanız yeni
+                    şifreyi de girin.
+                  </p>
+
+                  <div className="flex items-center justify-between gap-2 pt-2">
+                    <Button
+                      variant="danger-soft"
+                      onPress={handleManageCargoDelete}
+                      isDisabled={isManagingCargo}
+                    >
+                      Sil
+                    </Button>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onPress={handleManageCargoClose}
+                        isDisabled={isManagingCargo}
+                      >
+                        İptal
+                      </Button>
+                      <Button
+                        onPress={handleManageCargoSave}
+                        isPending={isManagingCargo}
+                        isDisabled={isManagingCargo}
+                      >
+                        Kaydet
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </Modal.Body>

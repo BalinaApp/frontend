@@ -1,33 +1,47 @@
 import { create } from 'zustand';
 import { api } from '@/services/api';
 
-// E-Fatura sağlayıcıları — backend `Provider` enum'una paralel.
+// E-Fatura sağlayıcıları — backend Prisma enum AccountingInvoiceProvider'a paralel.
 export type InvoiceProvider = 'BIZIMHESAP' | 'PARASUT';
 
-export interface BizimhesapIntegration {
-  id: string;
-  provider: 'BIZIMHESAP';
-  name: string;
+// Backend'in `toListItem` çıktısı — credential plaintext asla buraya akmaz.
+// `config` JSON kolonunun şekli provider'a göre değişir, alttaki BH/Paraşüt
+// tipleri bunu daraltıyor.
+export interface BizimhesapConfig {
   firmId: string;
-  /** Yalnızca son 4 hane geri döner — credential plaintext olarak istemciye verilmiyor. */
-  apiKeyTail?: string | null;
-  tokenTail?: string | null;
+  apiKey?: string | null;
+  baseUrl?: string | null;
+}
+
+export interface ParasutConfig {
+  parasutCompanyId: string;
+  baseUrl?: string | null;
+}
+
+interface ConnectionBase {
+  id: string;
+  label: string | null;
   isActive: boolean;
+  lastTestedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ParasutIntegration {
-  id: string;
+export interface BizimhesapIntegration extends ConnectionBase {
+  provider: 'BIZIMHESAP';
+  config: BizimhesapConfig;
+}
+
+export interface ParasutIntegration extends ConnectionBase {
   provider: 'PARASUT';
-  name: string;
-  /** Paraşüt'ün kendi company id'si — fatura path'inde kullanılır. */
-  parasutCompanyId: string;
-  username: string;
-  clientIdTail?: string | null;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
+  config: ParasutConfig;
+}
+
+// Backend liste endpoint'inin döndüğü generic kayıt — fetch sonrası provider'a
+// göre ayrıştırılır.
+interface RawConnectionListItem extends ConnectionBase {
+  provider: InvoiceProvider;
+  config: Record<string, unknown>;
 }
 
 export type InvoiceIntegration = BizimhesapIntegration | ParasutIntegration;
@@ -37,38 +51,39 @@ export interface InvoiceTestResult {
   error?: string;
 }
 
-export interface CreateBizimhesapDto {
-  name?: string;
+// Test DTO'ları — backend `BizimhesapTestConnectionDto` ve
+// `ParasutTestConnectionDto` ile birebir. Hepsi opsiyonel; boş gönderilirse
+// backend `.env` değerlerini kullanır.
+export interface BizimhesapTestDto {
+  token?: string;
   apiKey?: string;
+}
+
+export interface ParasutTestDto {
+  email?: string;
+  password?: string;
+  clientId?: string;
+  clientSecret?: string;
+}
+
+// Connect (kaydet) DTO'ları — `ConnectBizimhesapDto` ve `ConnectParasutDto`
+// ile birebir. Bağlanma başarılıysa backend upsert yapar.
+export interface ConnectBizimhesapDto {
   token: string;
   firmId: string;
-}
-
-export interface UpdateBizimhesapDto {
-  name?: string;
   apiKey?: string;
-  token?: string;
-  firmId?: string;
-  isActive?: boolean;
+  baseUrl?: string;
+  label?: string;
 }
 
-export interface CreateParasutDto {
-  name?: string;
+export interface ConnectParasutDto {
   clientId: string;
   clientSecret: string;
   username: string;
   password: string;
   parasutCompanyId: string;
-}
-
-export interface UpdateParasutDto {
-  name?: string;
-  clientId?: string;
-  clientSecret?: string;
-  username?: string;
-  password?: string;
-  parasutCompanyId?: string;
-  isActive?: boolean;
+  baseUrl?: string;
+  label?: string;
 }
 
 interface InvoiceState {
@@ -79,51 +94,73 @@ interface InvoiceState {
 
   fetchInvoiceIntegrations: (companyId: string) => Promise<void>;
 
-  createBizimhesap: (
-    companyId: string,
-    args: CreateBizimhesapDto
-  ) => Promise<BizimhesapIntegration | null>;
-  updateBizimhesap: (
-    companyId: string,
-    integrationId: string,
-    args: UpdateBizimhesapDto
-  ) => Promise<BizimhesapIntegration | null>;
-  removeBizimhesap: (companyId: string, integrationId: string) => Promise<void>;
+  // Test — kaydetmez, kullanıcı bağlamadan önce credential dener.
   testBizimhesapCredentials: (
     companyId: string,
-    args: CreateBizimhesapDto
+    args: BizimhesapTestDto,
   ) => Promise<InvoiceTestResult>;
-  testBizimhesapIntegration: (
-    companyId: string,
-    integrationId: string
-  ) => Promise<InvoiceTestResult>;
-
-  createParasut: (
-    companyId: string,
-    args: CreateParasutDto
-  ) => Promise<ParasutIntegration | null>;
-  updateParasut: (
-    companyId: string,
-    integrationId: string,
-    args: UpdateParasutDto
-  ) => Promise<ParasutIntegration | null>;
-  removeParasut: (companyId: string, integrationId: string) => Promise<void>;
   testParasutCredentials: (
     companyId: string,
-    args: CreateParasutDto
+    args: ParasutTestDto,
   ) => Promise<InvoiceTestResult>;
-  testParasutIntegration: (
+
+  // Connect — test + per-company upsert. Bir şirket için aynı provider'dan
+  // tek aktif bağlantı vardır; yeniden bağlanmak mevcut kaydı override eder.
+  // Hata durumunda throw eder (axios error) — caller try/catch ile yakalayıp
+  // backend mesajını toast'a koysun.
+  connectBizimhesap: (
     companyId: string,
-    integrationId: string
-  ) => Promise<InvoiceTestResult>;
+    args: ConnectBizimhesapDto,
+  ) => Promise<BizimhesapIntegration>;
+  connectParasut: (
+    companyId: string,
+    args: ConnectParasutDto,
+  ) => Promise<ParasutIntegration>;
+
+  // Disconnect — provider bazlı kaldırma. Sonraki fatura isteklerinde 404.
+  disconnectProvider: (
+    companyId: string,
+    provider: InvoiceProvider,
+  ) => Promise<void>;
 }
 
 const errorMessage = (err: unknown, fallback: string): string => {
-  const apiMsg = (err as { response?: { data?: { message?: string | string[]; error?: string } } })
-    ?.response?.data;
+  const apiMsg = (
+    err as {
+      response?: { data?: { message?: string | string[]; error?: string } };
+    }
+  )?.response?.data;
   const msg = apiMsg?.message ?? apiMsg?.error;
   if (Array.isArray(msg)) return msg.join(', ');
   return msg || (err instanceof Error ? err.message : fallback);
+};
+
+const splitConnections = (
+  rows: RawConnectionListItem[],
+): {
+  bizimhesaps: BizimhesapIntegration[];
+  parasuts: ParasutIntegration[];
+} => {
+  const bizimhesaps: BizimhesapIntegration[] = [];
+  const parasuts: ParasutIntegration[] = [];
+  for (const row of rows) {
+    if (row.provider === 'BIZIMHESAP') {
+      bizimhesaps.push({
+        ...row,
+        provider: 'BIZIMHESAP',
+        config: (row.config || { firmId: '' }) as unknown as BizimhesapConfig,
+      });
+    } else if (row.provider === 'PARASUT') {
+      parasuts.push({
+        ...row,
+        provider: 'PARASUT',
+        config: (row.config || {
+          parasutCompanyId: '',
+        }) as unknown as ParasutConfig,
+      });
+    }
+  }
+  return { bizimhesaps, parasuts };
 };
 
 export const useInvoiceIntegrationStore = create<InvoiceState>((set) => ({
@@ -135,151 +172,111 @@ export const useInvoiceIntegrationStore = create<InvoiceState>((set) => ({
   fetchInvoiceIntegrations: async (companyId) => {
     set({ isLoading: true });
     try {
-      const [bh, ps] = await Promise.all([
-        api
-          .get<BizimhesapIntegration[]>(`/company/${companyId}/integrations/bizimhesap`)
-          .then((r) => r.data ?? [])
-          .catch(() => []),
-        api
-          .get<ParasutIntegration[]>(`/company/${companyId}/integrations/parasut`)
-          .then((r) => r.data ?? [])
-          .catch(() => []),
-      ]);
-      set({ bizimhesaps: bh, parasuts: ps, isLoading: false });
-    } catch {
-      set({ isLoading: false });
-    }
-  },
-
-  createBizimhesap: async (companyId, args) => {
-    set({ isSaving: true });
-    try {
-      const { data } = await api.post<BizimhesapIntegration>(
-        `/company/${companyId}/integrations/bizimhesap`,
-        args
+      const { data } = await api.get<RawConnectionListItem[]>(
+        `/company/${companyId}/accounting/connections`,
       );
-      set((state) => ({
-        bizimhesaps: [...state.bizimhesaps, data],
-        isSaving: false,
-      }));
-      return data;
+      const { bizimhesaps, parasuts } = splitConnections(data ?? []);
+      set({ bizimhesaps, parasuts, isLoading: false });
     } catch {
-      set({ isSaving: false });
-      return null;
+      set({ bizimhesaps: [], parasuts: [], isLoading: false });
     }
-  },
-
-  updateBizimhesap: async (companyId, integrationId, args) => {
-    set({ isSaving: true });
-    try {
-      const { data } = await api.patch<BizimhesapIntegration>(
-        `/company/${companyId}/integrations/bizimhesap/${integrationId}`,
-        args
-      );
-      set((state) => ({
-        bizimhesaps: state.bizimhesaps.map((i) => (i.id === integrationId ? data : i)),
-        isSaving: false,
-      }));
-      return data;
-    } catch {
-      set({ isSaving: false });
-      return null;
-    }
-  },
-
-  removeBizimhesap: async (companyId, integrationId) => {
-    await api.delete(`/company/${companyId}/integrations/bizimhesap/${integrationId}`);
-    set((state) => ({
-      bizimhesaps: state.bizimhesaps.filter((i) => i.id !== integrationId),
-    }));
   },
 
   testBizimhesapCredentials: async (companyId, args) => {
     try {
-      const { data } = await api.post<InvoiceTestResult>(
-        `/company/${companyId}/integrations/bizimhesap/test`,
-        args
-      );
-      return data;
+      const { data } = await api.post<{
+        success?: boolean;
+        ok?: boolean;
+        error?: string;
+      }>(`/company/${companyId}/bizimhesap/test`, args);
+      // Backend hem `success` hem `ok` döndürebilir; ikisini de kabul ediyoruz.
+      const ok = data?.ok ?? data?.success ?? false;
+      return { ok, error: ok ? undefined : data?.error };
     } catch (err) {
       return { ok: false, error: errorMessage(err, 'Test başarısız') };
     }
-  },
-
-  testBizimhesapIntegration: async (companyId, integrationId) => {
-    try {
-      const { data } = await api.post<InvoiceTestResult>(
-        `/company/${companyId}/integrations/bizimhesap/${integrationId}/test`
-      );
-      return data;
-    } catch (err) {
-      return { ok: false, error: errorMessage(err, 'Test başarısız') };
-    }
-  },
-
-  createParasut: async (companyId, args) => {
-    set({ isSaving: true });
-    try {
-      const { data } = await api.post<ParasutIntegration>(
-        `/company/${companyId}/integrations/parasut`,
-        args
-      );
-      set((state) => ({
-        parasuts: [...state.parasuts, data],
-        isSaving: false,
-      }));
-      return data;
-    } catch {
-      set({ isSaving: false });
-      return null;
-    }
-  },
-
-  updateParasut: async (companyId, integrationId, args) => {
-    set({ isSaving: true });
-    try {
-      const { data } = await api.patch<ParasutIntegration>(
-        `/company/${companyId}/integrations/parasut/${integrationId}`,
-        args
-      );
-      set((state) => ({
-        parasuts: state.parasuts.map((i) => (i.id === integrationId ? data : i)),
-        isSaving: false,
-      }));
-      return data;
-    } catch {
-      set({ isSaving: false });
-      return null;
-    }
-  },
-
-  removeParasut: async (companyId, integrationId) => {
-    await api.delete(`/company/${companyId}/integrations/parasut/${integrationId}`);
-    set((state) => ({
-      parasuts: state.parasuts.filter((i) => i.id !== integrationId),
-    }));
   },
 
   testParasutCredentials: async (companyId, args) => {
     try {
-      const { data } = await api.post<InvoiceTestResult>(
-        `/company/${companyId}/integrations/parasut/test`,
-        args
-      );
-      return data;
+      const { data } = await api.post<{
+        success?: boolean;
+        ok?: boolean;
+        error?: string;
+      }>(`/company/${companyId}/parasut/test`, args);
+      const ok = data?.ok ?? data?.success ?? false;
+      return { ok, error: ok ? undefined : data?.error };
     } catch (err) {
       return { ok: false, error: errorMessage(err, 'Test başarısız') };
     }
   },
 
-  testParasutIntegration: async (companyId, integrationId) => {
+  connectBizimhesap: async (companyId, args) => {
+    set({ isSaving: true });
     try {
-      const { data } = await api.post<InvoiceTestResult>(
-        `/company/${companyId}/integrations/parasut/${integrationId}/test`
+      const { data } = await api.post<RawConnectionListItem>(
+        `/company/${companyId}/accounting/bizimhesap/connect`,
+        args,
       );
-      return data;
-    } catch (err) {
-      return { ok: false, error: errorMessage(err, 'Test başarısız') };
+      const integration: BizimhesapIntegration = {
+        ...data,
+        provider: 'BIZIMHESAP',
+        config: (data.config || { firmId: args.firmId }) as unknown as BizimhesapConfig,
+      };
+      set((state) => ({
+        // Tek aktif bağlantı kuralı: aynı provider'dan eskisini at, yenisini koy.
+        bizimhesaps: [
+          ...state.bizimhesaps.filter((b) => b.id !== integration.id),
+          integration,
+        ],
+        isSaving: false,
+      }));
+      return integration;
+    } catch (error) {
+      // Backend 400 mesajını caller'a kadar taşı — UI bunu toast olarak
+      // göstermeli (yanlış şifre, geçersiz token, vb.). Sessizce null
+      // döndürmek dokümandaki "mesajı göster" akışını bozar.
+      set({ isSaving: false });
+      throw error;
     }
+  },
+
+  connectParasut: async (companyId, args) => {
+    set({ isSaving: true });
+    try {
+      const { data } = await api.post<RawConnectionListItem>(
+        `/company/${companyId}/accounting/parasut/connect`,
+        args,
+      );
+      const integration: ParasutIntegration = {
+        ...data,
+        provider: 'PARASUT',
+        config: (data.config || {
+          parasutCompanyId: args.parasutCompanyId,
+        }) as unknown as ParasutConfig,
+      };
+      set((state) => ({
+        parasuts: [
+          ...state.parasuts.filter((p) => p.id !== integration.id),
+          integration,
+        ],
+        isSaving: false,
+      }));
+      return integration;
+    } catch (error) {
+      set({ isSaving: false });
+      throw error;
+    }
+  },
+
+  disconnectProvider: async (companyId, provider) => {
+    await api.delete(
+      `/company/${companyId}/accounting/${provider}/disconnect`,
+    );
+    set((state) => ({
+      bizimhesaps:
+        provider === 'BIZIMHESAP' ? [] : state.bizimhesaps,
+      parasuts: provider === 'PARASUT' ? [] : state.parasuts,
+    }));
   },
 }));

@@ -28,6 +28,8 @@ interface SettingsItem {
   tile: string;
   /** Hide entry when the pricing/subscription system is disabled in DB. */
   requiresPricing?: boolean;
+  /** Hide unless user has OWNER/ADMIN role on the current company. */
+  requiresOwnerAdmin?: boolean;
 }
 
 export default function SettingsGeneralPage() {
@@ -80,6 +82,8 @@ export default function SettingsGeneralPage() {
       href: `/${slug}/settings/activity-log`,
       icon: Clock,
       tile: 'bg-sky-500',
+      // Doc §1.1: yalnızca OWNER/ADMIN üyeler audit log endpoint'ine erişebilir.
+      requiresOwnerAdmin: true,
     },
     {
       id: 'theme',
@@ -98,7 +102,13 @@ export default function SettingsGeneralPage() {
     },
   ];
 
-  const items = allItems.filter((item) => !item.requiresPricing || isPricingEnabled);
+  const userRole = currentCompany?.role;
+  const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+  const items = allItems.filter(
+    (item) =>
+      (!item.requiresPricing || isPricingEnabled) &&
+      (!item.requiresOwnerAdmin || isOwnerOrAdmin),
+  );
 
   const handleLogout = () => {
     logout();

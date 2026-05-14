@@ -436,23 +436,27 @@ export default function ActivityLogPage() {
 
   const router = useRouter();
   const { currentCompany } = useCompanyStore();
-  const { items, meta, isLoading, error, fetchCompanyLogs, reset } =
+  const { items, meta, isLoading, error, forbidden, fetchCompanyLogs, reset } =
     useAuditLogStore();
 
   const slug = currentCompany?.slug ?? '';
   const companyId = currentCompany?.id;
+  // Doc §1.1: yalnızca OWNER/ADMIN üyeler audit log'u görebilir. Backend zaten
+  // 403 döner; UI'da önceden gate edip net mesaj göstermek daha iyi.
+  const userRole = currentCompany?.role;
+  const canViewLogs = userRole === 'OWNER' || userRole === 'ADMIN';
 
   const [range, setRange] = useState<DateRange>(() => todayRange());
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId || !canViewLogs) return;
     reset();
     fetchCompanyLogs(companyId, {
       page: 1,
       startDate: range.from,
       endDate: endOfDay(range.to),
     });
-  }, [companyId, range.from, range.to, fetchCompanyLogs, reset]);
+  }, [companyId, canViewLogs, range.from, range.to, fetchCompanyLogs, reset]);
 
   const hasMore = meta.page < meta.totalPages;
 
@@ -487,7 +491,22 @@ export default function ActivityLogPage() {
 
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col px-3">
-          {/* Filter row */}
+          {/* OWNER/ADMIN dışı roller bu sayfayı göremez — backend 403 dönmeden
+              UI'da net bir mesajla durduralım. */}
+          {!canViewLogs ? (
+            <div className="flex flex-col items-center gap-2 rounded-xl bg-surface px-4 py-12 text-center">
+              <Lock className="h-6 w-6 text-muted" />
+              <span className="text-sm font-medium text-foreground">
+                Bu sayfaya erişim yetkiniz yok
+              </span>
+              <span className="text-xs text-muted">
+                Aktivite günlüğünü yalnızca şirket sahibi veya yönetici rolündeki
+                üyeler görüntüleyebilir.
+              </span>
+            </div>
+          ) : (
+          <>
+          {/* Filter row 1: meta + date range */}
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-xs text-muted">
               {meta.total > 0
@@ -508,7 +527,18 @@ export default function ActivityLogPage() {
           </div>
 
           <div className="flex flex-col rounded-xl bg-surface">
-            {error ? (
+            {forbidden ? (
+              <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
+                <Lock className="mb-1 h-6 w-6 text-muted" />
+                <span className="text-sm font-medium text-foreground">
+                  Bu sayfaya erişim yetkiniz yok
+                </span>
+                <span className="text-xs text-muted">
+                  Aktivite günlüğünü yalnızca şirket sahibi veya yönetici
+                  rolündeki üyeler görüntüleyebilir.
+                </span>
+              </div>
+            ) : error ? (
               <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
                 <span className="text-sm font-medium text-foreground">
                   Aktivite günlüğü açılamadı
@@ -608,6 +638,8 @@ export default function ActivityLogPage() {
               <CircleCheckFill className="h-3 w-3" />
               <span>Tüm kayıtlar gösterildi · {meta.total} işlem</span>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

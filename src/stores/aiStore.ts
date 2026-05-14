@@ -375,18 +375,12 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
  *  görselinden body-aware warp + mask-based transfer ile yeni görsel. */
 export const FASHN_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   {
-    id: 'fashn-ai/tryon-v1.6',
-    label: 'Fashn Tryon v1.6 ⭐',
+    id: 'fashn-ai/tryon-max',
+    label: 'Fashn Tryon Max ⭐',
     description:
-      'Fashn.ai sanal kıyafet deneme — kişiyi koruyup kıyafeti sadık şekilde geçirir. Chiffon/asimetrik garment için ÖNERİLİR.',
+      'Fashn.ai sanal kıyafet deneme — 2K çıktı, quality mode. Web UI ile aynı pipeline.',
     kind: 'image',
     isDefault: true,
-  },
-  {
-    id: 'fashn-ai/tryon-v1.5',
-    label: 'Fashn Tryon v1.5',
-    description: 'Önceki Fashn.ai sürümü — uyumluluk için.',
-    kind: 'image',
   },
 ];
 
@@ -991,6 +985,9 @@ export const useAiStore = create<AiState>((set, get) => ({
           integrationId:
             args.integrationId ?? selectedVideoIntegrationId ?? selectedFalId ?? undefined,
         },
+        // Kling Master 3-8 dk; backend timeout 6 dk. Frontend default
+        // (180s) yetmiyor — 7 dk veriyoruz (backend'den biraz uzun).
+        { timeout: 7 * 60_000 },
       );
       return data.video?.url
         ? { url: data.video.url }

@@ -19,6 +19,9 @@ interface FilterDefBase {
   preposition?: string;
   /** Sol başta gösterilecek 16×16 ikon (FilterPopover liste view'ında). */
   icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+  /** Detay popover'ının arama input'unda gösterilecek placeholder
+   *  ("Durumu değiştir...", "KDV değiştir..." gibi). */
+  searchPlaceholder?: string;
 }
 
 export interface SelectFilterDef extends FilterDefBase {
@@ -28,6 +31,11 @@ export interface SelectFilterDef extends FilterDefBase {
   defaultValue: string;
   value: string;
   onChange: (next: string) => void;
+  /** Opsiyonel: her seçeneğin yanında 16×16 avatar (örn. mağaza logosu). */
+  optionIconUrl?: (value: string) => string | null;
+  /** Opsiyonel: listenin en altına "Yeni ekle" benzeri bir aksiyon satırı. */
+  addNewLabel?: string;
+  onAddNew?: () => void;
 }
 
 export interface MultiSelectFilterDef extends FilterDefBase {

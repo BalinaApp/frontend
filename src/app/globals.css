@@ -387,6 +387,40 @@ body[class*="theme-"] .integrations-blob {
   0%   { --chroma-angle: 0deg; }
   100% { --chroma-angle: 360deg; }
 }
+/* Button içinde dolaşan dolgu chroma — pseudo-element ile blur'lanmış conic
+   gradient. İçeriği (svg icon) net kalır; alt katman dönerken yumuşak,
+   "dağılmış" puslu bir renk akışı izlenimi verir. */
+.chroma-bg {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Base dolgu — alttaki blur'lu conic ile karıştığında parlaklık dengelenir. */
+  background:
+    linear-gradient(135deg, #0358f7, #c679c4, #fa3d1d, #ffb005) !important;
+}
+.chroma-bg::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: conic-gradient(
+    from var(--chroma-angle, 0deg),
+    #0358f7 0%,
+    #c679c4 20%,
+    #fa3d1d 40%,
+    #ffb005 60%,
+    #e1e1fe 80%,
+    #0358f7 100%
+  );
+  filter: blur(10px);
+  animation: chroma-sweep 2.4s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+.chroma-bg > * {
+  position: relative;
+  z-index: 1;
+}
+
 .chroma-border {
   position: relative;
   isolation: isolate;
@@ -416,4 +450,88 @@ body[class*="theme-"] .integrations-blob {
   animation: chroma-sweep 2.4s linear infinite;
   pointer-events: none;
   z-index: -1;
+}
+
+/* ------------------------------------------------------------------
+   Define AI assistant design tokens — guided-ai-chat-panel.tsx ve
+   ai-chat-fab.tsx tarafından kullanılır. Notion + Define tarzı katmanlı
+   gri yüzey paleti; mevcut --accent / --background ile birlikte yaşar.
+   ------------------------------------------------------------------ */
+:root {
+  /* Backgrounds (light) */
+  --balinaos-bg-light-loud: #FFFFFF;
+  --balinaos-bg-light-shout: #FBFBFA;
+  --balinaos-bg-light-default: rgba(0, 0, 0, 0.02);
+  --balinaos-bg-light-faint: rgba(0, 0, 0, 0.04);
+
+  /* Backgrounds (dark surfaces over light) */
+  --balinaos-bg-dark-faint: rgba(0, 0, 0, 0.02);
+  --balinaos-bg-dark-muted: rgba(0, 0, 0, 0.04);
+  --balinaos-bg-dark-default: rgba(0, 0, 0, 0.06);
+  --balinaos-bg-dark-strong: rgba(0, 0, 0, 0.08);
+  --balinaos-bg-dark-loud: rgba(0, 0, 0, 0.12);
+
+  /* Raised surfaces (composer / cards) */
+  --balinaos-bg-raised-shout: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(252, 252, 252, 0.75) 100%
+  );
+
+  /* Borders */
+  --balinaos-border-faint: rgba(0, 0, 0, 0.04);
+  --balinaos-border-default: rgba(0, 0, 0, 0.06);
+  --balinaos-border-muted: rgba(0, 0, 0, 0.08);
+  --balinaos-border-strong: rgba(0, 0, 0, 0.12);
+  --balinaos-border-loud: rgba(0, 0, 0, 0.20);
+
+  /* Text */
+  --balinaos-text-loud: #000000;
+  --balinaos-text-shout: #18181B;
+  --balinaos-text-strong: #404040;
+  --balinaos-text-default: #52525B;
+  --balinaos-text-muted: #71717A;
+  --balinaos-text-faint: #A1A1AA;
+
+  /* Icon */
+  --balinaos-icon-loud: #18181B;
+  --balinaos-icon-strong: #404040;
+  --balinaos-icon-default: #71717A;
+  --balinaos-icon-muted: #A1A1AA;
+  --balinaos-icon-faint: #D4D4D8;
+
+  /* Neutral dark steps (used in shadows) */
+  --balinaos-neutral-dark-2: rgba(0, 0, 0, 0.02);
+  --balinaos-neutral-dark-4: rgba(0, 0, 0, 0.04);
+  --balinaos-neutral-dark-6: rgba(0, 0, 0, 0.06);
+  --balinaos-neutral-dark-8: rgba(0, 0, 0, 0.08);
+  --balinaos-neutral-dark-10: rgba(0, 0, 0, 0.10);
+  --balinaos-neutral-dark-90: rgba(0, 0, 0, 0.90);
+  --balinaos-neutral-dark-100: #000000;
+
+  /* Neutral light */
+  --balinaos-neutral-light-100: #FFFFFF;
+}
+
+/* Define AiStatus_textShimmer — pending status row için text-mask shimmer.
+   Background 200% auto, position'ı animate ediyoruz; clipBox text. */
+@keyframes ai-text-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.ai-text-shimmer {
+  display: inline-block;
+  background: linear-gradient(
+    90deg,
+    var(--balinaos-text-faint) 0%,
+    var(--balinaos-text-default) 25%,
+    var(--balinaos-text-loud) 50%,
+    var(--balinaos-text-default) 75%,
+    var(--balinaos-text-faint) 100%
+  );
+  background-size: 200% auto;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: ai-text-shimmer 2.4s linear infinite;
 }

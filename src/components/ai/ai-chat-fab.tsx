@@ -21,7 +21,8 @@ export function AiChatFab() {
       className={[
         // chroma-border sürekli akan renkli kenar — Composer ile aynı stil.
         'chroma-border',
-        'flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-1.5 pr-2.5',
+        // Kullanıcı isteği: fab full radius (pill).
+        'flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-1.5 pr-2.5',
         'text-xs font-medium transition-colors',
         isAiDrawerOpen
           ? 'bg-black/[0.06] text-foreground'

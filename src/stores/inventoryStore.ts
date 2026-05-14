@@ -81,10 +81,12 @@ export interface Product {
   stockQuantity: number;
   price: number;
   purchasePrice: number | null;
+  vatRate: number | null;
   storeId: string;
   storeName: string;
   wcProductId: bigint;
   syncedAt: string;
+  createdAt: string;
   variationCount: number;
   isActive: boolean;
   /** Listing endpoint'i bu alanı zaten dolduruyor — Eşleştirme kolonu için. */
@@ -179,8 +181,20 @@ interface InventoryState {
       sortOrder?: 'asc' | 'desc';
       stockStatus?: 'instock' | 'outofstock' | 'critical';
       mappingStatus?: 'mapped' | 'unmapped';
+      isActive?: 'true' | 'false';
+      vatRate?: number;
+      dateFrom?: string;
+      dateTo?: string;
     }
   ) => Promise<void>;
+  /** Toplu Aktif/Pasif. "Satıştan Kaldır" → isActive=false, geri al → true. */
+  bulkSetActive: (
+    companyId: string,
+    productIds: string[],
+    isActive: boolean
+  ) => Promise<number>;
+  /** Toplu hard-delete. Çağrılmadan önce confirm gösterilmelidir. */
+  bulkDelete: (companyId: string, productIds: string[]) => Promise<number>;
   fetchProduct: (companyId: string, productId: string) => Promise<void>;
   updateProductStock: (companyId: string, productId: string, stockQuantity: number) => Promise<boolean>;
   updateVariationStock: (companyId: string, variationId: string, stockQuantity: number) => Promise<boolean>;
@@ -266,6 +280,10 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
       if (options.sortOrder) params.append('sortOrder', options.sortOrder);
       if (options.stockStatus) params.append('stockStatus', options.stockStatus);
       if (options.mappingStatus) params.append('mappingStatus', options.mappingStatus);
+      if (options.isActive) params.append('isActive', options.isActive);
+      if (options.vatRate !== undefined) params.append('vatRate', String(options.vatRate));
+      if (options.dateFrom) params.append('dateFrom', options.dateFrom);
+      if (options.dateTo) params.append('dateTo', options.dateTo);
 
       const response = await api.get<ProductsResponse>(
         `/company/${companyId}/inventory/products?${params.toString()}`
@@ -485,5 +503,51 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         p.id === productId ? { ...p, ...updates } : p
       ),
     });
+  },
+
+  bulkSetActive: async (companyId, productIds, isActive) => {
+    if (productIds.length === 0) return 0;
+    try {
+      const response = await api.post<{ updated: number }>(
+        `/company/${companyId}/inventory/products/bulk-set-active`,
+        { productIds, isActive }
+      );
+      const updatedCount = response.data?.updated ?? 0;
+      // Etkilenen ürünlerin local list state'ini de güncelle.
+      const ids = new Set(productIds);
+      set({
+        products: get().products.map((p) =>
+          ids.has(p.id) ? { ...p, isActive } : p
+        ),
+      });
+      return updatedCount;
+    } catch (error: any) {
+      set({
+        error: error.response?.data?.message || 'Toplu güncelleme başarısız',
+      });
+      return 0;
+    }
+  },
+
+  bulkDelete: async (companyId, productIds) => {
+    if (productIds.length === 0) return 0;
+    try {
+      const response = await api.post<{ deleted: number }>(
+        `/company/${companyId}/inventory/products/bulk-delete`,
+        { productIds }
+      );
+      const deletedCount = response.data?.deleted ?? 0;
+      const ids = new Set(productIds);
+      set({
+        products: get().products.filter((p) => !ids.has(p.id)),
+        productsTotal: Math.max(0, get().productsTotal - deletedCount),
+      });
+      return deletedCount;
+    } catch (error: any) {
+      set({
+        error: error.response?.data?.message || 'Toplu silme başarısız',
+      });
+      return 0;
+    }
   },
 }));

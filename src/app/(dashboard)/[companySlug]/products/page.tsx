@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Box as Package,
   ArrowDown,
@@ -33,6 +33,8 @@ import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { FilterPopover } from '@/components/products/filter-popover';
 import { SavedFilterTabs } from '@/components/products/saved-filter-tabs';
+import { ActiveFilterChips } from '@/components/products/active-filter-chips';
+import { BulkActionsBar } from '@/components/products/bulk-actions-bar';
 import type { FilterDef } from '@/components/products/filter-types';
 
 // ---- Filter types ---------------------------------------------------------
@@ -42,14 +44,14 @@ type MappingFilter = 'all' | 'mapped' | 'unmapped';
 type SortField = 'name' | 'stockQuantity' | 'price';
 type SortOrder = 'asc' | 'desc';
 
+// Detay popover'larında "Tümü" satırı YOK — Figma birebir. Filtre default'a
+// dönmek için chip'in sağındaki X kullanılıyor (resetFilter).
 const activeOptions = [
-  { value: 'all', label: 'Tümü' },
   { value: 'yes', label: 'Aktif' },
   { value: 'no', label: 'Pasif' },
 ];
 
 const mappingOptions = [
-  { value: 'all', label: 'Tümü' },
   { value: 'mapped', label: 'Eşleştirildi' },
   { value: 'unmapped', label: 'Eşleştirme yok' },
 ];
@@ -93,14 +95,18 @@ export default function InventoryPage() {
     updateProductPurchasePrice,
     updateProduct,
     updateProductInList,
+    bulkSetActive,
+    bulkDelete,
   } = useInventoryStore();
+  const router = useRouter();
 
-  // Filtre state'leri
+  // Filtre state'leri (hepsi backend-bağlı)
   const [activeFilter, setActiveFilter] = useState<ActiveFilter>('all');
-  const [brandFilter, setBrandFilter] = useState<string>('all'); // backend desteği yok — UI placeholder
-  const [vatFilter, setVatFilter] = useState<string>('all'); // backend desteği yok — UI placeholder
+  const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [vatFilter, setVatFilter] = useState<string>('all');
   const [mappingFilter, setMappingFilter] = useState<MappingFilter>('all');
-  const [dateFilter, setDateFilter] = useState<string>(''); // UI placeholder
+  /** YYYY-MM-DD..YYYY-MM-DD aralık formatı; tek tarih de tek başına gönderilir. */
+  const [dateFilter, setDateFilter] = useState<string>('');
 
   // SKU/Barkod araması (backend `search` query'sine geçer)
   const [skuQuery, setSkuQuery] = useState('');
@@ -119,18 +125,54 @@ export default function InventoryPage() {
   const fetchData = useCallback(
     (page: number = 1) => {
       if (!currentCompany?.id) return;
-      const filters: Record<string, string | undefined> = {};
-      if (skuQuery) filters.search = skuQuery;
-      if (activeFilter === 'yes') filters.isActive = 'true';
-      if (activeFilter === 'no') filters.isActive = 'false';
-      if (mappingFilter !== 'all') filters.mappingStatus = mappingFilter;
+
+      // Tarih filtresi parser — "YYYY-MM-DD..YYYY-MM-DD" veya "YYYY-MM-DD".
+      let dateFrom: string | undefined;
+      let dateTo: string | undefined;
+      const dRaw = dateFilter.trim();
+      if (dRaw) {
+        const [from, to] = dRaw.split('..').map((s) => s.trim());
+        if (from) {
+          const d = new Date(from);
+          if (!Number.isNaN(d.getTime())) dateFrom = d.toISOString();
+        }
+        if (to) {
+          // Tek günü kapsayacak şekilde günün sonuna kaydır.
+          const d = new Date(to);
+          if (!Number.isNaN(d.getTime())) {
+            d.setHours(23, 59, 59, 999);
+            dateTo = d.toISOString();
+          }
+        } else if (from && !to) {
+          // Yalnızca tek tarih girildiyse: o günü kapsayacak gte+lte.
+          const d = new Date(from);
+          if (!Number.isNaN(d.getTime())) {
+            d.setHours(23, 59, 59, 999);
+            dateTo = d.toISOString();
+          }
+        }
+      }
 
       fetchProducts(currentCompany.id, {
         page,
         limit: perPage,
         sortBy: sortField,
         sortOrder,
-        ...filters,
+        search: skuQuery || undefined,
+        isActive:
+          activeFilter === 'yes'
+            ? 'true'
+            : activeFilter === 'no'
+              ? 'false'
+              : undefined,
+        mappingStatus: mappingFilter !== 'all' ? mappingFilter : undefined,
+        storeId: storeFilter !== 'all' ? storeFilter : undefined,
+        vatRate:
+          vatFilter !== 'all' && !Number.isNaN(Number(vatFilter))
+            ? Number(vatFilter)
+            : undefined,
+        dateFrom,
+        dateTo,
       });
     },
     [
@@ -138,6 +180,9 @@ export default function InventoryPage() {
       skuQuery,
       activeFilter,
       mappingFilter,
+      storeFilter,
+      vatFilter,
+      dateFilter,
       sortField,
       sortOrder,
       perPage,
@@ -192,13 +237,16 @@ export default function InventoryPage() {
   };
 
   // Filter popover'ın okuyacağı tek tip listesi (Figma birebir):
-  //   Durumu / Marka / KDV / Eşleştirme / SKU / Tarih
+  //   Durumu / Mağaza / KDV / Eşleştirme / SKU / Tarih
   // Filtre değişince useEffect zaten fetchData'yı tetikliyor.
+  // Figma birebir — "Tümü" satırı yok; deselect chip X ile yapılır.
+  const storeOptions = stores.map((s) => ({ value: s.id, label: s.name }));
   const filterDefs: FilterDef[] = [
     {
       id: 'active',
       label: 'Durumu',
       icon: CircleDashed,
+      searchPlaceholder: 'Durumu değiştir...',
       type: 'select',
       defaultValue: 'all',
       value: activeFilter,
@@ -206,38 +254,57 @@ export default function InventoryPage() {
       options: activeOptions,
     },
     {
-      id: 'brand',
-      label: 'Marka',
+      id: 'store',
+      label: 'Mağaza',
       icon: Tag,
+      searchPlaceholder: 'Mağaza değiştir...',
       type: 'select',
       defaultValue: 'all',
-      value: brandFilter,
-      onChange: setBrandFilter,
-      options: [
-        { value: 'all', label: 'Tümü' },
-        { value: 'other', label: 'Diğer' },
-      ],
+      value: storeFilter,
+      onChange: setStoreFilter,
+      options: storeOptions,
+      optionIconUrl: (value) => {
+        if (value === 'all') return null;
+        const store = stores.find((s) => s.id === value);
+        return storeFaviconUrl(store?.url);
+      },
     },
     {
       id: 'vat',
       label: 'KDV',
       icon: Percent,
+      searchPlaceholder: 'KDV değiştir...',
       type: 'select',
       defaultValue: 'all',
       value: vatFilter,
       onChange: setVatFilter,
       options: [
-        { value: 'all', label: 'Tümü' },
         { value: '0', label: '%0' },
-        { value: '8', label: '%8' },
+        { value: '5', label: '%5' },
         { value: '10', label: '%10' },
+        { value: '15', label: '%15' },
         { value: '20', label: '%20' },
       ],
+      addNewLabel: 'Yeni ekle',
+      onAddNew: () => {
+        // Kullanıcıdan özel bir KDV oranı al; backend `vatRate` query'sine düşer.
+        const raw = window.prompt('Yeni KDV oranı girin (% — 0-100 arası):');
+        if (raw == null) return;
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+        const n = Number(trimmed.replace('%', '').replace(',', '.'));
+        if (Number.isNaN(n) || n < 0 || n > 100) {
+          toast.danger('Geçerli bir oran girin (0-100 arası)');
+          return;
+        }
+        setVatFilter(String(n));
+      },
     },
     {
       id: 'mapping',
       label: 'Eşleştirme',
       icon: CopyCheck,
+      searchPlaceholder: 'Eşleştirme değiştir...',
       type: 'select',
       defaultValue: 'all',
       value: mappingFilter,
@@ -248,6 +315,7 @@ export default function InventoryPage() {
       id: 'sku',
       label: 'SKU',
       icon: Tags,
+      searchPlaceholder: 'SKU ara...',
       preposition: 'ile',
       type: 'text',
       placeholder: 'SKU/Barkod ile ara',
@@ -258,6 +326,7 @@ export default function InventoryPage() {
       id: 'date',
       label: 'Tarih',
       icon: Calendar,
+      searchPlaceholder: 'Tarih ara...',
       preposition: 'ile',
       type: 'text',
       placeholder: 'Örn. 2026-05-01..2026-05-31',
@@ -271,12 +340,13 @@ export default function InventoryPage() {
       <PageHeader title="Ürünler" />
 
       <div className="flex flex-col overflow-hidden">
-        {/* ============== Tab strip + filter icon (p-4) ============== */}
+        {/* ============== Tab strip + active filter chips + filter icon ============== */}
         <div className="flex flex-col gap-3 p-4">
           <SavedFilterTabs
             companyId={currentCompany?.id}
             context="products"
             filters={filterDefs}
+            trailing={<ActiveFilterChips filters={filterDefs} />}
             rightAction={<FilterPopover filters={filterDefs} />}
           />
         </div>
@@ -287,7 +357,7 @@ export default function InventoryPage() {
           <div className="flex items-center justify-between overflow-hidden rounded-2xl px-3 py-1">
             <div className="flex flex-1 items-center gap-2">
               <div className="px-1">
-                <span className="text-sm font-medium leading-5 text-foreground/60">Ürün adı</span>
+                <span className="text-xs font-medium leading-4 text-[#71717A]">Ürün adı</span>
               </div>
             </div>
             <div className="flex flex-1 items-center justify-between">
@@ -322,7 +392,7 @@ export default function InventoryPage() {
               Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="h-14 animate-pulse rounded-2xl bg-foreground/[0.03]"
+                  className="h-[60px] animate-pulse rounded-2xl bg-foreground/[0.03]"
                 />
               ))
             ) : products.length === 0 ? (
@@ -330,14 +400,15 @@ export default function InventoryPage() {
                 Ürün bulunamadı
               </div>
             ) : (
-              products.map((product, idx) => {
+              products.map((product) => {
                 const isChecked = selected.has(product.id);
                 return (
                   <div
                     key={product.id}
                     className={[
-                      'flex h-14 items-center justify-between overflow-hidden rounded-2xl p-3 transition-colors',
-                      idx === 0 ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.03]',
+                      // Figma 12234:6863 — h:60, p:12, r:16, justify-between.
+                      'flex h-[60px] items-center justify-between overflow-hidden rounded-2xl p-3 transition-colors',
+                      isChecked ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.03]',
                     ].join(' ')}
                   >
                     {/* LEFT half — checkbox + image + name */}
@@ -385,7 +456,7 @@ export default function InventoryPage() {
                           <div className="group inline-flex items-center gap-1">
                             <Link
                               href={`/${companySlug}/products/${product.id}`}
-                              className="truncate text-sm font-medium leading-5 text-foreground hover:underline"
+                              className="truncate text-sm font-medium leading-5 text-black hover:underline"
                             >
                               {product.name}
                             </Link>
@@ -469,6 +540,49 @@ export default function InventoryPage() {
               })
             )}
           </div>
+
+          {/* ============== Bulk actions bar (Figma 12249:3298) ============== */}
+          <BulkActionsBar
+            count={selected.size}
+            onMap={() => {
+              if (!currentCompany?.id) return;
+              const ids = Array.from(selected);
+              // Eşleştirme akışı: product-mappings sayfasına seçili id'leri ?ids=
+              // query param'i ile gönderir; orası "preselect" durumuyla açılır.
+              router.push(
+                `/${companySlug}/product-mappings?ids=${ids.join(',')}`
+              );
+            }}
+            onUnpublish={async () => {
+              if (!currentCompany?.id) return;
+              const ids = Array.from(selected);
+              const updated = await bulkSetActive(currentCompany.id, ids, false);
+              if (updated > 0) {
+                toast.success(`${updated} ürün satıştan kaldırıldı`);
+                setSelected(new Set());
+              } else {
+                toast.danger('Hiçbir ürün güncellenemedi');
+              }
+            }}
+            onDelete={async () => {
+              if (!currentCompany?.id) return;
+              const ids = Array.from(selected);
+              if (
+                !window.confirm(
+                  `${ids.length} ürün kalıcı olarak silinecek. Devam edilsin mi?`
+                )
+              ) {
+                return;
+              }
+              const deleted = await bulkDelete(currentCompany.id, ids);
+              if (deleted > 0) {
+                toast.success(`${deleted} ürün silindi`);
+                setSelected(new Set());
+              } else {
+                toast.danger('Hiçbir ürün silinemedi');
+              }
+            }}
+          />
         </div>
       </div>
     </>
@@ -484,10 +598,11 @@ function HeaderLabel({
   className?: string;
   children: React.ReactNode;
 }) {
+  // Figma 12232:15726 — Inter 500 12px #71717A, padding 0 4px inner.
   return (
     <div className={['flex items-center gap-2', className ?? ''].join(' ')}>
       <div className="inline-flex flex-col items-start justify-center px-1">
-        <span className="text-sm font-medium leading-5 text-foreground/60">{children}</span>
+        <span className="text-xs font-medium leading-4 text-[#71717A]">{children}</span>
       </div>
     </div>
   );
@@ -525,7 +640,7 @@ function IntegrationFavicons({
     return <span className="text-xs text-muted">—</span>;
   }
   return (
-    <div className="flex items-start -space-x-2">
+    <div className="flex items-start -space-x-2.5">
       {stores.map((s) => {
         const src = storeFaviconUrl(s.url);
         return (
@@ -578,25 +693,28 @@ function SortHeaderButton({
 }) {
   const isActive = currentField === field;
   return (
+    // Figma 12232:15726 — sort button: rounded-full, padding 0 4px, gap 4.
+    // Header text 12px Inter 500 #71717A. ArrowDown sadece active'de ya da
+    // hover'da görünür; ASC iken yukarı (rotate-180), DESC iken aşağı.
     <button
       type="button"
       onClick={() => onSort(field)}
       className={[
-        'inline-flex items-center gap-1 rounded-[999px] px-1 text-sm font-medium leading-5 transition-colors',
-        isActive
-          ? 'text-foreground'
-          : 'text-foreground/60 hover:text-foreground',
+        'group inline-flex items-center gap-1 rounded-full px-1 text-xs font-medium leading-4 transition-colors',
+        isActive ? 'text-[#18181B]' : 'text-[#71717A] hover:text-[#18181B]',
       ].join(' ')}
     >
       {children}
-      {isActive && (
-        <ArrowDown
-          className={[
-            'h-3 w-3 transition-transform',
-            currentOrder === 'asc' ? 'rotate-180' : '',
-          ].join(' ')}
-        />
-      )}
+      <ArrowDown
+        className={[
+          'h-3 w-3 transition-all',
+          isActive
+            ? currentOrder === 'asc'
+              ? 'rotate-180'
+              : ''
+            : 'opacity-0 group-hover:opacity-100',
+        ].join(' ')}
+      />
     </button>
   );
 }

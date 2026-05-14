@@ -24,7 +24,8 @@ import {
 import { useAiStore, MODEL_CATALOG } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
-import { applySkuOverlayToImage } from '@/lib/sku-overlay';
+import { applySkuOverlayToImage, applySkuOverlayToVideo } from '@/lib/sku-overlay';
+import { api } from '@/services/api';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 interface Props {
@@ -72,12 +73,25 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [composerText, setComposerText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Kod-bekleme durumu: image/video üretimi öncesi, ürün kodu yoksa AI önce
+  // kodu sorar. Bir sonraki kullanıcı mesajı bu kuyrukta tutulan görseller +
+  // mode ile üretime gider.
+  const [pendingCodeFor, setPendingCodeFor] = useState<{
+    files: string[];
+    promptText: string;
+    mode: 'image' | 'video';
+  } | null>(null);
   // textarea focus iken chroma sweep durur (kullanıcı odakta yazıyor,
   // çevredeki animasyon dikkat dağıtmasın). Blur olunca tekrar açılır.
   const [isComposerFocused, setIsComposerFocused] = useState(false);
+  // Tıklanan AI media için fullscreen overlay state — null iken kapalı.
+  const [mediaPreview, setMediaPreview] = useState<AiMediaPreviewItem | null>(
+    null,
+  );
 
   // Sabit eşleme (kullanıcı kararı): görsel = Fashn, video = Fal Kling.
   const imageIntegration =
@@ -87,7 +101,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   const hasIntegration = !!imageIntegration && !!videoIntegration;
   // Aktif modeller — composer'daki Model dropdown'undan seçilmişse onu
   // kullan, yoksa provider'a göre default'a düş.
-  const selectedImageModel = selectedImageModelId ?? 'fashn-ai/tryon-v1.6';
+  const selectedImageModel = selectedImageModelId ?? 'fashn-ai/tryon-max';
   const selectedVideoModel =
     selectedVideoModelId ?? 'fal-ai/kling-video/v2.1/master/image-to-video';
 
@@ -112,6 +126,14 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       behavior: 'smooth',
     });
   }, [messages.length]);
+
+  // composerText sıfırlandığında (send sonrası) textarea inline height'ını
+  // resetle — auto-grow onChange'de büyütülmüş satırları temizler.
+  useEffect(() => {
+    if (composerText === '' && textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+  }, [composerText]);
 
   // Backend snapshot — debounced.
   useEffect(() => {
@@ -170,6 +192,41 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   const handleSend = async () => {
     if (!currentCompany?.id || isGenerating) return;
     const rawText = composerText.trim();
+
+    // ----- Kod-bekleme akışı: AI önceki turda kod istemişti -----
+    if (pendingCodeFor) {
+      if (!rawText) return;
+      const code = rawText.replace(/^kod\s*[:=]\s*/i, '').trim();
+      if (!code) return;
+      setProductCode(code);
+      appendMessage({ id: '', kind: 'user-text', text: rawText });
+      const { files, promptText, mode: pendingMode } = pendingCodeFor;
+      setPendingCodeFor(null);
+      setComposerText('');
+      setIsGenerating(true);
+      const pendingId = `pending-${Date.now()}`;
+      appendMessage({
+        id: pendingId,
+        kind: 'pending',
+        label:
+          pendingMode === 'image'
+            ? 'AI ile görsel oluşturuluyor…'
+            : 'AI ile video oluşturuluyor (1-3 dk sürebilir)…',
+        mode: pendingMode,
+      });
+      try {
+        if (pendingMode === 'image') {
+          await runImageGeneration(promptText, files, code);
+        } else {
+          await runVideoGeneration(promptText, files, code);
+        }
+      } finally {
+        removeMessage(pendingId);
+        setIsGenerating(false);
+      }
+      return;
+    }
+
     if (!rawText && attachedImages.length === 0) return;
 
     // "Kod: XYZ" / "kod:XYZ" patternini parse et — kod productCode'a yazılır,
@@ -194,11 +251,60 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
           : 'image'
         : mode;
 
+    // ----- Image/Video üretimi öncesi: kod yoksa AI önce kodu sorsun -----
+    const codeInProductState = productCode.trim();
+    const codeFromText = codeMatch?.[1]?.trim() ?? '';
+    const needsCodePrompt =
+      !codeInProductState &&
+      !codeFromText &&
+      ((resolvedMode === 'image' && attachedImages.length >= 2) ||
+        (resolvedMode === 'video' && attachedImages.length >= 1));
+    if (needsCodePrompt) {
+      const prefix = imageIntegration?.codePrefix?.trim() ?? '';
+      const exampleSku = prefix ? `${prefix}-001` : '001';
+      attachedImages.forEach((url, i) => {
+        const name =
+          attachedImages.length >= 2 ? (i === 0 ? 'model' : 'urun') : 'gorsel';
+        appendMessage({
+          id: '',
+          kind: 'user-image',
+          url,
+          createdAt: Date.now(),
+          name,
+          ext: extFromUrl(url),
+        });
+      });
+      if (rawText) appendMessage({ id: '', kind: 'user-text', text: rawText });
+      const target = resolvedMode === 'video' ? 'videonun' : 'görselin';
+      appendMessage({
+        id: '',
+        kind: 'bot-text',
+        text: `Üretimden önce ürün kodunu yazın (örn: 001 → ${exampleSku} olarak ${target} sol altına yerleştirilecek).`,
+      });
+      setPendingCodeFor({
+        files: [...attachedImages],
+        promptText,
+        mode: resolvedMode,
+      });
+      setComposerText('');
+      clearAttachedImages();
+      return;
+    }
+
     // Mesaj akışına user girdisini ekle.
     if (attachedImages.length > 0) {
-      for (const url of attachedImages) {
-        appendMessage({ id: '', kind: 'user-image', url });
-      }
+      attachedImages.forEach((url, i) => {
+        const name =
+          attachedImages.length >= 2 ? (i === 0 ? 'model' : 'urun') : 'gorsel';
+        appendMessage({
+          id: '',
+          kind: 'user-image',
+          url,
+          createdAt: Date.now(),
+          name,
+          ext: extFromUrl(url),
+        });
+      });
     }
     if (rawText) {
       appendMessage({ id: '', kind: 'user-text', text: rawText });
@@ -233,7 +339,11 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
   };
 
-  const runImageGeneration = async (promptText: string, files: string[]) => {
+  const runImageGeneration = async (
+    promptText: string,
+    files: string[],
+    explicitCode?: string,
+  ) => {
     if (!currentCompany?.id) return;
     if (files.length < 2) {
       pushBotError(
@@ -253,7 +363,11 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
       return;
     }
-    const sku = computeSku();
+    // explicitCode kod-bekleme akışından gelir; productCode store'a yeni
+    // yazıldıysa bu render'da henüz okunamayabilir, o yüzden parametre tercih.
+    const code = explicitCode?.trim() || productCode.trim();
+    const prefix = imageIntegration?.codePrefix?.trim() ?? '';
+    const sku = code ? (prefix ? `${prefix}-${code}` : code) : '';
     const overlaid = sku
       ? await applySkuOverlayToImage(result.url, sku)
       : { url: result.url, embedded: false };
@@ -263,10 +377,17 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       url: overlaid.url,
       sku,
       skuEmbedded: overlaid.embedded,
+      createdAt: Date.now(),
     });
+    // Bir sonraki ürün için kod tekrar sorulsun.
+    setProductCode('');
   };
 
-  const runVideoGeneration = async (promptText: string, files: string[]) => {
+  const runVideoGeneration = async (
+    promptText: string,
+    files: string[],
+    explicitCode?: string,
+  ) => {
     if (!currentCompany?.id) return;
     if (files.length === 0) {
       pushBotError(
@@ -285,12 +406,30 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
       return;
     }
+    const code = explicitCode?.trim() || productCode.trim();
+    const prefix = imageIntegration?.codePrefix?.trim() ?? '';
+    const sku = code ? (prefix ? `${prefix}-${code}` : code) : '';
+    // SKU varsa backend ffmpeg endpoint'ine yolla — başarılıysa blob URL ve
+    // skuEmbedded=true, başarısızsa orijinal URL ve UI CSS overlay'e düşer.
+    const overlaid =
+      sku && currentCompany?.id
+        ? await applySkuOverlayToVideo({
+            companyId: currentCompany.id,
+            videoUrl: result.url,
+            sku,
+            api,
+          })
+        : { url: result.url, embedded: false };
     appendMessage({
       id: '',
       kind: 'bot-video',
-      url: result.url,
-      sku: computeSku(),
+      url: overlaid.url,
+      sku,
+      skuEmbedded: overlaid.embedded,
+      createdAt: Date.now(),
     });
+    // Bir sonraki ürün için kod tekrar sorulsun.
+    setProductCode('');
   };
 
   const pushBotError = (text: string) =>
@@ -326,51 +465,100 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
   return (
     <div
-      className="flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-2xl"
+      className="relative flex h-full min-w-0 flex-1 flex-col overflow-hidden rounded-lg"
       style={{
-        background: 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: 'blur(32px)',
-        boxShadow:
-          '0px 1px 1px rgba(0,0,0,0.04), 0px 3px 9px rgba(0,0,0,0.04), 0px 6px 18px rgba(0,0,0,0.02)',
+        background: [
+          'linear-gradient(0deg, rgba(255,255,255,0.96), rgba(255,255,255,0.96))',
+          'linear-gradient(180deg, rgba(252,252,252,0.7) 0%, rgba(252,252,252,0.4) 100%)',
+        ].join(', '),
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        boxShadow: [
+          '0 0 0 1px rgba(0,0,0,0.04)',
+          '0 0 2px 0 rgba(0,0,0,0.04)',
+          '0 4px 6px -2px rgba(0,0,0,0.04)',
+          '0 16px 28px -8px rgba(0,0,0,0.04)',
+          '0 24px 40px -12px rgba(0,0,0,0.08)',
+        ].join(', '),
       }}
     >
-      {/* Header — Figma 12249:7375 */}
-      <div className="flex items-center gap-2.5 overflow-hidden px-4 py-3">
-        <div className="flex flex-1 items-center gap-2.5">
-          <AiLogo />
-          <div className="flex h-7 w-10 items-center justify-center overflow-hidden rounded-full bg-black/[0.05] p-1">
-            <span className="text-sm font-medium leading-5 text-black">AI</span>
-          </div>
+      {/* Header — 48px, absolute. Beyaz progressive blur: üstte tam opak
+          beyaz, alta doğru transparanlaşır; backdrop-filter + mask ile
+          altından kayan mesajlar yumuşakça bulanıklaşır. */}
+      <div
+        className="absolute top-0 left-0 right-0 z-10 flex h-12 items-center justify-between gap-1 overflow-hidden px-2.5"
+        style={{
+          background:
+            'linear-gradient(to bottom, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.85) 55%, rgba(255,255,255,0) 100%)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          maskImage:
+            'linear-gradient(to bottom, #000 55%, rgba(0,0,0,0.6) 80%, transparent 100%)',
+          WebkitMaskImage:
+            'linear-gradient(to bottom, #000 55%, rgba(0,0,0,0.6) 80%, transparent 100%)',
+        }}
+      >
+        {/* Sol: BalinaOS AI title (logo + label, statik). */}
+        <div className="flex h-7 flex-1 items-center gap-1.5">
+          <BalinaOsMark
+            className="h-4 w-4 shrink-0"
+            style={{ color: 'var(--balinaos-icon-loud)' }}
+            aria-hidden="true"
+          />
+          <span
+            className="text-[13px] font-medium leading-none"
+            style={{ color: 'var(--balinaos-text-shout)' }}
+          >
+            BalinaOS AI
+          </span>
         </div>
+
+        {/* Sağ: Genişlet (desktop-only) + Kapat. Mobile yalnızca close. */}
         {isDrawer && (
-          <div className="flex items-center gap-1 text-foreground/70 max-sm:hidden">
+          <div className="flex h-7 items-center gap-1">
             <Button
+              isIconOnly
               variant="ghost"
               size="sm"
-              isIconOnly
               aria-label={isAiDrawerExpanded ? 'Daralt' : 'Genişlet'}
               onPress={() => toggleAiDrawerExpanded()}
+              className="max-sm:hidden"
             >
+              {/* Corner brackets — expanded iken içe-doğru (shrink),
+                  daraltılmışken dışa-doğru (expand). */}
               <svg
-                width="14"
-                height="14"
+                width="16"
+                height="16"
                 viewBox="0 0 16 16"
-                fill="currentColor"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
                 aria-hidden="true"
               >
-                <path d="M6.2168 8.72266C6.50798 8.42824 6.98279 8.4257 7.27734 8.7168C7.57154 9.00799 7.57423 9.48287 7.2832 9.77734L4.59863 12.5H6.2998C6.71402 12.5 7.0498 12.8358 7.0498 13.25C7.04964 13.6641 6.71392 14 6.2998 14H2.75C2.55116 14 2.36036 13.9208 2.21973 13.7803C2.07915 13.6397 2.00008 13.4488 2 13.25V9.75C2 9.33579 2.33579 9 2.75 9C3.16421 9 3.5 9.33579 3.5 9.75V11.4775L6.2168 8.72266Z" />
-                <path d="M13.25 2C13.4488 2.00006 13.6397 2.07917 13.7803 2.21973C13.9208 2.36033 14 2.55119 14 2.75V6.25C14 6.66414 13.6641 6.99988 13.25 7C12.8358 7 12.5 6.66421 12.5 6.25V4.52246L9.7832 7.27734C9.49206 7.57173 9.01721 7.57419 8.72266 7.2832C8.42838 6.99201 8.42575 6.51716 8.7168 6.22266L11.4014 3.5H9.7002C9.28598 3.5 8.9502 3.16421 8.9502 2.75C8.95028 2.33586 9.28603 2 9.7002 2H13.25Z" />
+                {isAiDrawerExpanded ? (
+                  <>
+                    <path d="M3 9h4v4" />
+                    <path d="M13 7H9V3" />
+                  </>
+                ) : (
+                  <>
+                    <path d="M3 9v4h4" />
+                    <path d="M13 7V3h-4" />
+                  </>
+                )}
               </svg>
             </Button>
             {onClose && (
               <Button
+                isIconOnly
                 variant="ghost"
                 size="sm"
-                isIconOnly
                 aria-label="Kapat"
                 onPress={onClose}
               >
-                <Xmark className="h-3.5 w-3.5" />
+                <Xmark className="h-4 w-4" />
               </Button>
             )}
           </div>
@@ -378,17 +566,21 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       </div>
 
       {/* Messages — sadece drawer expanded iken %50 ortalı kolon; normal
-          drawer modunda tam genişlik kullanır (dar olduğu için). */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+          drawer modunda tam genişlik kullanır (dar olduğu için). Üstte
+          header'ın altından akış için pt-12 (header 48px). */}
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto pt-12"
+      >
         <div
-          className={`mx-auto w-full px-4 py-2 ${
+          className={`mx-auto w-full px-2 py-4 ${
             isAiDrawerExpanded ? 'sm:max-w-[50%]' : ''
           }`}
         >
-          <ul className="flex flex-col gap-3">
+          <ul className="flex flex-col gap-4">
             {messages.map((m) => (
               <li key={m.id} className="flex flex-col">
-                <MessageView message={m} />
+                <MessageView message={m} onOpenPreview={setMediaPreview} />
               </li>
             ))}
           </ul>
@@ -396,53 +588,86 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       </div>
 
       {/* Empty state suggestions — kullanıcı henüz mesaj göndermedi.
-          Tıklayınca composer'a hazır prompt + mode set olur. */}
+          Tıklayınca composer'a hazır prompt + mode set olur. Composer'ın
+          üst-fade overlay'inin altında kalmaması için z-20 + pb-5. */}
       {!messages.some((m) => m.kind === 'user-text' || m.kind === 'user-image') && (
         <div
-          className={`mx-auto w-full px-4 pb-1 pt-2 ${
+          className={`relative z-20 mx-auto w-full px-4 pb-5 pt-2 ${
             isAiDrawerExpanded ? 'sm:max-w-[50%]' : ''
           }`}
         >
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
+            <Button
+              size="sm"
+              variant="flat"
+              radius="full"
+              onPress={() => {
                 setMode('image');
                 setComposerText('Yeni bir ürün görseli oluştur');
               }}
-              className="flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-black/[0.08]"
+              className="h-8 gap-1.5 text-xs font-medium"
             >
               <Picture className="h-3.5 w-3.5 text-muted" />
               Yeni bir ürün görseli oluştur
-            </button>
-            <button
-              type="button"
-              onClick={() => {
+            </Button>
+            <Button
+              size="sm"
+              variant="flat"
+              radius="full"
+              onPress={() => {
                 setMode('video');
                 setComposerText('Ürün videosu oluştur');
               }}
-              className="flex items-center gap-1.5 rounded-full bg-black/[0.04] px-3 py-1.5 text-xs font-medium text-foreground hover:bg-black/[0.08]"
+              className="h-8 gap-1.5 text-xs font-medium"
             >
               <Play className="h-3.5 w-3.5 text-muted" />
               Ürün videosu oluştur
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
-      {/* Composer — aynı koşula uyar. Drag/drop ve paste ile görsel eklenir. */}
+      {/* Composer — sticky bottom, üst kenarda beyaz progressive blur (Header
+          ile simetrik). Mesaj listesi alttan composer arkasına doğru kayar ve
+          fade ile yumuşakça gözden kaybolur — keskin kesik gitmez. */}
       <div
-        className={`mx-auto w-full px-4 py-3.5 ${
+        className={`relative mx-auto w-full px-2 pb-2 ${
           isAiDrawerExpanded ? 'sm:max-w-[50%]' : ''
         }`}
       >
+        {/* Üst fade: composer container'ın hemen üstünde 28px'lik beyaz
+            gradient + backdrop blur. Mesaj listesi bunun ardından geçince
+            yumuşakça erir. */}
         <div
-          style={{ borderRadius: '9999px' }}
-          className={`relative flex flex-col gap-2 p-1 transition-colors ${
-            isDragging
-              ? 'bg-accent/10 ring-2 ring-accent/40'
-              : 'bg-black/[0.04]'
-          } ${isDragging || isComposerFocused ? '' : 'chroma-border'}`}
+          aria-hidden="true"
+          className="pointer-events-none absolute left-0 right-0 -top-7 h-7"
+          style={{
+            background:
+              'linear-gradient(to top, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.7) 50%, rgba(255,255,255,0) 100%)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            maskImage:
+              'linear-gradient(to top, #000 40%, rgba(0,0,0,0.6) 75%, transparent 100%)',
+            WebkitMaskImage:
+              'linear-gradient(to top, #000 40%, rgba(0,0,0,0.6) 75%, transparent 100%)',
+          }}
+        />
+        <div
+          className={`relative flex flex-col gap-2.5 rounded-md p-2.5 ${
+            isDragging || isComposerFocused ? '' : 'chroma-border'
+          }`}
+          style={{
+            backgroundImage: 'var(--balinaos-bg-raised-shout)',
+            boxShadow: [
+              '0 0 0 1px var(--balinaos-neutral-dark-4)',
+              '0 4px 12px 0 var(--balinaos-neutral-dark-2)',
+              '0 8px 24px 0 var(--balinaos-neutral-dark-2)',
+              '0 16px 32px 0 var(--balinaos-neutral-dark-4)',
+              '0 32px 48px 0 var(--balinaos-neutral-dark-2)',
+            ].join(', '),
+            backdropFilter: 'blur(24px)',
+            WebkitBackdropFilter: 'blur(24px)',
+          }}
           onDragEnter={(e) => {
             if (e.dataTransfer.types.includes('Files')) {
               e.preventDefault();
@@ -470,46 +695,58 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
           }}
         >
           {isDragging && (
-            <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-accent/15 backdrop-blur-sm">
-              <span className="text-sm font-medium text-accent">
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md backdrop-blur-sm"
+              style={{ background: 'var(--balinaos-bg-dark-strong)' }}
+            >
+              <span
+                className="text-sm font-medium"
+                style={{ color: 'var(--balinaos-text-loud)' }}
+              >
                 Görseli buraya bırakın
               </span>
             </div>
           )}
-          {/* Attached image previews — başta picture icon + divider, sonra
-              24×24 round thumbnail'lar. Figma'da @ context icon yerine bizde
-              görsel iconu (Picture) + iliştirilen dosya(lar). */}
+
+          {/* contextRow — eklenen görsellerin chip listesi (Define ChatInput
+              contextRow spec: min-height 32px, gap 4px, flex-wrap). */}
           {attachedImages.length > 0 && (
-            <div className="flex items-center gap-2 px-3 pt-3 text-foreground/70">
-              <Picture className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span className="h-4 w-px bg-black/[0.08]" aria-hidden="true" />
-              <div className="flex flex-wrap items-center gap-1.5">
-                {attachedImages.map((url, i) => (
-                  <div
-                    key={i}
-                    className="relative h-6 w-6 overflow-hidden rounded-full border border-black/10"
+            <div className="flex min-h-8 flex-wrap items-center gap-1">
+              {attachedImages.map((url, i) => (
+                <div
+                  key={i}
+                  className="relative flex h-8 items-center gap-1.5 rounded-[0.5rem] px-1.5"
+                  style={{ background: 'var(--balinaos-bg-dark-muted)' }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-5 w-5 rounded-full object-cover"
+                  />
+                  <span
+                    className="text-[13px] font-medium"
+                    style={{ color: 'var(--balinaos-text-shout)' }}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={() => removeAttachedImage(i)}
-                      aria-label="Görseli kaldır"
-                      className="absolute right-0 top-0 flex h-3 w-3 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
-                    >
-                      <Xmark className="h-2 w-2" />
-                    </button>
-                  </div>
-                ))}
-                <span className="text-xs text-muted">
-                  {attachedImages.length} görsel
-                </span>
-              </div>
+                    {i === 0 ? 'Model' : i === 1 ? 'Ürün' : `Görsel ${i + 1}`}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachedImage(i)}
+                    aria-label="Görseli kaldır"
+                    className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full hover:bg-[var(--balinaos-bg-dark-strong)]"
+                    style={{ color: 'var(--balinaos-icon-strong)' }}
+                  >
+                    <Xmark className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Text input — paste ile görsel desteği */}
-          <div className="px-3 pt-3">
+          {/* inputRow — border yok, sade textarea. Auto-grow:
+              content değiştikçe height yeniden hesaplanır (max 7.5rem). */}
+          <label className="flex min-h-9 cursor-text items-start gap-1.5 p-1.5">
             <input
               ref={fileInputRef}
               type="file"
@@ -522,8 +759,14 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
               }}
             />
             <textarea
+              ref={textareaRef}
               value={composerText}
-              onChange={(e) => setComposerText(e.target.value)}
+              onChange={(e) => {
+                setComposerText(e.target.value);
+                const el = e.currentTarget;
+                el.style.height = 'auto';
+                el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -542,30 +785,40 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
               }}
               onFocus={() => setIsComposerFocused(true)}
               onBlur={() => setIsComposerFocused(false)}
-              placeholder="BalinaOS sor..."
+              placeholder="BalinaOS AI sor..."
               rows={1}
-              className="block w-full resize-none border-none bg-transparent text-sm text-foreground placeholder:text-muted focus:outline-none"
-              style={{ minHeight: 20 }}
+              className="block w-full resize-none rounded-sm border-none bg-transparent px-1 text-[14px] leading-6 outline-none placeholder:text-[var(--balinaos-text-faint)] focus:placeholder:text-[var(--balinaos-text-muted)]"
+              style={{
+                color: 'var(--balinaos-text-shout)',
+                minHeight: '1.5rem',
+                maxHeight: '7.5rem',
+                overflowY: 'auto',
+              }}
             />
-          </div>
+          </label>
 
-          {/* Bottom row: + (mode kısayolu) + Araçlar / mode pill + send */}
-          <div className="flex items-center justify-between gap-2 px-1 pb-1">
-            <div className="flex items-center gap-1">
-              {/* + → görsel yükle (file picker) */}
+          {/* actionsRow — HeroUI v3 Button kullanır. Toolbar bottom'a daha
+              fazla nefes alanı için pb-1.5 (composer container'a ek olarak). */}
+          <div className="flex h-8 items-center justify-between pb-1.5">
+            <div className="flex h-8 items-center gap-1">
               <Button
-                variant="ghost"
-                size="sm"
                 isIconOnly
                 aria-label="Dosya ekle"
                 onPress={() => fileInputRef.current?.click()}
+                variant="light"
+                size="sm"
+                radius="lg"
+                className="h-8 w-8 min-w-8"
               >
-                <Paperclip className="h-4 w-4" />
+                <Paperclip
+                  className="h-4 w-4"
+                  style={{ color: 'var(--balinaos-icon-strong)' }}
+                />
               </Button>
+              <ComposerDivider />
               <ToolsButton mode={mode} onSelect={setMode} />
             </div>
-
-            <div className="flex items-center gap-1">
+            <div className="flex h-8 items-center gap-1">
               <ModelDropdown
                 mode={mode}
                 imageModelId={selectedImageModel}
@@ -573,24 +826,24 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
                 onImageSelect={setSelectedImageModelId}
                 onVideoSelect={setSelectedVideoModelId}
               />
-              <Button
-                variant="tertiary"
-                size="sm"
-                isIconOnly
-                aria-label="Gönder"
+              <SendButton
                 onPress={() => void handleSend()}
+                isActive={!!composerText.trim() || attachedImages.length > 0}
                 isDisabled={
                   isGenerating ||
                   (!composerText.trim() && attachedImages.length === 0)
                 }
-                className="rounded-2xl"
-              >
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+              />
             </div>
           </div>
         </div>
       </div>
+      {mediaPreview && (
+        <AiMediaOverlay
+          item={mediaPreview}
+          onClose={() => setMediaPreview(null)}
+        />
+      )}
     </div>
   );
 }
@@ -646,19 +899,84 @@ function ModeDropdown({
             <Sparkles className="size-4 shrink-0 text-muted" />
             <Label>Auto</Label>
           </Dropdown.Item>
-          <Dropdown.Item id="image" textValue="Görsel Oluştur">
+          <Dropdown.Item id="image" textValue="Görsel">
             <Dropdown.ItemIndicator />
             <Picture className="size-4 shrink-0 text-muted" />
-            <Label>Görsel Oluştur</Label>
+            <Label>Görsel</Label>
           </Dropdown.Item>
-          <Dropdown.Item id="video" textValue="Video Oluştur">
+          <Dropdown.Item id="video" textValue="Video">
             <Dropdown.ItemIndicator />
             <Play className="size-4 shrink-0 text-muted" />
-            <Label>Video Oluştur</Label>
+            <Label>Video</Label>
           </Dropdown.Item>
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>
+  );
+}
+
+/** Composer'da gruplar arası dikey ayırıcı — Define ChatInput_divider spec.
+ *  9px geniş kapsayıcı içinde 1×16 hairline. */
+function ComposerDivider() {
+  return (
+    <span
+      className="flex h-8 w-[9px] items-center justify-center"
+      aria-hidden="true"
+    >
+      <span
+        className="h-4 w-px rounded-full"
+        style={{ background: 'var(--balinaos-border-strong)' }}
+      />
+    </span>
+  );
+}
+
+/** Send butonu — Define ChatInput_sendButton spec. 32×32 round.
+ *  Active (compose text/files): bg neutral-dark-90, icon light-100.
+ *  Disabled: bg dark-faint, icon faint. */
+function SendButton({
+  onPress,
+  isActive,
+  isDisabled,
+}: {
+  onPress: () => void;
+  isActive: boolean;
+  isDisabled: boolean;
+}) {
+  // isActive iken (text/file var) background'da conic-gradient chroma döner;
+  // boş/disabled iken sade gri arka plan.
+  const iconColor = isActive
+    ? 'var(--balinaos-neutral-light-100)'
+    : 'var(--balinaos-icon-faint)';
+  return (
+    <Button
+      isIconOnly
+      size="sm"
+      radius="full"
+      variant="solid"
+      aria-label="Gönder"
+      onPress={onPress}
+      isDisabled={isDisabled}
+      className={`h-8 w-8 min-w-8 shrink-0 ${isActive ? 'chroma-bg' : ''}`}
+      style={
+        isActive ? undefined : { background: 'var(--balinaos-bg-dark-faint)' }
+      }
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.25"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        style={{ color: iconColor }}
+      >
+        <path d="M3.83 6.67L8 2.5l4.17 4.17M8 13.5V3" />
+      </svg>
+    </Button>
   );
 }
 
@@ -748,21 +1066,26 @@ function ModelDropdown({
   return (
     <Dropdown>
       <Dropdown.Trigger
-        className="h-8 max-w-[160px] rounded-2xl px-3 text-xs font-medium text-foreground/80 hover:bg-black/[0.06]"
+        className="inline-flex h-8 max-w-[160px] items-center overflow-hidden rounded-lg bg-transparent px-3 text-xs font-medium text-foreground/80 transition-colors hover:bg-black/[0.06]"
         aria-label="Model seç"
       >
-        <span className="truncate">{activeMeta?.label ?? 'Model'}</span>
+        <span className="block w-full truncate text-left">
+          {activeMeta?.label ?? 'Model'}
+        </span>
       </Dropdown.Trigger>
-      <Dropdown.Popover className="w-[260px]" placement="top end">
-        {/* Search field — Popover üst kısmında, Menu'ye dahil değil */}
-        <div className="border-b border-black/[0.06] p-2">
+      <Dropdown.Popover className="w-[260px] rounded-lg" placement="top end">
+        {/* Search input — sade, icon yok. */}
+        <div
+          className="px-2 py-2"
+          style={{ borderBottom: '1px solid var(--balinaos-border-default)' }}
+        >
           <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Model ara..."
-            className="block w-full rounded-md bg-black/[0.04] px-2 py-1.5 text-xs text-foreground placeholder:text-muted focus:bg-black/[0.06] focus:outline-none"
-            // Aria autoFocus — kullanıcı popover açılınca direkt yazabilsin
+            className="block w-full rounded-lg border-none bg-transparent px-0 py-0.5 text-xs outline-none placeholder:text-[var(--balinaos-text-faint)] focus:placeholder:text-[var(--balinaos-text-muted)]"
+            style={{ color: 'var(--balinaos-text-shout)' }}
             autoFocus
           />
         </div>
@@ -809,11 +1132,14 @@ function ToolsButton({
   // Mod 'auto' → "Auto" ghost; image/video → tertiary (mavi) pill.
   const isAuto = mode === 'auto';
   const label =
-    mode === 'auto' ? 'Auto' : mode === 'image' ? 'Görsel Oluştur' : 'Video Oluştur';
+    mode === 'auto' ? 'Auto' : mode === 'image' ? 'Görsel' : 'Video';
   const Icon = mode === 'auto' ? Sparkles : mode === 'image' ? Picture : Play;
+  // HeroUI v3 Button-uyumlu pill stili: rounded-full, flat (auto) / light
+  // (mod aktif). Hover/active state'leri HeroUI design token'larıyla aynı
+  // hissi vermek için bg-black/[0.04|0.08] kullanılır.
   const triggerClass = isAuto
-    ? 'h-8 rounded-2xl bg-black/[0.06] px-3 text-sm font-medium text-foreground hover:bg-black/[0.08]'
-    : 'h-8 rounded-2xl bg-transparent px-3 text-sm font-medium text-[#0485F7] hover:bg-black/[0.04]';
+    ? 'inline-flex h-8 items-center gap-1 rounded-full bg-black/[0.06] px-3 text-sm font-medium text-foreground hover:bg-black/[0.08]'
+    : 'inline-flex h-8 items-center gap-1 rounded-full bg-transparent px-3 text-sm font-medium text-[#0485F7] hover:bg-black/[0.04]';
   return (
     <ModeDropdown
       mode={mode}
@@ -832,7 +1158,13 @@ function ToolsButton({
 
 /* ---------------- Message renderers ---------------- */
 
-function MessageView({ message }: { message: GuidedMessageWithKind }) {
+function MessageView({
+  message,
+  onOpenPreview,
+}: {
+  message: GuidedMessageWithKind;
+  onOpenPreview: (item: AiMediaPreviewItem) => void;
+}) {
   const m = message;
   switch (m.kind) {
     case 'bot-text':
@@ -842,31 +1174,40 @@ function MessageView({ message }: { message: GuidedMessageWithKind }) {
     case 'bot-image':
       return (
         <div className="self-start">
-          <MediaCard
+          <AiMediaCard
             url={m.url}
             type="image"
             sku={m.sku}
+            createdAt={m.createdAt}
             showSkuOverlay={!!m.sku && !m.skuEmbedded}
-            side="bot"
+            onOpenPreview={onOpenPreview}
           />
         </div>
       );
     case 'bot-video':
       return (
         <div className="self-start">
-          <MediaCard
+          <AiMediaCard
             url={m.url}
             type="video"
             sku={m.sku}
-            showSkuOverlay={!!m.sku}
-            side="bot"
+            createdAt={m.createdAt}
+            showSkuOverlay={!!m.sku && !m.skuEmbedded}
+            onOpenPreview={onOpenPreview}
           />
         </div>
       );
     case 'user-image':
       return (
         <div className="self-end">
-          <MediaCard url={m.url} type="image" compact side="user" />
+          <AiMediaCard
+            url={m.url}
+            type="image"
+            createdAt={m.createdAt}
+            nameOverride={m.name}
+            extOverride={m.ext}
+            onOpenPreview={onOpenPreview}
+          />
         </div>
       );
     case 'pending':
@@ -881,12 +1222,15 @@ type GuidedMessageWithKind =
   ReturnType<typeof useAiCreatorStore.getState>['messages'][number];
 
 function BotBubble({ children }: { children: React.ReactNode }) {
-  // Figma 12249:7447 — Frame 68, rounded 0/16/16/16 (sol-üst köşesi düz).
-  // Kullanıcı isteği: bg rgba(0,0,0,0.04).
+  // AiResponse — Define spec: padding 4px 32px 4px 4px (sağda nefes), gövde
+  // metni 14px/24, kenar yok. Mesaj wrapper'ın self-start'ı dış katmanda.
   return (
     <div
-      className="max-w-[85%] self-start bg-black/[0.04] px-3 py-3 text-sm text-foreground"
-      style={{ borderRadius: '0px 16px 16px 16px' }}
+      className="max-w-[85%] self-start text-[14px] leading-6"
+      style={{
+        color: 'var(--balinaos-text-shout)',
+        padding: '4px 32px 4px 4px',
+      }}
     >
       {children}
     </div>
@@ -894,11 +1238,22 @@ function BotBubble({ children }: { children: React.ReactNode }) {
 }
 
 function UserBubble({ children }: { children: React.ReactNode }) {
-  // Figma 12249:7456 — Frame 68, rounded 16/16/16/0 (sağ-alt köşesi düz).
+  // UserMessage — Define spec: max-w 23.625rem, padding 10px 16px,
+  // border-radius 16px (single-line 24px), bg dark-default. Single-line:
+  // width max-content + radius 1.5rem; biz pratikte tek satır kabul ediyoruz.
   return (
     <div
-      className="max-w-[85%] self-end bg-black/[0.04] px-3 py-3 text-sm text-foreground"
-      style={{ borderRadius: '16px 16px 16px 0px' }}
+      className="self-end break-words"
+      style={{
+        maxWidth: '23.625rem',
+        padding: '10px 16px',
+        borderRadius: '24px',
+        background: 'var(--balinaos-bg-dark-default)',
+        color: 'var(--balinaos-text-shout)',
+        fontSize: '14px',
+        lineHeight: '20px',
+        width: 'max-content',
+      }}
     >
       {children}
     </div>
@@ -914,110 +1269,264 @@ function PendingBubble({ label, mode }: { label: string; mode?: ChatMode }) {
   const mm = Math.floor(elapsed / 60).toString();
   const ss = (elapsed % 60).toString().padStart(2, '0');
   const Icon = mode === 'video' ? Play : Picture;
+  // Define AiStatus_thinkingContainer spec: padding 4px 12px, satır 28px,
+  // gap 8px, padding 4px (toggle butonu görünümünde). icon 20×20 +
+  // shimmer text + elapsed.
   return (
     <div
-      className="ai-pending self-start overflow-hidden"
-      style={{ borderRadius: '0px 16px 16px 16px' }}
+      className="self-start"
+      style={{ padding: '4px 12px' }}
     >
-      {/* Üretim placeholder — shimmer animasyonu ile dolar.
-          Görsel için 240x320 (3:4), video için 240x140 oran. */}
-      <div
-        className={`relative overflow-hidden bg-black/[0.04] ${
-          mode === 'video' ? 'h-[140px]' : 'h-[320px]'
-        } w-[240px]`}
-      >
-        {/* Shimmer overlay — sürekli sağ-sol kayan parıltı */}
-        <div className="ai-shimmer absolute inset-0" />
-        {/* Merkezdeki icon + pulse halka */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative">
-            <span className="ai-pulse-ring absolute inset-0 rounded-full" />
-            <span
-              className="ai-conic-spin relative flex h-12 w-12 items-center justify-center rounded-full text-white"
-              style={{
-                background:
-                  'conic-gradient(from 0deg, #0485F7, #B86CFF, #FF77B5, #FFB454, #0485F7)',
-              }}
-            >
-              <Icon className="h-5 w-5" />
-            </span>
-          </div>
-        </div>
-      </div>
-      {/* Alt etiket */}
-      <div className="flex flex-col gap-0.5 bg-black/[0.04] px-3 py-2.5">
-        <span className="flex items-center gap-2 text-sm text-foreground">
-          <span className="ai-dot inline-flex">
-            <span /><span /><span />
+      <div className="flex h-7 items-center gap-2 rounded-lg p-1">
+        <span
+          className="flex h-5 w-5 shrink-0 items-center justify-center"
+          style={{ color: 'var(--balinaos-icon-default)' }}
+          aria-hidden="true"
+        >
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="ai-text-shimmer text-[13px] font-normal">
+            {label}
           </span>
-          {label}
-        </span>
-        <span className="text-[11px] text-muted">
-          {mm}:{ss}
-          {elapsed >= 30 && elapsed < 90 && ' • genelde 30-60 sn sürer'}
-          {elapsed >= 90 && ' • model yoğun olabilir'}
+          <span
+            className="text-[12px] tabular-nums"
+            style={{ color: 'var(--balinaos-text-faint)' }}
+          >
+            {mm}:{ss}
+          </span>
         </span>
       </div>
-
     </div>
   );
 }
 
-function MediaCard({
+/* ---------------- AI media card (Claude.ai Files-pane stili) ----------------
+ *
+ * Default: temiz preview + altta filename / "{EXT} • {relative}".
+ * Hover: metadata blur'lanıp yukarı kayar, alt taraftan Download butonu fade-in.
+ * Preview tıklaması fullscreen `AiMediaOverlay`'i açar; Download butonu sadece
+ * indirir. Video card içinde sessiz autoplay loop oynar (controls'suz);
+ * overlay'de native controls aktif.
+ */
+
+export interface AiMediaPreviewItem {
+  url: string;
+  type: 'image' | 'video';
+  sku?: string;
+  createdAt?: number;
+}
+
+function extForType(type: 'image' | 'video'): string {
+  // image canvas JPEG verir (sku-overlay.ts toDataURL 'image/jpeg'),
+  // video backend ffmpeg ile mp4. SKU yoksa da konsistan kalsın.
+  return type === 'image' ? 'jpg' : 'mp4';
+}
+
+/** Data URL'den dosya uzantısı çıkarır. `data:image/png;base64,…` → "png".
+ *  HTTP URL'leri için fallback gerekirse path'in son `.xxx` parçasını dener. */
+function extFromUrl(url: string): string | undefined {
+  const m = url.match(/^data:image\/([a-z0-9+.-]+)/i);
+  if (m) {
+    const mime = m[1].toLowerCase();
+    if (mime === 'jpeg') return 'jpg';
+    return mime;
+  }
+  const path = url.split('?')[0];
+  const pm = path.match(/\.([a-z0-9]+)$/i);
+  return pm ? pm[1].toLowerCase() : undefined;
+}
+
+function filenameFor(item: AiMediaPreviewItem): string {
+  const base = item.sku?.trim() || (item.type === 'image' ? 'gorsel' : 'video');
+  return `${base}.${extForType(item.type)}`;
+}
+
+/** Blob/data/HTTP URL'leri için programatik indirme. `<a download>` JSX'iyle
+ *  yapsak HeroUI Button'ın press handler'ı ile çakışıyor; tek bir anchor
+ *  oluşturup tıklamak en stabil yol. */
+function triggerDownload(url: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/** Mesaj metadata satırı için Türkçe relative zaman: "Bugün 15:48",
+ *  "Dün 14:20", "08.05 14:20". createdAt yoksa boş döner. */
+function formatRelativeTime(ts?: number): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const hhmm = `${d.getHours().toString().padStart(2, '0')}:${d
+    .getMinutes()
+    .toString()
+    .padStart(2, '0')}`;
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) return `Bugün ${hhmm}`;
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  const isYesterday =
+    d.getFullYear() === yest.getFullYear() &&
+    d.getMonth() === yest.getMonth() &&
+    d.getDate() === yest.getDate();
+  if (isYesterday) return `Dün ${hhmm}`;
+  const dd = d.getDate().toString().padStart(2, '0');
+  const mm = (d.getMonth() + 1).toString().padStart(2, '0');
+  return `${dd}.${mm} ${hhmm}`;
+}
+
+function AiMediaCard({
   url,
   type,
-  compact,
   sku,
+  createdAt,
   showSkuOverlay,
-  side,
+  onOpenPreview,
+  nameOverride,
+  extOverride,
 }: {
   url: string;
   type: 'image' | 'video';
-  compact?: boolean;
   sku?: string;
+  createdAt?: number;
   showSkuOverlay?: boolean;
-  side: 'bot' | 'user';
+  onOpenPreview: (item: AiMediaPreviewItem) => void;
+  /** filenameFor()'u bypass eder. User uploads için 'model' / 'urun' geliyor. */
+  nameOverride?: string;
+  /** extForType()'u bypass eder. Yüklenen dosyanın gerçek uzantısı. */
+  extOverride?: string;
 }) {
-  const radius =
-    side === 'bot'
-      ? '0px 16px 16px 16px'
-      : '16px 16px 16px 0px';
+  const ext = extOverride || extForType(type);
+  const item: AiMediaPreviewItem = { url, type, sku, createdAt };
+  const filename = nameOverride
+    ? `${nameOverride}.${ext}`
+    : filenameFor(item);
+  const subtitle = `${ext.toUpperCase()}${
+    createdAt ? ` • ${formatRelativeTime(createdAt)}` : ''
+  }`;
   return (
-    <figure
-      className={`overflow-hidden bg-black/[0.04] ${compact ? 'max-w-[180px]' : 'max-w-[260px]'}`}
-      style={{ borderRadius: radius }}
-    >
-      <div className="relative">
-        {type === 'image' ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={url} alt="" className="block w-full" />
-        ) : (
-          <video src={url} controls className="block w-full" />
-        )}
-        {showSkuOverlay && sku && (
-          <span
-            className="pointer-events-none absolute right-4 bottom-4 text-black"
-            style={{
-              fontFamily: 'Arial, sans-serif',
-              fontSize: '24px',
-              fontWeight: 600,
-              lineHeight: 1,
-            }}
-          >
-            {sku}
-          </span>
-        )}
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          download
-          className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/40 px-1.5 py-1 text-[10px] font-medium text-white hover:bg-black/60"
-          aria-label="İndir"
+    <div className="group relative flex w-[320px] cursor-pointer flex-col gap-1 rounded-3xl pb-3 transition-colors hover:bg-black/[0.04]">
+      <div className="flex flex-1 items-center justify-center p-[18px]">
+        <button
+          type="button"
+          onClick={() => onOpenPreview(item)}
+          className="relative block w-full overflow-hidden rounded-xl shadow-[0_20px_40px_-12px_rgba(0,0,0,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+          aria-label="Önizleme aç"
         >
-          <ArrowDownToLine className="h-3 w-3" />
-        </a>
+          {type === 'image' ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={sku || ''} className="block w-full" />
+          ) : (
+            // Sessiz autoplay loop — card içinde temiz görünüm. Native controls
+            // sadece AiMediaOverlay (fullscreen) içinde gösterilir.
+            <video
+              src={url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="block w-full"
+            />
+          )}
+          {showSkuOverlay && sku && (
+            <span
+              className="pointer-events-none absolute bottom-4 left-4 text-black"
+              style={{
+                fontFamily: 'Arial, sans-serif',
+                fontSize: '48px',
+                fontWeight: 400,
+                lineHeight: 1,
+              }}
+            >
+              {sku}
+            </span>
+          )}
+        </button>
       </div>
-    </figure>
+
+      {/* Metadata — default state. Hover'da blur+fade, yukarı kayar. */}
+      <div className="pointer-events-none flex flex-col items-center gap-0.5 transition-all duration-200 group-hover:-translate-y-2.5 group-hover:opacity-0 group-hover:blur-sm">
+        <span className="text-sm font-medium text-foreground">{filename}</span>
+        <span className="text-xs text-muted">{subtitle}</span>
+      </div>
+
+      {/* Action bar — hover'da alttan fade-in. */}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-[10%] items-center justify-center opacity-0 blur-sm transition-all duration-200 group-hover:pointer-events-auto group-hover:-translate-y-4 group-hover:opacity-100 group-hover:blur-none">
+        <Button
+          variant="ghost"
+          size="sm"
+          onPress={() => triggerDownload(url, filename)}
+          className="rounded-full"
+        >
+          <span>İndir</span>
+          <ArrowDownToLine className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function AiMediaOverlay({
+  item,
+  onClose,
+}: {
+  item: AiMediaPreviewItem;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-6 backdrop-blur-xl sm:p-12"
+    >
+      {/* Kapatma — backdrop tıklaması da kapatır, ama explicit X gerekli. */}
+      <Button
+        isIconOnly
+        variant="ghost"
+        size="sm"
+        aria-label="Kapat"
+        onPress={onClose}
+        className="absolute right-4 top-4 z-10 rounded-full bg-white/10 text-white hover:bg-white/20"
+      >
+        <Xmark className="h-4 w-4" />
+      </Button>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-full max-w-5xl flex-col"
+      >
+        {item.type === 'image' ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.url}
+            alt={item.sku || ''}
+            className="max-h-[85vh] max-w-full rounded-lg object-contain"
+          />
+        ) : (
+          <video
+            src={item.url}
+            controls
+            autoPlay
+            className="max-h-[85vh] max-w-full rounded-lg"
+          />
+        )}
+      </div>
+    </div>
   );
 }

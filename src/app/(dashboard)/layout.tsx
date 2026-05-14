@@ -11,7 +11,7 @@ import { useAiStore } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 
 // Bottom strip yüksekliği — AI launcher + history button satırı.
-const BOTTOM_STRIP_HEIGHT = 40;
+const BOTTOM_STRIP_HEIGHT = 56;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { usage, fetchUsage, fetchPricingStatus } = usePricingStore();

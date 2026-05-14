@@ -28,9 +28,30 @@ export type GuidedMessage =
       sku?: string;
       /** SKU canvas ile URL'e gömüldü mü? true ise UI ek CSS overlay basmaz. */
       skuEmbedded?: boolean;
+      /** Mesaj card'ının metadata satırında relative tarih için stamp. */
+      createdAt?: number;
     }
-  | { id: string; kind: 'bot-video'; url: string; caption?: string; sku?: string }
-  | { id: string; kind: 'user-image'; url: string }
+  | {
+      id: string;
+      kind: 'bot-video';
+      url: string;
+      caption?: string;
+      sku?: string;
+      /** SKU ffmpeg drawtext ile mp4'e gömüldü mü? true ise UI ek CSS overlay basmaz. */
+      skuEmbedded?: boolean;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      kind: 'user-image';
+      url: string;
+      createdAt?: number;
+      /** Composer'a 2 görsel eklendiyse ilk = "model", ikinci = "urun".
+       *  Tek görsel ise "gorsel". Card filename'inde gösterilir. */
+      name?: string;
+      /** Yüklenen dosyanın gerçek uzantısı (data URL MIME'inden çıkarılır). */
+      ext?: string;
+    }
   | { id: string; kind: 'pending'; label: string; mode?: ChatMode };
 
 interface AiCreatorState {
@@ -125,13 +146,22 @@ export const useAiCreatorStore = create<AiCreatorState>()((set) => ({
   setProductCode: (code) => set({ productCode: code }),
 }));
 
-/** Video için cinematic varsayılan prompt. Kullanıcı promptu kısa ise zenginleştirir. */
+/** Video için cinematic varsayılan prompt. Kullanıcı promptu kısa ise zenginleştirir.
+ *  Fal Kling endpoint maksimum 2500 karakter kabul ediyor — kullanıcı uzun bir
+ *  prompt (örn. VTON instruction) yapıştırırsa kısaltarak overflow'u önleriz. */
+const FAL_PROMPT_MAX = 2500;
+const VIDEO_SUFFIX =
+  '. Cinematic product video. Smooth camera motion, soft lighting, natural body movement, high fidelity, fashion editorial style.';
+
 export function buildVideoPrompt(userPrompt: string): string {
   const trimmed = userPrompt.trim();
   if (!trimmed) {
-    return 'Cinematic product video. Smooth camera motion, soft lighting, natural body movement, high fidelity, fashion editorial style.';
+    return VIDEO_SUFFIX.slice(2); // baştaki ". " yok
   }
-  return `${trimmed}. Cinematic product video. Smooth camera motion, soft lighting, natural body movement, high fidelity, fashion editorial style.`;
+  const maxUserLen = FAL_PROMPT_MAX - VIDEO_SUFFIX.length - 8; // güvenlik buffer'ı
+  const truncated =
+    trimmed.length > maxUserLen ? trimmed.slice(0, maxUserLen) : trimmed;
+  return `${truncated}${VIDEO_SUFFIX}`;
 }
 
 /* ---------------- History store (persisted) ---------------- */

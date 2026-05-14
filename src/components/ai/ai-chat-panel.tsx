@@ -60,7 +60,7 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const toggleAiDrawerExpanded = useUIStore((s) => s.toggleAiDrawerExpanded);
 
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>('fashn-ai/tryon-v1.6');
+  const [selectedModel, setSelectedModel] = useState<string>('fashn-ai/tryon-max');
   // Output ratio sabit kalıyor — Figma'da boyut chip'i yok; gelecekte mod
   // popover'ında çıkacak.
   const imageSize: FalImageSize = 'square_hd';

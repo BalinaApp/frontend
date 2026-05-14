@@ -56,14 +56,13 @@ export function AiChatDrawer() {
         isAiDrawerOpen ? 'pointer-events-auto' : 'pointer-events-none',
       ].join(' ')}
       style={{
-        // Normal: bottom-right'ta 440×680 floating card (16px margin).
-        // Expanded: sıfıra sıfır, sadece top:16 — content arkada hafif görünsün.
-        // Inset (top/right/bottom/left) ile hesaplanan boyut animate olur;
-        // width/height set etmiyoruz, calc() ile auto-compute.
-        top: showExpanded ? (isMobile ? '0px' : '16px') : 'calc(100% - 696px)',
+        // Normal: bottom-right'ta 394×560 floating card (Notion assistant
+        // floatingContainer spec: 24.625rem × 35rem). Margin 16px.
+        // Expanded: tam ekran (mobile veya web expanded).
+        top: showExpanded ? (isMobile ? '0px' : '16px') : 'calc(100% - 576px)',
         right: showExpanded ? '0px' : '16px',
         bottom: showExpanded ? '0px' : '16px',
-        left: showExpanded ? '0px' : 'calc(100% - 456px)',
+        left: showExpanded ? '0px' : 'calc(100% - 410px)',
         transformOrigin: 'bottom right',
         // Kapalıyken FAB konumundan büyüyerek açılır.
         transform: isAiDrawerOpen ? 'scale(1)' : 'scale(0.6)',

@@ -855,7 +855,15 @@ function OrderDetailDrawer({
           ],
         },
       );
-      toast.success('Kargo etiketi oluşturuldu');
+      // Backend idempotency guard: bu sipariş için zaten barkod varsa MNG'ye
+      // tekrar gitmeden mevcut bilgi döner. Kullanıcıya farklı toast göster.
+      const alreadyExists =
+        data && typeof data === 'object' && (data as { alreadyExists?: unknown }).alreadyExists === true;
+      if (alreadyExists) {
+        toast.info('Bu sipariş için barkod zaten oluşturulmuş, mevcut etiket yazdırılıyor');
+      } else {
+        toast.success('Kargo etiketi oluşturuldu');
+      }
       setCargoOpen(false);
       // Print dialog — MNG response'tan tracking + label bilgisi varsa
       // etikete ekleriz.

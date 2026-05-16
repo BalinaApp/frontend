@@ -68,9 +68,16 @@ export interface Order {
   discountTotal: number;
   customerName: string | null;
   customerEmail: string | null;
+  customerPhone: string | null;
+  billingAddress: string | null;
+  shippingAddress: string | null;
   paymentMethod: string | null;
   itemsCount: number;
   orderDate: string;
+  isInvoiceIssued?: boolean;
+  invoiceIssuedAt?: string | null;
+  invoiceProvider?: string | null;
+  externalInvoiceId?: string | null;
   store: {
     id: string;
     name: string;
@@ -82,6 +89,77 @@ export interface OrdersResponse {
   total: number;
   page: number;
   totalPages: number;
+}
+
+/** Sipariş detayı — items + refunds + shipments + store ile birlikte.
+ *  `GET /companies/:companyId/orders/:orderId` endpoint'inden gelir. */
+export interface OrderDetailItem {
+  id: string;
+  orderId: string;
+  productId: string | null;
+  name: string;
+  sku: string | null;
+  quantity: number;
+  price: number;
+  subtotal: number;
+  total: number;
+  taxTotal: number;
+  /** Pazaryeri ürün/varyant id'leri — BigInt JSON üzerinden string. */
+  wcProductId: string | null;
+  wcVariationId: string | null;
+  /** Local Product join — eşleşme yoksa null. */
+  product: {
+    id: string;
+    name: string;
+    description: string | null;
+    sku: string | null;
+    imageUrl: string | null;
+    productType: string;
+    price: number;
+    purchasePrice: number | null;
+    vatRate: number | null;
+    stockQuantity: number;
+    stockStatus: string;
+  } | null;
+}
+
+export interface OrderDetailRefund {
+  id: string;
+  orderId: string;
+  wcRefundId: string;
+  amount: number;
+  reason: string | null;
+  refundDate: string;
+  createdAt: string;
+}
+
+export interface OrderDetailShipment {
+  id: string;
+  orderId: string;
+  provider: string | null;
+  providerName: string | null;
+  trackingNumber: string | null;
+  trackingLink: string | null;
+  dateShipped: string | null;
+  status: string | null;
+  labelUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrderDetail extends Order {
+  wcOrderId: string;
+  syncedAt: string;
+  createdAt: string;
+  store: {
+    id: string;
+    name: string;
+    platform: string | null;
+    url: string | null;
+  };
+  items: OrderDetailItem[];
+  refunds: OrderDetailRefund[];
+  shipments: OrderDetailShipment[];
 }
 
 export interface DateDetailOrders {
@@ -108,6 +186,10 @@ interface OrderState {
   ordersPage: number;
   ordersTotalPages: number;
   dateDetailOrders: DateDetailOrders | null;
+  /** Drawer için tek sipariş detayı (items + refunds + shipments). */
+  selectedOrderDetail: OrderDetail | null;
+  isOrderDetailLoading: boolean;
+  orderDetailError: string | null;
 
   // Filters
   period: string;
@@ -144,6 +226,9 @@ interface OrderState {
   ) => Promise<void>;
   fetchOrdersByDate: (companyId: string, date: string) => Promise<void>;
   clearDateDetailOrders: () => void;
+  /** Tek sipariş detayı + items + refunds + shipments. */
+  fetchOrderDetail: (companyId: string, orderId: string) => Promise<void>;
+  clearOrderDetail: () => void;
   fetchAllAnalytics: (companyId: string) => Promise<void>;
 }
 
@@ -160,6 +245,9 @@ export const useOrderStore = create<OrderState>((set, get) => ({
   ordersPage: 1,
   ordersTotalPages: 0,
   dateDetailOrders: null,
+  selectedOrderDetail: null,
+  isOrderDetailLoading: false,
+  orderDetailError: null,
   period: '30d',
   customDateRange: null,
   selectedStoreId: null,
@@ -381,6 +469,38 @@ export const useOrderStore = create<OrderState>((set, get) => ({
 
   clearDateDetailOrders: () => {
     set({ dateDetailOrders: null });
+  },
+
+  fetchOrderDetail: async (companyId: string, orderId: string) => {
+    set({
+      isOrderDetailLoading: true,
+      orderDetailError: null,
+    });
+    try {
+      const response = await api.get<OrderDetail>(
+        `/companies/${companyId}/orders/${orderId}`,
+      );
+      set({
+        selectedOrderDetail: response.data,
+        isOrderDetailLoading: false,
+      });
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      set({
+        selectedOrderDetail: null,
+        isOrderDetailLoading: false,
+        orderDetailError:
+          e.response?.data?.message || 'Sipariş detayı yüklenemedi',
+      });
+    }
+  },
+
+  clearOrderDetail: () => {
+    set({
+      selectedOrderDetail: null,
+      orderDetailError: null,
+      isOrderDetailLoading: false,
+    });
   },
 
   fetchAllAnalytics: async (companyId: string) => {

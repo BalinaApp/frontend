@@ -208,7 +208,7 @@ interface InventoryState {
   fetchProduct: (companyId: string, productId: string) => Promise<void>;
   updateProductStock: (companyId: string, productId: string, stockQuantity: number) => Promise<boolean>;
   updateVariationStock: (companyId: string, variationId: string, stockQuantity: number) => Promise<boolean>;
-  updateProductPurchasePrice: (companyId: string, productId: string, purchasePrice: number) => Promise<boolean>;
+  updateProductPurchasePrice: (companyId: string, productId: string, purchasePrice: number | null) => Promise<boolean>;
   updateVariationPurchasePrice: (companyId: string, variationId: string, purchasePrice: number) => Promise<boolean>;
   /** Multi-field PATCH — inline cell editor + edit sayfası için.
    *  Backend: name, isActive, vatRate, sku, description, price, imageUrls[]. */
@@ -409,7 +409,7 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
     }
   },
 
-  updateProductPurchasePrice: async (companyId: string, productId: string, purchasePrice: number) => {
+  updateProductPurchasePrice: async (companyId: string, productId: string, purchasePrice: number | null) => {
     set({ isUpdating: true, error: null });
     try {
       await api.patch(`/company/${companyId}/inventory/products/${productId}/purchase-price`, {

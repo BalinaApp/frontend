@@ -352,13 +352,13 @@ export default function InventoryPage() {
 
   const handlePurchasePriceUpdate = async (
     productId: string,
-    newPrice: number
+    newPrice: number | null
   ): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const success = await updateProductPurchasePrice(currentCompany.id, productId, newPrice);
     if (success) {
       updateProductInList(productId, { purchasePrice: newPrice });
-      toast.success('Alış fiyatı güncellendi');
+      toast.success(newPrice == null ? 'Alış fiyatı kaldırıldı' : 'Alış fiyatı güncellendi');
     } else {
       toast.danger('Alış fiyatı güncellenemedi');
     }
@@ -1163,12 +1163,20 @@ function AddPricePopover({
   onSubmit,
 }: {
   value: number | null;
-  onSubmit: (value: number) => Promise<boolean> | void;
+  onSubmit: (value: number | null) => Promise<boolean> | void;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [raw, setRaw] = useState('');
 
   const submit = async () => {
+    // Boş input + mevcut değer varsa → temizle ("Eklenmedi" state'ine dön).
+    // Boş input + mevcut değer null ise → no-op, sadece kapat.
+    if (raw.trim() === '') {
+      if (value != null) await onSubmit(null);
+      setRaw('');
+      setIsOpen(false);
+      return;
+    }
     const n = parsePriceInput(raw);
     if (n == null || n < 0) {
       toast.danger('Geçerli bir fiyat girin');

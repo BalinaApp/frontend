@@ -1,23 +1,45 @@
 'use client';
 
 import { Xmark } from '@gravity-ui/icons';
+import { useRouter } from 'next/navigation';
+import { toast } from '@heroui/react';
 import { useUIStore } from '@/stores/uiStore';
+import { useAiStore } from '@/stores/aiStore';
+import { useCompanyStore } from '@/stores/companyStore';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 /**
  * AI launcher — bottom strip içinde inline buton.
- * Gradient sphere (Figma 12204:6590) + "BalinaOS AI" text.
- * Drawer açıkken aktif state'te kalır, click ile toggle eder.
+ * OpenAI entegrasyonu yoksa click → /stores'a redirect + highlight,
+ * drawer açılmaz.
  */
 export function AiChatFab() {
-  const { isAiDrawerOpen, toggleAiDrawer } = useUIStore();
+  const { isAiDrawerOpen, toggleAiDrawer, setAiDrawerOpen } = useUIStore();
+  const router = useRouter();
+  const { currentCompany } = useCompanyStore();
+  const integrations = useAiStore((s) => s.integrations);
+  const hasOpenAi = integrations.some(
+    (i) => i.isActive && i.provider === 'openai',
+  );
+
+  const handleClick = () => {
+    if (!hasOpenAi) {
+      if (isAiDrawerOpen) setAiDrawerOpen(false);
+      toast.warning('OpenAI entegrasyonu yok — bağla sayfasından ekleyin');
+      if (currentCompany?.slug) {
+        router.push(`/${currentCompany.slug}/stores?highlight=OPENAI`);
+      }
+      return;
+    }
+    toggleAiDrawer();
+  };
 
   return (
     <button
       type="button"
       aria-label="BalinaOS AI sohbetini aç/kapat"
       aria-pressed={isAiDrawerOpen}
-      onClick={() => toggleAiDrawer()}
+      onClick={handleClick}
       className={[
         // chroma-border sürekli akan renkli kenar — Composer ile aynı stil.
         'chroma-border',

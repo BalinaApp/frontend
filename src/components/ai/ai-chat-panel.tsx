@@ -34,7 +34,7 @@ const allModelOptions: Array<{
   value: string;
   label: string;
   kind: 'image' | 'video';
-  provider: 'fal' | 'fashn';
+  provider: 'fal' | 'fashn' | 'openai';
 }> = MODEL_CATALOG.map((m) => ({
   value: m.id,
   label: m.label,

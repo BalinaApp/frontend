@@ -2,10 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   ArrowDownToLine,
   ArrowRight,
   Check,
+  FileText,
   Paperclip,
   Picture,
   Play,
@@ -39,7 +43,20 @@ interface Props {
  * seçimi (Görsel/Video Oluştur), composer üstünde attached image preview.
  */
 export function GuidedAiChatPanel({ variant, onClose }: Props) {
+  const router = useRouter();
   const { currentCompany } = useCompanyStore();
+
+  /** Eksik entegrasyon → /stores'a yönlendir, ilgili tile'ı highlight et.
+   *  Stores sayfası `?highlight=<id>` query'sini okuyup scale animasyonu uygular. */
+  const redirectToIntegration = (
+    integrationId: 'OPENAI' | 'FASHN_AI' | 'FAL_AI',
+    label: string,
+  ) => {
+    if (!currentCompany?.slug) return;
+    toast.warning(`${label} entegrasyonu yok — bağla sayfasından ekleyin`);
+    router.push(`/${currentCompany.slug}/stores?highlight=${integrationId}`);
+    if (onClose) onClose();
+  };
   const {
     integrations,
     selectedImageModelId,
@@ -49,6 +66,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     fetchIntegrations,
     generateImageRaw,
     generateVideoRaw,
+    generateText: generateTextRaw,
   } = useAiStore();
   const isAiDrawerExpanded = useUIStore((s) => s.isAiDrawerExpanded);
   const toggleAiDrawerExpanded = useUIStore((s) => s.toggleAiDrawerExpanded);
@@ -93,12 +111,17 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     null,
   );
 
-  // Sabit eşleme (kullanıcı kararı): görsel = Fashn, video = Fal Kling.
+  // Sabit eşleme (kullanıcı kararı): metin = OpenAI, görsel = Fashn, video = Fal Kling.
+  const textIntegration =
+    integrations.find((i) => i.provider === 'openai' && i.isActive) ?? null;
   const imageIntegration =
     integrations.find((i) => i.provider === 'fashn' && i.isActive) ?? null;
   const videoIntegration =
     integrations.find((i) => i.provider === 'fal' && i.isActive) ?? null;
-  const hasIntegration = !!imageIntegration && !!videoIntegration;
+  // Text default mode olduğu için en azından bir entegrasyon yeterli — empty
+  // state sadece HİÇBİR entegrasyon yokken gösterilir.
+  const hasIntegration =
+    !!textIntegration || !!imageIntegration || !!videoIntegration;
   // Aktif modeller — composer'daki Model dropdown'undan seçilmişse onu
   // kullan, yoksa provider'a göre default'a düş.
   const selectedImageModel = selectedImageModelId ?? 'fashn-ai/tryon-max';
@@ -112,12 +135,15 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
   }, [currentCompany?.id, fetchIntegrations, fetchSessions]);
 
-  // İlk açılışta selamlama bot mesajı.
+  // İlk açılışta selamlama bot mesajı. Default mode 'text' (OpenAI sohbet).
   useEffect(() => {
     if (messages.length === 0 && hasIntegration) {
-      start('Merhaba! Ne üretmek istersiniz? Composer\'da modu seçin (Görsel/Video), görsel ekleyin ve istediğinizi yazın.');
+      const greeting = textIntegration
+        ? 'Merhaba! Ben BalinaOS AI. Soru sorabilir, ürün açıklaması üretebilir veya pazarlama metni yazmamı isteyebilirsin. Görsel/video için composer\'dan modu değiştir.'
+        : 'Merhaba! Composer\'da modu seçin (Görsel/Video), görsel ekleyin ve istediğinizi yazın.';
+      start(greeting);
     }
-  }, [messages.length, hasIntegration, start]);
+  }, [messages.length, hasIntegration, textIntegration, start]);
 
   // Mesaj listesi her güncellendiğinde en alta kaydır.
   useEffect(() => {
@@ -238,18 +264,18 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
     const promptText = rawText.replace(/(?:^|[\s,.;])kod\s*[:=]\s*[\w-]+/i, '').trim();
 
-    // Auto mode: attached görsel sayısı + prompt'taki "video" anahtar kelime
-    // ile karar ver. 2 görsel + video kelimesi yok → image (Fashn VTON).
-    // 1 görsel veya "video" kelimesi → video (Kling). 0 görsel + "video" →
-    // hata; 0 görsel + "görsel" → image (Fashn 2 görsel gerektireceği için
-    // ileride hata; kullanıcıya uyarı çıkar).
-    const promptHasVideo = /\bvideo\b/i.test(promptText);
+    // Text mode → OpenAI chat completions (sohbet / açıklama üretimi).
+    if (mode === 'text') {
+      setComposerText('');
+      await runTextGeneration(promptText);
+      return;
+    }
+
+    // Mode artık explicit: image veya video (text yukarıda early-return etti,
+    // auto kaldırıldı). Type assertion ile narrow et — diğer chat akışı bu
+    // değişkene image/video bekliyor.
     const resolvedMode: 'image' | 'video' =
-      mode === 'auto'
-        ? promptHasVideo || attachedImages.length === 1
-          ? 'video'
-          : 'image'
-        : mode;
+      mode === 'image' || mode === 'video' ? mode : 'image';
 
     // ----- Image/Video üretimi öncesi: kod yoksa AI önce kodu sorsun -----
     const codeInProductState = productCode.trim();
@@ -339,12 +365,100 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
   };
 
+  const runTextGeneration = async (promptText: string) => {
+    if (!currentCompany?.id) return;
+    if (!textIntegration) {
+      redirectToIntegration('OPENAI', 'OpenAI');
+      return;
+    }
+    if (!promptText.trim()) {
+      pushBotError('Boş mesaj gönderilemez');
+      return;
+    }
+    // User mesajı ekle
+    appendMessage({ id: '', kind: 'user-text', text: promptText });
+    setIsGenerating(true);
+    const pendingId = `pending-${Date.now()}`;
+    appendMessage({
+      id: pendingId,
+      kind: 'pending',
+      label: 'BalinaOS AI düşünüyor…',
+      mode: 'text',
+    });
+    try {
+      // Mevcut sohbet geçmişini chat completions formatına çevir.
+      const history = messages
+        .filter(
+          (m): m is typeof m & { kind: 'user-text' | 'bot-text' } =>
+            m.kind === 'user-text' || m.kind === 'bot-text',
+        )
+        .map((m) => ({
+          role: m.kind === 'user-text' ? ('user' as const) : ('assistant' as const),
+          content: m.kind === 'user-text' ? m.text : m.text,
+        }));
+      const systemMsg = {
+        role: 'system' as const,
+        content: `Sen BalinaOS AI asistanısın — bir e-ticaret yönetim panelinin (BalinaOS) yerleşik asistanısın.
+
+Kullanıcı sana ŞİRKET VERİSİYLE ALAKALI sorular sorabilir: siparişler, ürünler, stok, mağaza/pazaryeri durumları, aylık/haftalık satış istatistikleri vb. Bu tür sorularda hayal etme — kullanılabilir tool'ları çağırarak gerçek veriyi getir:
+
+Mevcut tool'lar:
+- get_order_summary(period): bugün/dün/hafta/ay/yıl satış özeti
+- get_recent_orders(limit, status?): son siparişler
+- get_top_selling_products(period, limit): en çok satanlar
+- get_inventory_summary(): stok özeti
+- get_low_stock_products(limit, threshold): kritik stok
+- search_products(query, limit): ürün ara
+- get_store_list(): bağlı mağazalar
+- get_product_history(sku, limit?): SKU'su verilen ürünün tüm geçmiş hareketleri (satışlar + stok değişiklikleri + ürün güncellemeleri, kim yaptı + ne zaman)
+
+KURALLAR:
+- Sayısal soru sorulduğunda mutlaka ilgili tool'u çağır; tahmin yürütme.
+- Birden fazla tool çağırman gerekirse paralel/sırayla çağır.
+- Yanıtların Türkçe, kısa ve doğrudan olsun. Para birimi: ₺.
+- Tool sonuçlarındaki currency = 'TRY' alanını ₺ olarak insanlaştır.
+- Liste/tablo gerektiren cevaplarda madde işareti kullan.
+- Ürün açıklaması yazma, pazarlama metni vb. yaratıcı görevlerde tool'u kullanma — sadece yaz.
+
+ÖZEL DURUMLAR:
+- Tool sonucunda \`_hint\` alanı varsa (örn. totalOrdersAllTime, latestOrderDate), bunu kullanıcıya açıklarken yorumla. Örn: "Bu dönemde sipariş yok ama sistemde toplam X sipariş var, en son sipariş şu tarihte". Sadece "0 sipariş" deyip geçme.
+- Sipariş/satış sorularında belirli bir dönem belirtilmemişse 'week' kullan ama 0 dönerse 'month' ve 'year' ile de dene; en azından bir veri bul.
+- Tarihleri Türkçe gün/ay/yıl formatında yaz (örn. 12 May 2026).
+
+ÜRÜN GEÇMİŞİ:
+- Kullanıcı bir SKU veya ürün koduyla "geçmiş hareketler", "kim ne zaman stok düşürdü", "ne zaman satıldı" gibi sorular sorarsa \`get_product_history\` tool'unu kullan.
+- Chat alanı DAR olduğu için **tablo kullanma** — onun yerine dikey markdown listesi yaz. Her olay için tek bir madde, içinde tek satır kalın başlık + altında 2-3 satır detay. Şu formatı kullan:
+  - **DD.MM.YYYY HH:MM — Satış (Shopify Mağazam)**
+    1 adet, ₺250, sipariş #1008
+  - **DD.MM.YYYY HH:MM — Stok Güncelleme**
+    user@x.com tarafından, +5 adet
+- Birden fazla mağazada aynı SKU varsa olayları kronolojik tek listede ver, "mağaza" detayda gözüksün.
+- Çok fazla olay varsa (>20) en yenileri ver + "toplam X olay" notu ekle.`,
+      };
+      const result = await generateTextRaw(currentCompany.id, {
+        messages: [systemMsg, ...history, { role: 'user', content: promptText }],
+      });
+      if (!result.text) {
+        pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
+        return;
+      }
+      appendMessage({ id: '', kind: 'bot-text', text: result.text });
+    } finally {
+      removeMessage(pendingId);
+      setIsGenerating(false);
+    }
+  };
+
   const runImageGeneration = async (
     promptText: string,
     files: string[],
     explicitCode?: string,
   ) => {
     if (!currentCompany?.id) return;
+    if (!imageIntegration) {
+      redirectToIntegration('FASHN_AI', 'Fashn.ai');
+      return;
+    }
     if (files.length < 2) {
       pushBotError(
         'Görsel üretimi için 2 görsel gerekli: 1) model (insan), 2) ürün (kıyafet). Lütfen önce iki görseli ekleyip tekrar deneyin.',
@@ -389,6 +503,10 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     explicitCode?: string,
   ) => {
     if (!currentCompany?.id) return;
+    if (!videoIntegration) {
+      redirectToIntegration('FAL_AI', 'Fal.ai');
+      return;
+    }
     if (files.length === 0) {
       pushBotError(
         'Video üretimi için en az bir başlangıç görseli gerekli. Lütfen bir görsel ekleyin.',
@@ -439,29 +557,9 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
   const isDrawer = variant === 'drawer';
 
-  if (!hasIntegration) {
-    const missing: string[] = [];
-    if (!imageIntegration) missing.push('Fashn.ai (görsel)');
-    if (!videoIntegration) missing.push('Fal.ai (video)');
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-6 text-center">
-        <p className="text-sm font-medium text-foreground">
-          {missing.join(' ve ')} bağlı değil
-        </p>
-        <p className="mt-1 text-xs text-muted">
-          AI üretim için Entegrasyonlar sayfasından bu hesapları bağlayın.
-        </p>
-        {currentCompany?.slug && (
-          <Link
-            href={`/${currentCompany.slug}/stores`}
-            className="mt-3 text-xs font-semibold text-accent underline"
-          >
-            Entegrasyonlara git
-          </Link>
-        )}
-      </div>
-    );
-  }
+  // Empty state kaldırıldı: drawer her zaman composer'la açık. Eksik
+  // entegrasyon durumunda send handler kullanıcıyı /stores'a yönlendirip
+  // ilgili tile'ı highlight ediyor (redirectToIntegration helper).
 
   return (
     <div
@@ -588,42 +686,46 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       </div>
 
       {/* Empty state suggestions — kullanıcı henüz mesaj göndermedi.
-          Tıklayınca composer'a hazır prompt + mode set olur. Composer'ın
-          üst-fade overlay'inin altında kalmaması için z-20 + pb-5. */}
-      {!messages.some((m) => m.kind === 'user-text' || m.kind === 'user-image') && (
-        <div
-          className={`relative z-20 mx-auto w-full px-4 pb-5 pt-2 ${
-            isAiDrawerExpanded ? 'sm:max-w-[50%]' : ''
-          }`}
-        >
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="tertiary"
-              onPress={() => {
-                setMode('image');
-                setComposerText('Yeni bir ürün görseli oluştur');
-              }}
-              className="h-8 gap-1.5 rounded-full text-xs font-medium"
-            >
-              <Picture className="h-3.5 w-3.5 text-muted" />
-              Yeni bir ürün görseli oluştur
-            </Button>
-            <Button
-              size="sm"
-              variant="tertiary"
-              onPress={() => {
-                setMode('video');
-                setComposerText('Ürün videosu oluştur');
-              }}
-              className="h-8 gap-1.5 rounded-full text-xs font-medium"
-            >
-              <Play className="h-3.5 w-3.5 text-muted" />
-              Ürün videosu oluştur
-            </Button>
+          Mod'a göre filtrelenir: text → hiç gözükmez, image → görsel, video → video. */}
+      {mode !== 'text' &&
+        !messages.some(
+          (m) => m.kind === 'user-text' || m.kind === 'user-image',
+        ) && (
+          <div
+            className={`relative z-20 mx-auto w-full px-4 pb-5 pt-2 ${
+              isAiDrawerExpanded ? 'sm:max-w-[50%]' : ''
+            }`}
+          >
+            <div className="flex flex-wrap gap-2">
+              {mode === 'image' && (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => {
+                    setComposerText('Yeni bir ürün görseli oluştur');
+                  }}
+                  className="h-8 gap-1.5 rounded-full text-xs font-medium"
+                >
+                  <Picture className="h-3.5 w-3.5 text-muted" />
+                  Yeni bir ürün görseli oluştur
+                </Button>
+              )}
+              {mode === 'video' && (
+                <Button
+                  size="sm"
+                  variant="tertiary"
+                  onPress={() => {
+                    setComposerText('Ürün videosu oluştur');
+                  }}
+                  className="h-8 gap-1.5 rounded-full text-xs font-medium"
+                >
+                  <Play className="h-3.5 w-3.5 text-muted" />
+                  Ürün videosu oluştur
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Composer — sticky bottom, üst kenarda beyaz progressive blur (Header
           ile simetrik). Mesaj listesi alttan composer arkasına doğru kayar ve
@@ -667,17 +769,19 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
             WebkitBackdropFilter: 'blur(24px)',
           }}
           onDragEnter={(e) => {
+            // Text modunda görsel attach yok → drag handlers no-op.
+            if (mode === 'text') return;
             if (e.dataTransfer.types.includes('Files')) {
               e.preventDefault();
               setIsDragging(true);
             }
           }}
           onDragOver={(e) => {
+            if (mode === 'text') return;
             if (e.dataTransfer.types.includes('Files')) e.preventDefault();
           }}
           onDragLeave={(e) => {
-            // Yalnızca container'dan tamamen çıkıldığında kapat — child'a
-            // geçtiğinde leave tetiklenmesin.
+            if (mode === 'text') return;
             if (
               !e.relatedTarget ||
               !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)
@@ -686,6 +790,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
             }
           }}
           onDrop={(e) => {
+            if (mode === 'text') return;
             e.preventDefault();
             setIsDragging(false);
             const file = e.dataTransfer.files?.[0];
@@ -743,8 +848,20 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
           )}
 
           {/* inputRow — border yok, sade textarea. Auto-grow:
-              content değiştikçe height yeniden hesaplanır (max 7.5rem). */}
-          <label className="flex min-h-9 cursor-text items-start gap-1.5 p-1.5">
+              content değiştikçe height yeniden hesaplanır (max 7.5rem).
+              NOT: <div> kullanıyoruz, <label> değil. Label içine gizli file
+              input koyarsak click event'i textarea'ya değil file picker'a
+              gider (HTML label-input association). */}
+          <div
+            className="flex min-h-9 cursor-text items-start gap-1.5 p-1.5"
+            onClick={(e) => {
+              // Composer alanına click → textarea'ya focus. Hidden file input
+              // tıklanmasın diye explicit target check yok — sadece focus.
+              if (e.target === e.currentTarget) {
+                textareaRef.current?.focus();
+              }
+            }}
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -793,36 +910,49 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
                 overflowY: 'auto',
               }}
             />
-          </label>
+          </div>
 
           {/* actionsRow — HeroUI v3 Button kullanır. Toolbar bottom'a daha
               fazla nefes alanı için pb-1.5 (composer container'a ek olarak). */}
           <div className="flex h-8 items-center justify-between pb-1.5">
             <div className="flex h-8 items-center gap-1">
-              <Button
-                isIconOnly
-                aria-label="Dosya ekle"
-                onPress={() => fileInputRef.current?.click()}
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 min-w-8 rounded-lg"
-              >
-                <Paperclip
-                  className="h-4 w-4"
-                  style={{ color: 'var(--balinaos-icon-strong)' }}
-                />
-              </Button>
-              <ComposerDivider />
-              <ToolsButton mode={mode} onSelect={setMode} />
+              {/* Paperclip + Tools — text modunda dosya yükleme yok, sadece mode chip. */}
+              {mode !== 'text' && (
+                <>
+                  <Button
+                    isIconOnly
+                    aria-label="Dosya ekle"
+                    onPress={() => fileInputRef.current?.click()}
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 min-w-8 rounded-lg"
+                  >
+                    <Paperclip
+                      className="h-4 w-4"
+                      style={{ color: 'var(--balinaos-icon-strong)' }}
+                    />
+                  </Button>
+                  <ComposerDivider />
+                </>
+              )}
+              <ToolsButton
+                mode={mode}
+                onSelect={setMode}
+                hasImageIntegration={!!imageIntegration}
+                hasVideoIntegration={!!videoIntegration}
+              />
             </div>
             <div className="flex h-8 items-center gap-1">
-              <ModelDropdown
-                mode={mode}
-                imageModelId={selectedImageModel}
-                videoModelId={selectedVideoModel}
-                onImageSelect={setSelectedImageModelId}
-                onVideoSelect={setSelectedVideoModelId}
-              />
+              {/* Model dropdown text modunda gizli — OpenAI tek model. */}
+              {mode !== 'text' && (
+                <ModelDropdown
+                  mode={mode}
+                  imageModelId={selectedImageModel}
+                  videoModelId={selectedVideoModel}
+                  onImageSelect={setSelectedImageModelId}
+                  onVideoSelect={setSelectedVideoModelId}
+                />
+              )}
               <SendButton
                 onPress={() => void handleSend()}
                 isActive={!!composerText.trim() || attachedImages.length > 0}
@@ -865,20 +995,22 @@ function AiLogo() {
 function ModeDropdown({
   mode,
   onSelect,
+  hasImageIntegration,
+  hasVideoIntegration,
   triggerClassName,
   triggerContent,
   triggerAriaLabel,
 }: {
   mode: ChatMode;
   onSelect: (mode: ChatMode) => void;
+  hasImageIntegration: boolean;
+  hasVideoIntegration: boolean;
   triggerClassName?: string;
   triggerContent: React.ReactNode;
   triggerAriaLabel?: string;
 }) {
   return (
     <Dropdown>
-      {/* Dropdown.Trigger kendi button DOM'unu render eder — className'i ona
-          ver, içeriği bir span ile sar (button-in-button hatasını önler). */}
       <Dropdown.Trigger className={triggerClassName} aria-label={triggerAriaLabel}>
         <span className="flex items-center gap-1">{triggerContent}</span>
       </Dropdown.Trigger>
@@ -888,24 +1020,30 @@ function ModeDropdown({
           selectedKeys={new Set([mode])}
           onSelectionChange={(keys) => {
             const next = Array.from(keys as Set<string>)[0];
-            if (next === 'auto' || next === 'image' || next === 'video') onSelect(next);
+            if (next === 'text' || next === 'image' || next === 'video') {
+              onSelect(next);
+            }
           }}
         >
-          <Dropdown.Item id="auto" textValue="Auto">
+          <Dropdown.Item id="text" textValue="Metin">
             <Dropdown.ItemIndicator />
-            <Sparkles className="size-4 shrink-0 text-muted" />
-            <Label>Auto</Label>
+            <FileText className="size-4 shrink-0 text-muted" />
+            <Label>Metin (OpenAI)</Label>
           </Dropdown.Item>
-          <Dropdown.Item id="image" textValue="Görsel">
-            <Dropdown.ItemIndicator />
-            <Picture className="size-4 shrink-0 text-muted" />
-            <Label>Görsel</Label>
-          </Dropdown.Item>
-          <Dropdown.Item id="video" textValue="Video">
-            <Dropdown.ItemIndicator />
-            <Play className="size-4 shrink-0 text-muted" />
-            <Label>Video</Label>
-          </Dropdown.Item>
+          {hasImageIntegration ? (
+            <Dropdown.Item id="image" textValue="Görsel">
+              <Dropdown.ItemIndicator />
+              <Picture className="size-4 shrink-0 text-muted" />
+              <Label>Görsel (Fashn)</Label>
+            </Dropdown.Item>
+          ) : null}
+          {hasVideoIntegration ? (
+            <Dropdown.Item id="video" textValue="Video">
+              <Dropdown.ItemIndicator />
+              <Play className="size-4 shrink-0 text-muted" />
+              <Label>Video (Fal)</Label>
+            </Dropdown.Item>
+          ) : null}
         </Dropdown.Menu>
       </Dropdown.Popover>
     </Dropdown>
@@ -982,9 +1120,20 @@ function ProviderIcon({
   provider,
   kind,
 }: {
-  provider: 'fal' | 'fashn';
+  provider: 'fal' | 'fashn' | 'openai';
   kind: 'image' | 'video';
 }) {
+  if (provider === 'openai') {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src="/figma/integrations/openai.svg"
+        alt="OpenAI"
+        className="h-4 w-4 shrink-0 rounded-full"
+        aria-hidden="true"
+      />
+    );
+  }
   if (provider === 'fashn') {
     return (
       <span
@@ -1121,25 +1270,35 @@ function ModelDropdown({
 function ToolsButton({
   mode,
   onSelect,
+  hasImageIntegration,
+  hasVideoIntegration,
 }: {
   mode: ChatMode;
   onSelect: (mode: ChatMode) => void;
+  hasImageIntegration: boolean;
+  hasVideoIntegration: boolean;
 }) {
-  // Mod 'auto' → "Auto" ghost; image/video → tertiary (mavi) pill.
-  const isAuto = mode === 'auto';
   const label =
-    mode === 'auto' ? 'Auto' : mode === 'image' ? 'Görsel' : 'Video';
-  const Icon = mode === 'auto' ? Sparkles : mode === 'image' ? Picture : Play;
-  // HeroUI v3 Button-uyumlu pill stili: rounded-full, flat (auto) / light
-  // (mod aktif). Hover/active state'leri HeroUI design token'larıyla aynı
-  // hissi vermek için bg-black/[0.04|0.08] kullanılır.
-  const triggerClass = isAuto
+    mode === 'text'
+      ? 'Metin'
+      : mode === 'image'
+        ? 'Görsel'
+        : mode === 'video'
+          ? 'Video'
+          : 'Metin';
+  const Icon =
+    mode === 'image' ? Picture : mode === 'video' ? Play : FileText;
+  // text = ghost (gri); image/video = tertiary (mavi) pill.
+  const isText = mode === 'text';
+  const triggerClass = isText
     ? 'inline-flex h-8 items-center gap-1 rounded-full bg-black/[0.06] px-3 text-sm font-medium text-foreground hover:bg-black/[0.08]'
     : 'inline-flex h-8 items-center gap-1 rounded-full bg-transparent px-3 text-sm font-medium text-[#0485F7] hover:bg-black/[0.04]';
   return (
     <ModeDropdown
       mode={mode}
       onSelect={onSelect}
+      hasImageIntegration={hasImageIntegration}
+      hasVideoIntegration={hasVideoIntegration}
       triggerClassName={triggerClass}
       triggerAriaLabel="Araçlar"
       triggerContent={
@@ -1220,6 +1379,8 @@ type GuidedMessageWithKind =
 function BotBubble({ children }: { children: React.ReactNode }) {
   // AiResponse — Define spec: padding 4px 32px 4px 4px (sağda nefes), gövde
   // metni 14px/24, kenar yok. Mesaj wrapper'ın self-start'ı dış katmanda.
+  // Markdown desteği: OpenAI **bold**, listeler, tablolar; başlıklar tek-line.
+  const isString = typeof children === 'string';
   return (
     <div
       className="max-w-[85%] self-start text-[14px] leading-6"
@@ -1228,7 +1389,72 @@ function BotBubble({ children }: { children: React.ReactNode }) {
         padding: '4px 32px 4px 4px',
       }}
     >
-      {children}
+      {isString ? (
+        <div className="ai-md flex flex-col gap-2">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={{
+              p: ({ children }) => <p className="my-0">{children}</p>,
+              ul: ({ children }) => (
+                <ul className="my-1 list-disc space-y-1 pl-5">{children}</ul>
+              ),
+              ol: ({ children }) => (
+                <ol className="my-1 list-decimal space-y-1 pl-5">{children}</ol>
+              ),
+              li: ({ children }) => <li className="leading-6">{children}</li>,
+              strong: ({ children }) => (
+                <strong className="font-semibold text-foreground">{children}</strong>
+              ),
+              em: ({ children }) => <em className="italic">{children}</em>,
+              code: ({ children }) => (
+                <code className="rounded bg-foreground/[0.06] px-1 py-0.5 font-mono text-[12.5px]">
+                  {children}
+                </code>
+              ),
+              h1: ({ children }) => (
+                <h3 className="my-1 text-[15px] font-semibold">{children}</h3>
+              ),
+              h2: ({ children }) => (
+                <h3 className="my-1 text-[15px] font-semibold">{children}</h3>
+              ),
+              h3: ({ children }) => (
+                <h3 className="my-1 text-[14px] font-semibold">{children}</h3>
+              ),
+              table: ({ children }) => (
+                <div className="my-1 -mx-2 overflow-x-auto">
+                  <table className="border-collapse text-[13px]" style={{ minWidth: 'max-content' }}>
+                    {children}
+                  </table>
+                </div>
+              ),
+              th: ({ children }) => (
+                <th className="whitespace-nowrap border border-black/10 bg-foreground/[0.04] px-2 py-1 text-left font-medium">
+                  {children}
+                </th>
+              ),
+              td: ({ children }) => (
+                <td className="whitespace-nowrap border border-black/10 px-2 py-1">
+                  {children}
+                </td>
+              ),
+              a: ({ children, href }) => (
+                <a
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-accent underline"
+                >
+                  {children}
+                </a>
+              ),
+            }}
+          >
+            {children as string}
+          </ReactMarkdown>
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -1264,7 +1490,8 @@ function PendingBubble({ label, mode }: { label: string; mode?: ChatMode }) {
   }, []);
   const mm = Math.floor(elapsed / 60).toString();
   const ss = (elapsed % 60).toString().padStart(2, '0');
-  const Icon = mode === 'video' ? Play : Picture;
+  // Text mode'da ikon gösterilmez (OpenAI sohbet için sadece shimmer text).
+  const Icon = mode === 'video' ? Play : mode === 'image' ? Picture : null;
   // Define AiStatus_thinkingContainer spec: padding 4px 12px, satır 28px,
   // gap 8px, padding 4px (toggle butonu görünümünde). icon 20×20 +
   // shimmer text + elapsed.
@@ -1274,13 +1501,15 @@ function PendingBubble({ label, mode }: { label: string; mode?: ChatMode }) {
       style={{ padding: '4px 12px' }}
     >
       <div className="flex h-7 items-center gap-2 rounded-lg p-1">
-        <span
-          className="flex h-5 w-5 shrink-0 items-center justify-center"
-          style={{ color: 'var(--balinaos-icon-default)' }}
-          aria-hidden="true"
-        >
-          <Icon className="h-4 w-4" />
-        </span>
+        {Icon && (
+          <span
+            className="flex h-5 w-5 shrink-0 items-center justify-center"
+            style={{ color: 'var(--balinaos-icon-default)' }}
+            aria-hidden="true"
+          >
+            <Icon className="h-4 w-4" />
+          </span>
+        )}
         <span className="flex items-center gap-1.5">
           <span className="ai-text-shimmer text-[13px] font-normal">
             {label}

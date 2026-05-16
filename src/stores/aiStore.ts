@@ -61,12 +61,12 @@ export interface FalIntegration {
   updatedAt: string;
 }
 
-/** Multi-provider AI entegrasyonu — `provider` ile fal/fashn ayrılır. */
+/** Multi-provider AI entegrasyonu — fal/fashn/openai ile ayrılır. */
 export interface AiIntegration extends FalIntegration {
-  provider: 'fal' | 'fashn';
+  provider: 'fal' | 'fashn' | 'openai';
 }
 
-export type ModelProvider = 'fal' | 'fashn';
+export type ModelProvider = 'fal' | 'fashn' | 'openai';
 
 export interface ModelCatalogEntry {
   id: string;
@@ -446,7 +446,7 @@ interface AiState {
   fetchIntegrations: (companyId: string) => Promise<void>;
   createIntegration: (
     companyId: string,
-    provider: 'fal' | 'fashn',
+    provider: 'fal' | 'fashn' | 'openai',
     args: { name?: string; apiKey: string }
   ) => Promise<AiIntegration | null>;
   updateIntegration: (
@@ -464,7 +464,7 @@ interface AiState {
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
   testApiKey: (
     companyId: string,
-    provider: 'fal' | 'fashn',
+    provider: 'fal' | 'fashn' | 'openai',
     apiKey: string,
   ) => Promise<FalTestResult>;
   testIntegration: (companyId: string, integrationId: string) => Promise<FalTestResult>;
@@ -539,6 +539,20 @@ interface AiState {
     }
   ) => Promise<{ url: string; error?: string }>;
 
+  /** OpenAI chat completions — metin üretici (açıklama, sohbet vs.). */
+  generateText: (
+    companyId: string,
+    args: {
+      messages: Array<{
+        role: 'system' | 'user' | 'assistant';
+        content: string;
+      }>;
+      model?: string;
+      temperature?: number;
+      integrationId?: string;
+    }
+  ) => Promise<{ text: string; error?: string }>;
+
   resetChat: () => void;
 
   // Conversations
@@ -612,7 +626,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       const list = (data ?? []).map((i) => ({
         ...i,
         // Backend tarafı enum'u büyük harf gönderebilir; normalize et.
-        provider: (String(i.provider || 'fal').toLowerCase() as 'fal' | 'fashn'),
+        provider: (String(i.provider || 'fal').toLowerCase() as 'fal' | 'fashn' | 'openai'),
       }));
       const fals = falsOnly(list);
 
@@ -665,7 +679,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       );
       const normalized: AiIntegration = {
         ...data,
-        provider: (String(data.provider || provider).toLowerCase() as 'fal' | 'fashn'),
+        provider: (String(data.provider || provider).toLowerCase() as 'fal' | 'fashn' | 'openai'),
       };
       set((state) => {
         const integrations = [...state.integrations, normalized];
@@ -677,7 +691,27 @@ export const useAiStore = create<AiState>((set, get) => ({
         };
       });
       return normalized;
-    } catch {
+    } catch (err: unknown) {
+      const e = err as {
+        response?: { status?: number; data?: { message?: unknown } };
+        message?: string;
+      };
+      // Backend hatasını console + state'e koy, çağıran toast.danger ile gösterebilir.
+      const raw = e.response?.data?.message ?? e.message ?? 'Anahtar kaydedilemedi';
+      const msg =
+        typeof raw === 'string'
+          ? raw
+          : Array.isArray(raw)
+            ? raw.map(String).join(', ')
+            : 'Anahtar kaydedilemedi';
+      console.error('[createIntegration] failed', e.response?.status, msg, err);
+      // Globally publish via toast so the user sees the real reason.
+      try {
+        const { toast } = await import('@heroui/react');
+        toast.danger(msg);
+      } catch {
+        /* ignore */
+      }
       set({ isSavingIntegration: false, isSavingFal: false });
       return null;
     }
@@ -692,7 +726,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       );
       const normalized: AiIntegration = {
         ...data,
-        provider: (String(data.provider || 'fal').toLowerCase() as 'fal' | 'fashn'),
+        provider: (String(data.provider || 'fal').toLowerCase() as 'fal' | 'fashn' | 'openai'),
       };
       set((state) => {
         const integrations = state.integrations.map((i) =>
@@ -1005,6 +1039,37 @@ export const useAiStore = create<AiState>((set, get) => ({
         'Bilinmeyen hata';
       console.error('[generateVideoRaw] failed:', e?.response?.status, msg, err);
       return { url: '', error: msg };
+    }
+  },
+
+  generateText: async (companyId, args) => {
+    try {
+      const { data } = await api.post<{ text: string }>(
+        `/company/${companyId}/ai/generate/text`,
+        {
+          messages: args.messages,
+          model: args.model,
+          temperature: args.temperature,
+          integrationId: args.integrationId,
+        },
+        { timeout: 60_000 },
+      );
+      return data.text
+        ? { text: data.text }
+        : { text: '', error: 'Backend boş yanıt döndürdü' };
+    } catch (err: unknown) {
+      const e = err as {
+        response?: { status?: number; data?: { message?: string | string[] } };
+        message?: string;
+      };
+      const msg =
+        (Array.isArray(e?.response?.data?.message)
+          ? e.response.data.message.join(', ')
+          : e?.response?.data?.message) ||
+        e?.message ||
+        'Bilinmeyen hata';
+      console.error('[generateText] failed:', e?.response?.status, msg, err);
+      return { text: '', error: msg };
     }
   },
 

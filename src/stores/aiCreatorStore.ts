@@ -14,7 +14,7 @@ const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
  * medyanın sağ-altına basılır. Kod boşsa overlay yok.
  */
 
-export type ChatMode = 'auto' | 'image' | 'video';
+export type ChatMode = 'text' | 'image' | 'video';
 
 /** Sohbet stream mesajları. */
 export type GuidedMessage =
@@ -97,7 +97,7 @@ const initialState: Omit<
 > = {
   sessionId: null,
   messages: [],
-  mode: 'auto',
+  mode: 'text',
   attachedImages: [],
   productCode: '',
 };

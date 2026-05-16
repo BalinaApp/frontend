@@ -802,8 +802,12 @@ export default function InventoryPage() {
                   >
                     {/* LEFT half — checkbox + image + name */}
                     <div className="flex flex-1 items-center gap-3">
-                      {/* Checkbox click row-click'i tetiklemesin */}
-                      <div onClick={(e) => e.stopPropagation()}>
+                      {/* Checkbox click/keydown row'a sızmasın — Space/Enter
+                          navigation tetiklemesin */}
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                      >
                         <Checkbox
                           isSelected={isChecked}
                           onChange={(next) => {
@@ -862,7 +866,10 @@ export default function InventoryPage() {
                       {/* Alış Fiyatı — null veya dolu, aynı chip + dropdown akışı */}
                       <CellWrap>
                         {!hidePurchasePrice ? (
-                          <div onClick={(e) => e.stopPropagation()}>
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            onKeyDown={(e) => e.stopPropagation()}
+                          >
                             <AddPricePopover
                               value={product.purchasePrice}
                               onSubmit={(newPrice) =>
@@ -893,7 +900,10 @@ export default function InventoryPage() {
 
                       {/* Durum — chip trigger + dropdown ile aktif/pasif seç */}
                       <CellWrap>
-                        <div onClick={(e) => e.stopPropagation()}>
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => e.stopPropagation()}
+                        >
                           <StatusPopover
                             isActive={product.isActive}
                             isDisabled={isStockist}

@@ -331,13 +331,44 @@ export default function ProductEditPage() {
     }
     setIsGeneratingDescription(true);
     try {
-      const systemContent =
-        'Sen e-ticaret ürün açıklaması yazarı asistanısın. Türkçe, kısa (60-120 kelime), satışa yönelik, ürünün kullanım alanı + materyal + öne çıkan özelliklerini içeren akıcı bir açıklama yaz. Madde işareti veya başlık kullanma — tek paragraf düz metin döndür.';
+      // SEO uyumlu, sabit formatlı şablon. AI bilinmeyen alanları
+      // ürün adından mantıklı şekilde çıkarsar (kumaş, boy vb.); kullanıcı
+      // sonradan editleyebilir. Format birebir korunur — Google rich results
+      // ve LLM crawler'lar için scannable, anahtar kelime yoğunluğu doğal.
+      const systemContent = [
+        'Sen Türkçe e-ticaret kadın giyim ürün açıklaması uzmanısın. Aşağıdaki ŞABLONU BİREBİR (satır sayısı, emoji ve sıra) takip ederek SEO uyumlu bir açıklama üret.',
+        '',
+        'Çıktı yalnızca düz metin olsun — markdown/başlık/numara kullanma.',
+        '',
+        'ŞABLON (kategori adını ürün adından çıkar: Elbise / Ceket Takım / Pantolon / Tunik / vb.):',
+        'Ürün kodu 👉🏻<SKU>',
+        '<Kategori> fiyatı 👉🏻<fiyat>₺',
+        '<Kategori> boy uzunluğu 👉🏻<cm> cm',
+        'Kumaşı 👉🏻<kumaş tipi>',
+        '',
+        '🌿<beden aralığı> beden aralığıdır',
+        '🌿<Kategori> <kalıp özelliği>',
+        '<kalıp/beden tavsiyesi tek satır> 🌸',
+        '🌿<özellik 1>',
+        '🌿<özellik 2>',
+        '',
+        '(<parantez içinde kapanış tavsiyesi — kalıp / ölçü / kumaş ile ilgili>)',
+        '',
+        'KURALLAR:',
+        '- SKU veya fiyat verilmemişse o satırı atla.',
+        '- Bilinmeyen alanlar (boy/kumaş/beden aralığı/kalıp/astar/kuşak/yaka/kol vb.) için ürün adına ve kategoriye uygun mantıklı, satışa yönelik tahminler yap (örn. uzun elbise → 135-140 cm).',
+        '- 🌿 ile başlayan 4-6 satır olsun; ürünün öne çıkan özelliklerini anahtar kelimelerle (tesettür, geniş kalıp, astarlı, viskon, müslim, kuşaklı, fermuarlı vb.) doğal şekilde vurgula.',
+        '- 🌸 ile biten satır kalıp/beden tavsiyesi olsun (örn. "1 beden küçük tercih edebilirsiniz 🌸").',
+        '- Kapanış parantezi tek cümle, müşteriye yönelik samimi ton.',
+        '- SEO: ürün adındaki kategori + en az 2 öne çıkan özellik anahtar kelimesi spec bloğunda + bullet bloğunda geçsin.',
+        '- 👉🏻 ve 🌿 emojilerini birebir kullan; başka emoji ekleme (yalnızca tavsiye satırında 🌸).',
+      ].join('\n');
       const userParts = [
         `Ürün adı: ${name.trim()}`,
         sku.trim() ? `SKU: ${sku.trim()}` : '',
+        price.trim() ? `Fiyat: ${price.trim()}₺` : '',
         description.trim()
-          ? `Mevcut açıklama (geliştir veya yeniden yaz): ${description.trim()}`
+          ? `Mevcut açıklama (referans al, gerekirse yeniden yaz): ${description.trim()}`
           : '',
       ]
         .filter(Boolean)

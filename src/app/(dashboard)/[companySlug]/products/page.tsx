@@ -626,7 +626,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="flex flex-col overflow-hidden">
+      <div className="flex flex-col">
         {/* ============== Filter row (Figma 12232:12828) ==============
             Sol: pill tabs ("Tüm Ürünler" seçili + saved filter setleri).
             Sağ: FilterPopover icon button. ActiveFilterChips & "+" tab
@@ -679,12 +679,12 @@ export default function InventoryPage() {
         </div>
 
         {/* ============== Header + rows (p-2.5 gap-2.5) ============== */}
-        <div className="flex flex-col gap-2.5 overflow-hidden p-2.5">
+        <div className="flex flex-col gap-2.5 p-2.5">
           {/* Column header — left half: name, right half: 5 cols. Tüm
               kolonlar SortHeaderButton — hover'da pill+arrow gösterir;
               tıklayınca sıralama uygulanır (backend `sortBy` string olarak
               alıyor). */}
-          <div className="flex items-center justify-between overflow-hidden rounded-2xl px-3 py-1">
+          <div className="flex items-center justify-between">
             <div className="flex flex-1 items-center gap-2">
               <SortHeaderButton
                 field="name"

@@ -378,7 +378,7 @@ export default function OrdersPage() {
 
       {/* Sipariş detay paneli artık layout seviyesinde sibling card olarak
           render ediliyor — burada wrap edici flex split yok, sayfa düz. */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-col">
         {/* ============== Filter row (Products page'iyle birebir) ==============
             Sol: pill tabs ("Tüm Siparişler" + dinamik saved filter setleri).
             Sağ: FilterPopover icon button.
@@ -427,10 +427,10 @@ export default function OrdersPage() {
         </div>
 
         {/* ============== Header + rows ============== */}
-        <div className="flex flex-col gap-2.5 overflow-hidden p-2.5">
+        <div className="flex flex-col gap-2.5 p-2.5">
           {/* Column header — left half: order, right half: 4 cols
               (Durum/Mağaza/Tutar/Tarih hepsi sıralanabilir, products pattern'i). */}
-          <div className="flex items-center justify-between overflow-hidden rounded-2xl px-3 py-1">
+          <div className="flex items-center justify-between">
             <div className="flex flex-1 items-center gap-2">
               <div className="px-1">
                 <span className="text-xs font-medium leading-4 text-muted">

@@ -143,6 +143,8 @@ export interface ProductDetail {
   /** URL-friendly slug — null olabilir. */
   slug: string | null;
   name: string;
+  /** Ürün açıklaması (WC `description`); null olabilir. */
+  description: string | null;
   sku: string | null;
   imageUrl: string | null;
   productType: string;
@@ -150,6 +152,8 @@ export interface ProductDetail {
   stockStatus: string;
   price: number;
   purchasePrice: number | null;
+  /** KDV oranı (%); null = belirsiz. */
+  vatRate: number | null;
   manageStock: boolean;
   isActive: boolean;
   wcProductId: bigint;

@@ -177,14 +177,20 @@ function DashboardLayoutInner({
   const sidePanel = useSidePanelContent();
 
   return (
-    <div className="bg-page flex h-screen w-full">
+    // h-dvh — mobil tarayıcılarda URL barı açıkken 100vh viewport'tan büyük
+    // çıkıyor, alt 56px (AI fab + usage warning) ekran altı geçiyordu. dvh
+    // dinamik viewport ile gerçek görünür yüksekliği esas alır. PWA için
+    // ayrıca alt strip'e safe-area-inset-bottom padding'i ekliyoruz.
+    <div className="bg-page flex h-dvh w-full">
       <AppSidebar />
-      <main className="flex h-screen min-w-0 flex-1 flex-col p-1 pl-0">
+      <main className="flex h-dvh min-w-0 flex-1 flex-col p-1 pl-0">
         <div
           className="relative flex flex-col"
           style={
             showBottomStrip
-              ? { height: `calc(100vh - ${stripHeight}px)` }
+              ? {
+                  height: `calc(100dvh - ${stripHeight}px - env(safe-area-inset-bottom))`,
+                }
               : { flex: '1 1 0%', minHeight: 0 }
           }
         >
@@ -216,7 +222,10 @@ function DashboardLayoutInner({
         {showBottomStrip && (
           <div
             className="flex shrink-0 items-center justify-end gap-2 px-3"
-            style={{ height: BOTTOM_STRIP_HEIGHT }}
+            style={{
+              height: `calc(${BOTTOM_STRIP_HEIGHT}px + env(safe-area-inset-bottom))`,
+              paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
           >
             {(isOnTrial || hasLimitPill) && (
               <UsageWarning

@@ -26,6 +26,7 @@ import {
   TextField,
   toast,
 } from '@heroui/react';
+import JsBarcode from 'jsbarcode';
 import { api } from '@/services/api';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -932,11 +933,64 @@ function OrderDetailDrawer({
     return null;
   };
 
+  // JsBarcode ile tracking number'ı Code128 SVG'ye render et. iframe içinde
+  // çalışmaz; ana doc'ta detached SVG'ye çiziyoruz, sonra innerHTML'ini
+  // print HTML'ine inject ediyoruz.
+  const renderBarcodeSvg = (value: string): string => {
+    try {
+      const svg = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'svg',
+      ) as SVGSVGElement;
+      JsBarcode(svg, value, {
+        format: 'CODE128',
+        width: 2,
+        height: 80,
+        displayValue: true,
+        fontSize: 14,
+        textMargin: 4,
+        margin: 0,
+        background: '#FFFFFF',
+        lineColor: '#000000',
+      });
+      return svg.outerHTML;
+    } catch {
+      return '';
+    }
+  };
+
+  // Backend response'undan ürün satırlarını çıkar. productInfoLabel58mm
+  // hazırsa onu kullan; yoksa order detail items'tan oluştur.
+  const extractProductLines = (apiData: unknown): string[] => {
+    if (apiData && typeof apiData === 'object') {
+      const d = apiData as {
+        productInfoLabel58mm?: { lines?: unknown } | null;
+      };
+      const lines = d.productInfoLabel58mm?.lines;
+      if (Array.isArray(lines) && lines.length > 0) {
+        return lines.filter((l): l is string => typeof l === 'string');
+      }
+    }
+    // Fallback: order detail
+    if (detail?.items?.length) {
+      return [
+        `Siparis No: ${order.orderNumber}`,
+        ...detail.items.map((it: OrderDetailItem) => {
+          const qty = it.quantity > 1 ? ` x${it.quantity}` : '';
+          return `${it.name}${qty} | ${it.sku ?? '-'}`;
+        }),
+      ];
+    }
+    return [];
+  };
+
   const runPrintLabel = (
     apiData: unknown,
     pkg: { desi: number; kg: number; content: string },
   ) => {
     const tracking = extractTracking(apiData);
+    const barcodeSvg = tracking ? renderBarcodeSvg(tracking) : '';
+    const productLines = extractProductLines(apiData);
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
     Object.assign(iframe.style, {
@@ -966,6 +1020,32 @@ function OrderDetailDrawer({
       ? esc(order.shippingAddress).replace(/\n/g, '<br/>')
       : '';
 
+    // 2. sayfa — ürün listesi. İlk satır ("Siparis No: ...") başlık olarak
+    // ayrı render edilir; kalan satırlar tablo satırlarına dönüşür.
+    const productHeader = productLines[0] || '';
+    const productRows = productLines.slice(1);
+    const productsPageHtml = productRows.length
+      ? `
+  <div class="page page-products">
+    <div class="products-header">
+      <div class="products-label">Ürün listesi</div>
+      <div class="products-order">${esc(productHeader || formatOrderNo(order.orderNumber))}</div>
+    </div>
+    <div class="products-list">
+      ${productRows
+        .map(
+          (line) =>
+            `<div class="product-line">${esc(line)}</div>`,
+        )
+        .join('')}
+    </div>
+    <div class="products-footer">
+      <span>${esc(order.customerName || 'Misafir')}</span>
+      <span>${esc(formatDate(order.orderDate))}</span>
+    </div>
+  </div>`
+      : '';
+
     doc.open();
     doc.write(`<!doctype html>
 <html lang="tr">
@@ -975,7 +1055,9 @@ function OrderDetailDrawer({
 <style>
   @page { size: 10cm 15cm; margin: 4mm; }
   * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; margin: 0; padding: 6mm; color: #18181B; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; margin: 0; color: #18181B; }
+  .page { padding: 6mm; min-height: calc(15cm - 8mm); display: flex; flex-direction: column; }
+  .page + .page { page-break-before: always; }
   h1 { font-size: 14pt; margin: 0 0 3mm; font-weight: 600; }
   .order-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11pt; color: #71717A; margin: 0 0 4mm; }
   .section { margin-bottom: 4mm; }
@@ -987,32 +1069,50 @@ function OrderDetailDrawer({
   .row .v { color: #18181B; font-weight: 500; }
   .total { border-top: 1pt solid #18181B; margin-top: 2mm; padding-top: 2mm; }
   .total .v { font-weight: 700; font-size: 11pt; }
+  .barcode-block { margin-top: auto; padding-top: 4mm; border-top: 0.5pt solid #E8E8E8; text-align: center; }
+  .barcode-block svg { max-width: 100%; height: auto; }
+  .barcode-fallback { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; letter-spacing: 0.1em; padding: 4mm 0; }
+  .page-products { padding-top: 8mm; }
+  .products-header { margin-bottom: 4mm; }
+  .products-label { font-size: 8pt; color: #71717A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 1mm; }
+  .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; }
+  .products-list { flex: 1; }
+  .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #E8E8E8; word-break: break-word; }
+  .product-line:last-child { border-bottom: none; }
+  .products-footer { margin-top: 4mm; padding-top: 3mm; border-top: 0.5pt solid #E8E8E8; display: flex; justify-content: space-between; font-size: 8pt; color: #71717A; }
 </style>
 </head>
 <body>
-  <h1>${esc(order.customerName || 'Misafir')}</h1>
-  <p class="order-no">${esc(formatOrderNo(order.orderNumber))}</p>
-  ${
-    shippingHtml
-      ? `<div class="section"><div class="label">Teslimat adresi</div><div class="value">${shippingHtml}</div></div>`
-      : ''
-  }
-  ${
-    order.customerPhone
-      ? `<div class="section"><div class="label">Telefon</div><div class="value">${esc(order.customerPhone)}</div></div>`
-      : ''
-  }
-  <div class="row"><span class="k">Tarih</span><span class="v">${esc(formatDate(order.orderDate))}</span></div>
-  <div class="row"><span class="k">Mağaza</span><span class="v">${esc(store?.name ?? order.store?.name ?? '—')}</span></div>
-  <div class="row"><span class="k">Ürün</span><span class="v">${order.itemsCount}</span></div>
-  <div class="row"><span class="k">Ödeme</span><span class="v">${esc(order.paymentMethod || '—')}</span></div>
-  <div class="row"><span class="k">Paket</span><span class="v">${pkg.desi} desi · ${pkg.kg} kg</span></div>
-  ${
-    tracking
-      ? `<div class="row"><span class="k">Kargo no</span><span class="v" style="font-family: ui-monospace, 'SF Mono', Menlo, monospace;">${esc(tracking)}</span></div>`
-      : ''
-  }
-  <div class="row total"><span class="k">Toplam</span><span class="v">${esc(formatCurrency(order.total))}</span></div>
+  <div class="page">
+    <h1>${esc(order.customerName || 'Misafir')}</h1>
+    <p class="order-no">${esc(formatOrderNo(order.orderNumber))}</p>
+    ${
+      shippingHtml
+        ? `<div class="section"><div class="label">Teslimat adresi</div><div class="value">${shippingHtml}</div></div>`
+        : ''
+    }
+    ${
+      order.customerPhone
+        ? `<div class="section"><div class="label">Telefon</div><div class="value">${esc(order.customerPhone)}</div></div>`
+        : ''
+    }
+    <div class="row"><span class="k">Tarih</span><span class="v">${esc(formatDate(order.orderDate))}</span></div>
+    <div class="row"><span class="k">Mağaza</span><span class="v">${esc(store?.name ?? order.store?.name ?? '—')}</span></div>
+    <div class="row"><span class="k">Ürün</span><span class="v">${order.itemsCount}</span></div>
+    <div class="row"><span class="k">Ödeme</span><span class="v">${esc(order.paymentMethod || '—')}</span></div>
+    <div class="row"><span class="k">Paket</span><span class="v">${pkg.desi} desi · ${pkg.kg} kg</span></div>
+    <div class="row total"><span class="k">Toplam</span><span class="v">${esc(formatCurrency(order.total))}</span></div>
+    ${
+      tracking
+        ? `<div class="barcode-block">${
+            barcodeSvg
+              ? barcodeSvg
+              : `<div class="barcode-fallback">${esc(tracking)}</div>`
+          }</div>`
+        : ''
+    }
+  </div>
+  ${productsPageHtml}
 </body>
 </html>`);
     doc.close();

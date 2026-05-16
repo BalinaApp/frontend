@@ -933,9 +933,60 @@ function OrderDetailDrawer({
     return null;
   };
 
-  // JsBarcode ile tracking number'ı Code128 SVG'ye render et. iframe içinde
-  // çalışmaz; ana doc'ta detached SVG'ye çiziyoruz, sonra innerHTML'ini
-  // print HTML'ine inject ediyoruz.
+  // MNG createBarcode response'unda hazır label varsa onu kullan — varyantlar:
+  //   - labelImage / barcodeImage / LabelImage  → base64 PNG (data URL'e wrap)
+  //   - labelPdf / LabelPdf                     → base64 PDF
+  //   - labelUrl / labelLink / label_url        → uzak resim/PDF URL'i
+  //   - zpl / ZPL                               → thermal raw (browser print için kullanılamaz)
+  // Hiçbiri yoksa JsBarcode fallback'i devreye girer.
+  const extractMngLabelHtml = (apiData: unknown): string | null => {
+    if (!apiData || typeof apiData !== 'object') return null;
+    const d = apiData as Record<string, unknown>;
+    const pick = (...keys: string[]): string | undefined => {
+      for (const k of keys) {
+        const v = d[k];
+        if (typeof v === 'string' && v.trim()) return v.trim();
+      }
+      return undefined;
+    };
+
+    const url = pick('labelUrl', 'LabelUrl', 'labelLink', 'label_url');
+    if (url) {
+      if (/\.pdf(\?|$)/i.test(url)) {
+        return `<embed src="${url}" type="application/pdf" class="mng-label-embed" />`;
+      }
+      return `<img src="${url}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+    }
+
+    const pdfBase64 = pick('labelPdf', 'LabelPdf', 'labelPdfBase64');
+    if (pdfBase64) {
+      const src = pdfBase64.startsWith('data:')
+        ? pdfBase64
+        : `data:application/pdf;base64,${pdfBase64}`;
+      return `<embed src="${src}" type="application/pdf" class="mng-label-embed" />`;
+    }
+
+    const imgBase64 = pick(
+      'labelImage',
+      'LabelImage',
+      'barcodeImage',
+      'BarcodeImage',
+      'labelData',
+      'LabelData',
+    );
+    if (imgBase64) {
+      const src = imgBase64.startsWith('data:')
+        ? imgBase64
+        : `data:image/png;base64,${imgBase64}`;
+      return `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+    }
+
+    return null;
+  };
+
+  // FALLBACK: MNG hazır label döndürmediyse JsBarcode ile tracking'i Code128
+  // SVG'ye render et. Backend log'larında gerçek MNG alanı tespit edilince
+  // bu fallback ve jsbarcode dep'i kaldırılacak.
   const renderBarcodeSvg = (value: string): string => {
     try {
       const svg = document.createElementNS(
@@ -989,7 +1040,10 @@ function OrderDetailDrawer({
     pkg: { desi: number; kg: number; content: string },
   ) => {
     const tracking = extractTracking(apiData);
-    const barcodeSvg = tracking ? renderBarcodeSvg(tracking) : '';
+    // 1) Hazır MNG label varsa onu kullan (tercih), 2) yoksa JsBarcode fallback,
+    // 3) o da yoksa düz monospace tracking string.
+    const mngLabelHtml = extractMngLabelHtml(apiData);
+    const barcodeSvg = !mngLabelHtml && tracking ? renderBarcodeSvg(tracking) : '';
     const productLines = extractProductLines(apiData);
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
@@ -1072,6 +1126,10 @@ function OrderDetailDrawer({
   .barcode-block { margin-top: auto; padding-top: 4mm; border-top: 0.5pt solid #E8E8E8; text-align: center; }
   .barcode-block svg { max-width: 100%; height: auto; }
   .barcode-fallback { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; letter-spacing: 0.1em; padding: 4mm 0; }
+  .mng-label-img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+  .mng-label-embed { width: 100%; height: 9cm; border: 0; }
+  .mng-label-page { padding: 0; }
+  .mng-label-page .mng-label-img, .mng-label-page .mng-label-embed { width: 10cm; height: 15cm; max-width: none; }
   .page-products { padding-top: 8mm; }
   .products-header { margin-bottom: 4mm; }
   .products-label { font-size: 8pt; color: #71717A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 1mm; }
@@ -1083,6 +1141,11 @@ function OrderDetailDrawer({
 </style>
 </head>
 <body>
+  ${
+    mngLabelHtml
+      ? `<div class="page mng-label-page">${mngLabelHtml}</div>`
+      : ''
+  }
   <div class="page">
     <h1>${esc(order.customerName || 'Misafir')}</h1>
     <p class="order-no">${esc(formatOrderNo(order.orderNumber))}</p>
@@ -1103,7 +1166,9 @@ function OrderDetailDrawer({
     <div class="row"><span class="k">Paket</span><span class="v">${pkg.desi} desi · ${pkg.kg} kg</span></div>
     <div class="row total"><span class="k">Toplam</span><span class="v">${esc(formatCurrency(order.total))}</span></div>
     ${
-      tracking
+      // MNG label zaten yukarıdaki sayfada gözüküyorsa burada tekrar barkod
+      // çizmeye gerek yok; sadece MNG yoksa tracking fallback'i bas.
+      !mngLabelHtml && tracking
         ? `<div class="barcode-block">${
             barcodeSvg
               ? barcodeSvg

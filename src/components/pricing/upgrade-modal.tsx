@@ -1,10 +1,10 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { Check, Sparkles, Thunderbolt as Zap, CrownDiamond as Crown } from '@gravity-ui/icons';
 import { Button, Modal } from '@heroui/react';
 import { usePricingStore, PlanFeatures } from '@/stores/pricingStore';
-import { useCompanyStore } from '@/stores/companyStore';
+import { UpgradePlanModal } from './upgrade-plan-modal';
 
 interface UpgradeModalProps {
   open: boolean;
@@ -112,20 +112,18 @@ export function UpgradeModal({
   feature,
   requiredPlan,
 }: UpgradeModalProps) {
-  const router = useRouter();
-  const { currentCompany } = useCompanyStore();
   const { myPlan } = usePricingStore();
+  const [upgradePlan, setUpgradePlan] = useState<'PRO' | 'ENTERPRISE' | null>(null);
 
   const handleUpgrade = (planType: 'PRO' | 'ENTERPRISE') => {
     onOpenChange(false);
-    if (currentCompany) {
-      router.push(`/${currentCompany.slug}/pricing?upgrade=${planType}`);
-    }
+    setUpgradePlan(planType);
   };
 
   const currentPlanName = myPlan?.plan.name || 'FREE';
 
   return (
+    <>
     <Modal isOpen={open} onOpenChange={onOpenChange}>
       <Modal.Backdrop>
         <Modal.Container>
@@ -174,5 +172,14 @@ export function UpgradeModal({
         </Modal.Container>
       </Modal.Backdrop>
     </Modal>
+
+    {upgradePlan && (
+      <UpgradePlanModal
+        isOpen={!!upgradePlan}
+        onOpenChange={(open) => !open && setUpgradePlan(null)}
+        defaultPlan={upgradePlan}
+      />
+    )}
+    </>
   );
 }

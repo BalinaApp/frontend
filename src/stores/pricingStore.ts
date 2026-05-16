@@ -100,23 +100,24 @@ export const usePricingStore = create<PricingState>((set, get) => ({
     }
   },
 
-  // Fetch usage info
+  // Fetch usage info — pricing modülü kapalı veya backend down olunca sessiz
+  // şekilde fail eder; UI banner'lar bu fetch'in başarısına bağlı değil.
   fetchUsage: async () => {
     try {
       const response = await api.get('/pricing/usage');
       set({ usage: response.data });
-    } catch (error: unknown) {
-      console.error('Usage fetch error:', error);
+    } catch {
+      // sessiz fail — usage UI'da banner için opsiyonel.
     }
   },
 
-  // Fetch pricing status (enabled/disabled)
+  // Pricing status — endpoint yoksa veya network hatası varsa default false.
   fetchPricingStatus: async () => {
     try {
       const response = await api.get('/pricing/status');
       set({ isPricingEnabled: response.data.enabled });
-    } catch (error: unknown) {
-      console.error('Pricing status fetch error:', error);
+    } catch {
+      // sessiz fail — isPricingEnabled false kalır.
     }
   },
 

@@ -1,13 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  Box as Package,
+  Plus,
   ArrowDown,
+  ChevronDown,
   Pencil,
+  Copy,
+  TrashBin,
   CircleDashed,
   Check,
   CircleXmark,
@@ -18,22 +21,31 @@ import {
   Calendar,
 } from '@gravity-ui/icons';
 import {
+  AlertDialog,
+  Button,
   Checkbox,
+  Dropdown,
+  FieldError,
+  Input,
+  Label,
+  Modal,
+  TextField,
   Tooltip as UITooltip,
   toast,
 } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
-import {
-  EditableTextCell,
-  EditablePriceCell,
-} from '@/components/inventory';
+import { useProductMappingStore } from '@/stores/productMappingStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { FilterPopover } from '@/components/products/filter-popover';
-import { SavedFilterTabs } from '@/components/products/saved-filter-tabs';
 import { ActiveFilterChips } from '@/components/products/active-filter-chips';
+import { useSavedFilterStore } from '@/stores/savedFilterStore';
+import {
+  applyFilterPayload,
+  clearFilters as clearAllFilters,
+} from '@/components/products/filter-types';
 import { BulkActionsBar } from '@/components/products/bulk-actions-bar';
 import type { FilterDef } from '@/components/products/filter-types';
 
@@ -41,19 +53,32 @@ import type { FilterDef } from '@/components/products/filter-types';
 
 type ActiveFilter = 'all' | 'yes' | 'no';
 type MappingFilter = 'all' | 'mapped' | 'unmapped';
-type SortField = 'name' | 'stockQuantity' | 'price';
+// Backend `sortBy` query'sini string olarak alıyor; UI tarafında kolon başına
+// bilinen anahtarlar. Backend desteklemeyen alanlar gönderildiğinde 400/ignore
+// dönerse buraya geri dönüp daraltırız.
+type SortField =
+  | 'name'
+  | 'price'
+  | 'purchasePrice'
+  | 'storeName'
+  | 'isMapped'
+  | 'isActive'
+  | 'stockQuantity';
 type SortOrder = 'asc' | 'desc';
 
 // Detay popover'larında "Tümü" satırı YOK — Figma birebir. Filtre default'a
 // dönmek için chip'in sağındaki X kullanılıyor (resetFilter).
+// Figma 12249:4962'ye göre her seçeneğin solunda 16×16 ikon: Aktif →
+// circle-dashed, Pasif → circle-xmark, Eşleştirildi → check, Eşleştirme yok →
+// circle-xmark.
 const activeOptions = [
-  { value: 'yes', label: 'Aktif' },
-  { value: 'no', label: 'Pasif' },
+  { value: 'yes', label: 'Aktif', icon: CircleDashed },
+  { value: 'no', label: 'Pasif', icon: CircleXmark },
 ];
 
 const mappingOptions = [
-  { value: 'mapped', label: 'Eşleştirildi' },
-  { value: 'unmapped', label: 'Eşleştirme yok' },
+  { value: 'mapped', label: 'Eşleştirildi', icon: Check },
+  { value: 'unmapped', label: 'Eşleştirme yok', icon: CircleXmark },
 ];
 
 // ---- Favicon helper -------------------------------------------------------
@@ -98,6 +123,7 @@ export default function InventoryPage() {
     bulkSetActive,
     bulkDelete,
   } = useInventoryStore();
+  const createMapping = useProductMappingStore((s) => s.createMapping);
   const router = useRouter();
 
   // Filtre state'leri (hepsi backend-bağlı)
@@ -121,6 +147,122 @@ export default function InventoryPage() {
   useEffect(() => {
     if (currentCompany?.id) fetchStores(currentCompany.id);
   }, [currentCompany?.id, fetchStores]);
+
+  // Saved filter setleri — tab strip'inde "Tüm Ürünler" + her saved filter
+  // ismi gösterilir. Kaydet butonundan oluşturulan setler bu listede çıkar.
+  // Selector tüm array'i döndürür (stable ref); filtre useMemo ile yapılır —
+  // aksi halde Zustand her render'da yeni array görüp "getSnapshot should be
+  // cached" sonsuz döngü uyarısı verir.
+  const fetchSaved = useSavedFilterStore((s) => s.fetch);
+  const updateSaved = useSavedFilterStore((s) => s.update);
+  const removeSaved = useSavedFilterStore((s) => s.remove);
+  const createSaved = useSavedFilterStore((s) => s.create);
+  const allSavedFilters = useSavedFilterStore((s) => s.filters);
+  const savedFilters = useMemo(
+    () => allSavedFilters.filter((f) => f.context === 'products'),
+    [allSavedFilters],
+  );
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (currentCompany?.id) fetchSaved(currentCompany.id, 'products');
+  }, [currentCompany?.id, fetchSaved]);
+
+  // Saved tab dropdown aksiyonları: rename modal + duplicate + delete.
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameErr, setRenameErr] = useState<string | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  const openRename = (id: string, currentName: string) => {
+    setRenameId(id);
+    setRenameValue(currentName);
+    setRenameErr(null);
+  };
+  const submitRename = async () => {
+    if (!currentCompany?.id || !renameId) return;
+    const name = renameValue.trim();
+    if (!name) {
+      setRenameErr('İsim boş olamaz');
+      return;
+    }
+    setIsRenaming(true);
+    try {
+      const ok = await updateSaved(currentCompany.id, renameId, { name });
+      if (ok) {
+        toast.success('Yeniden adlandırıldı');
+        setRenameId(null);
+      } else {
+        setRenameErr('Güncellenemedi');
+      }
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+  const handleDuplicate = async (sf: { name: string; payload: Record<string, string | string[]> }) => {
+    if (!currentCompany?.id) return;
+    const result = await createSaved(
+      currentCompany.id,
+      'products',
+      `${sf.name} (kopya)`,
+      sf.payload,
+    );
+    if (result) toast.success('Kopya oluşturuldu');
+    else toast.danger('Kopyalanamadı');
+  };
+  // Saved filter silme — native confirm yerine HeroUI AlertDialog ile.
+  // ID dialog state'ine yazılır, kullanıcı Sil derse handleConfirmDeleteSaved
+  // çalışır.
+  const [deleteSavedId, setDeleteSavedId] = useState<string | null>(null);
+  const [isDeletingSaved, setIsDeletingSaved] = useState(false);
+  // Bulk delete (ürün toplu silme) AlertDialog state.
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const deleteSavedName = useMemo(
+    () => savedFilters.find((s) => s.id === deleteSavedId)?.name ?? '',
+    [savedFilters, deleteSavedId],
+  );
+
+  const handleDeleteSaved = (id: string) => {
+    setDeleteSavedId(id);
+  };
+
+  const handleConfirmDeleteSaved = async () => {
+    if (!currentCompany?.id || !deleteSavedId) return;
+    setIsDeletingSaved(true);
+    try {
+      const ok = await removeSaved(currentCompany.id, deleteSavedId);
+      if (ok) {
+        toast.success('Silindi');
+        if (activeSavedId === deleteSavedId) {
+          setActiveSavedId(null);
+          clearAllFilters(filterDefs);
+        }
+        setDeleteSavedId(null);
+      } else {
+        toast.danger('Silinemedi');
+      }
+    } finally {
+      setIsDeletingSaved(false);
+    }
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (!currentCompany?.id || selected.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const ids = Array.from(selected);
+      const deleted = await bulkDelete(currentCompany.id, ids);
+      if (deleted > 0) {
+        toast.success(`${deleted} ürün silindi`);
+        setSelected(new Set());
+        setBulkDeleteOpen(false);
+      } else {
+        toast.danger('Hiçbir ürün silinemedi');
+      }
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
 
   const fetchData = useCallback(
     (page: number = 1) => {
@@ -222,13 +364,10 @@ export default function InventoryPage() {
 
   // ---- Inline cell helpers ------------------------------------------------
 
-  // Ürün Adı için: row başına edit modu — Link/Pencil ile birlikte çalışsın.
-  const [editingNameId, setEditingNameId] = useState<string | null>(null);
-
-  // Inline cell save'leri için ortak helper.
+  // Inline cell save'leri için ortak helper (sadece isActive toggle).
   const saveProduct = async (
     productId: string,
-    patch: Partial<{ name: string; isActive: boolean }>
+    patch: Partial<{ isActive: boolean }>
   ): Promise<boolean> => {
     if (!currentCompany?.id) return false;
     const ok = await updateProduct(currentCompany.id, productId, patch);
@@ -286,10 +425,9 @@ export default function InventoryPage() {
         { value: '20', label: '%20' },
       ],
       addNewLabel: 'Yeni ekle',
-      onAddNew: () => {
-        // Kullanıcıdan özel bir KDV oranı al; backend `vatRate` query'sine düşer.
-        const raw = window.prompt('Yeni KDV oranı girin (% — 0-100 arası):');
-        if (raw == null) return;
+      addNewPlaceholder: 'Örn. 18',
+      onAddNew: (raw) => {
+        // Dropdown içindeki inline input'tan gelen değer.
         const trimmed = raw.trim();
         if (!trimmed) return;
         const n = Number(trimmed.replace('%', '').replace(',', '.'));
@@ -326,10 +464,9 @@ export default function InventoryPage() {
       id: 'date',
       label: 'Tarih',
       icon: Calendar,
-      searchPlaceholder: 'Tarih ara...',
       preposition: 'ile',
       type: 'text',
-      placeholder: 'Örn. 2026-05-01..2026-05-31',
+      widget: 'date-range',
       value: dateFilter,
       onChange: setDateFilter,
     },
@@ -337,64 +474,295 @@ export default function InventoryPage() {
 
   return (
     <>
-      <PageHeader title="Ürünler" />
+      {/* Bulk product silme onayı — native window.confirm yerine AlertDialog. */}
+      <AlertDialog
+        isOpen={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          if (!isBulkDeleting && !open) setBulkDeleteOpen(false);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Ürünleri sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                <p>
+                  Seçili <strong>{selected.size}</strong> ürün kalıcı olarak
+                  silinecek. Bu işlem geri alınamaz.
+                </p>
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button variant="tertiary" slot="close" isDisabled={isBulkDeleting}>
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleConfirmBulkDelete}
+                  isPending={isBulkDeleting}
+                  isDisabled={isBulkDeleting}
+                >
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+
+      {/* Saved filter silme onayı — native window.confirm yerine HeroUI v3
+          AlertDialog. Tüm destructive aksiyonlarda bu pattern kullanılır. */}
+      <AlertDialog
+        isOpen={deleteSavedId !== null}
+        onOpenChange={(open) => {
+          if (!isDeletingSaved && !open) setDeleteSavedId(null);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                <p>
+                  <strong>{deleteSavedName}</strong> filtre seti kalıcı olarak
+                  silinecek. Bu işlem geri alınamaz.
+                </p>
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button variant="tertiary" slot="close" isDisabled={isDeletingSaved}>
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleConfirmDeleteSaved}
+                  isPending={isDeletingSaved}
+                  isDisabled={isDeletingSaved}
+                >
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+
+      {/* Rename modal — saved tab "Düzenle" aksiyonu açar */}
+      <Modal
+        isOpen={renameId !== null}
+        onOpenChange={(open) => {
+          if (!isRenaming && !open) setRenameId(null);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[420px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Filtre setini yeniden adlandır</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <TextField
+                  value={renameValue}
+                  onChange={(v) => {
+                    setRenameValue(v);
+                    if (renameErr) setRenameErr(null);
+                  }}
+                  isInvalid={!!renameErr}
+                  autoFocus
+                >
+                  <Label>İsim</Label>
+                  <Input
+                    placeholder="Filtre seti adı"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitRename();
+                      }
+                    }}
+                  />
+                  {renameErr && <FieldError>{renameErr}</FieldError>}
+                </TextField>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close" isDisabled={isRenaming}>
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="primary"
+                  onPress={submitRename}
+                  isPending={isRenaming}
+                  isDisabled={isRenaming}
+                >
+                  Kaydet
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      <PageHeader
+        title="Ürünler"
+        action={
+          !isStockist ? (
+            // Yeni ürün ekleme şimdilik deaktif — backend hazır olduğunda
+            // tekrar aktif edilecek. Link'i kaldırdık, disabled görünüm.
+            <Button
+              variant="primary"
+              size="sm"
+              isDisabled
+              className="h-8 rounded-full px-3 text-xs"
+              aria-label="Yeni ürün ekleme şimdilik deaktif"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Yeni ürün
+            </Button>
+          ) : null
+        }
+      />
 
       <div className="flex flex-col overflow-hidden">
-        {/* ============== Tab strip + active filter chips + filter icon ============== */}
-        <div className="flex flex-col gap-3 p-4">
-          <SavedFilterTabs
+        {/* ============== Filter row (Figma 12232:12828) ==============
+            Sol: pill tabs ("Tüm Ürünler" seçili + saved filter setleri).
+            Sağ: FilterPopover icon button. ActiveFilterChips & "+" tab
+            butonu Figma'da yok — daha sonra ayrı bir UX kararı olarak
+            geri eklenecek. Kayıtlı filtre logic'i SavedFilterTabs'tan
+            taşınmadı — şimdilik static "Tüm Ürünler" + tek placeholder
+            tab; fonksiyon kullanıcıyla beraber tasarlanacak. */}
+        <div className="flex flex-col gap-2 p-4">
+          <div className="flex flex-row items-center justify-between">
+            <div className="flex flex-wrap items-center gap-2">
+              <TabPill
+                selected={activeSavedId === null}
+                onPress={() => {
+                  setActiveSavedId(null);
+                  clearAllFilters(filterDefs);
+                }}
+              >
+                Tüm Ürünler
+              </TabPill>
+              {savedFilters.map((sf) => (
+                <SavedTab
+                  key={sf.id}
+                  name={sf.name}
+                  isActive={activeSavedId === sf.id}
+                  onSelect={() => {
+                    setActiveSavedId(sf.id);
+                    applyFilterPayload(filterDefs, sf.payload);
+                  }}
+                  onRename={() => openRename(sf.id, sf.name)}
+                  onDuplicate={() => handleDuplicate(sf)}
+                  onDelete={() => handleDeleteSaved(sf.id)}
+                />
+              ))}
+            </div>
+            <FilterPopover filters={filterDefs} />
+          </div>
+          {/* Aktif filtre alanı — Linear-style segmented chip + Vazgeç/Kaydet.
+              Sadece en az bir filtre aktif İVE aktif saved tab ile payload'lar
+              eşit değilse render eder. Kaydet sonrası onSaved ile yeni saved
+              tab'ı aktif yap → chips alanı otomatik saklanır. */}
+          <ActiveFilterChips
+            filters={filterDefs}
             companyId={currentCompany?.id}
             context="products"
-            filters={filterDefs}
-            trailing={<ActiveFilterChips filters={filterDefs} />}
-            rightAction={<FilterPopover filters={filterDefs} />}
+            activeSavedFilter={
+              savedFilters.find((sf) => sf.id === activeSavedId) ?? null
+            }
+            onSaved={(sf) => setActiveSavedId(sf.id)}
           />
         </div>
 
         {/* ============== Header + rows (p-2.5 gap-2.5) ============== */}
         <div className="flex flex-col gap-2.5 overflow-hidden p-2.5">
-          {/* Column header — left half: name, right half: 5 cols */}
+          {/* Column header — left half: name, right half: 5 cols. Tüm
+              kolonlar SortHeaderButton — hover'da pill+arrow gösterir;
+              tıklayınca sıralama uygulanır (backend `sortBy` string olarak
+              alıyor). */}
           <div className="flex items-center justify-between overflow-hidden rounded-2xl px-3 py-1">
             <div className="flex flex-1 items-center gap-2">
-              <div className="px-1">
-                <span className="text-xs font-medium leading-4 text-[#71717A]">Ürün adı</span>
-              </div>
+              <SortHeaderButton
+                field="name"
+                currentField={sortField}
+                currentOrder={sortOrder}
+                onSort={handleSort}
+              >
+                Ürün adı
+              </SortHeaderButton>
             </div>
-            <div className="flex flex-1 items-center justify-between">
+            <div className="flex flex-1 items-center gap-20">
               {!hideListPrice ? (
-                <div className="flex w-16 items-center gap-2">
+                <div className="flex flex-1 items-center gap-2">
                   <SortHeaderButton
                     field="price"
                     currentField={sortField}
                     currentOrder={sortOrder}
                     onSort={handleSort}
                   >
-                    Satış Fiyatı
+                    Satış F.
                   </SortHeaderButton>
                 </div>
               ) : (
-                <span className="w-16" />
+                <span className="flex-1" />
               )}
               {!hidePurchasePrice ? (
-                <HeaderLabel className="w-16">Alış Fiyatı</HeaderLabel>
+                <div className="flex flex-1 items-center gap-2">
+                  <SortHeaderButton
+                    field="purchasePrice"
+                    currentField={sortField}
+                    currentOrder={sortOrder}
+                    onSort={handleSort}
+                  >
+                    Alış F.
+                  </SortHeaderButton>
+                </div>
               ) : (
-                <span className="w-16" />
+                <span className="flex-1" />
               )}
-              <HeaderLabel className="w-16">Mağazalar</HeaderLabel>
-              <HeaderLabel className="w-16">Eşleştirme</HeaderLabel>
-              <HeaderLabel className="w-16">Durum</HeaderLabel>
+              <div className="flex flex-1 items-center gap-2">
+                <SortHeaderButton
+                  field="storeName"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Mağazalar
+                </SortHeaderButton>
+              </div>
+              <div className="flex flex-1 items-center gap-2">
+                <SortHeaderButton
+                  field="isMapped"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Eşleştirme
+                </SortHeaderButton>
+              </div>
+              <div className="flex flex-1 items-center gap-2">
+                <SortHeaderButton
+                  field="isActive"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Durum
+                </SortHeaderButton>
+              </div>
             </div>
           </div>
 
           {/* Rows */}
           <div className="flex flex-col">
-            {isLoading ? (
-              Array.from({ length: 6 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="h-[60px] animate-pulse rounded-2xl bg-foreground/[0.03]"
-                />
-              ))
+            {isLoading && products.length === 0 ? (
+              // Skeleton yok — sadece sade boşluk; veri geldiğinde rows
+              // anında render edilir.
+              <div className="h-12" />
             ) : products.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted">
                 Ürün bulunamadı
@@ -405,31 +773,53 @@ export default function InventoryPage() {
                 return (
                   <div
                     key={product.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() =>
+                      router.push(
+                        `/${companySlug}/products/${product.slug ?? product.id}`,
+                      )
+                    }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        router.push(
+                          `/${companySlug}/products/${product.slug ?? product.id}`,
+                        );
+                      }
+                    }}
                     className={[
-                      // Figma 12234:6863 — h:60, p:12, r:16, justify-between.
-                      'flex h-[60px] items-center justify-between overflow-hidden rounded-2xl p-3 transition-colors',
-                      isChecked ? 'bg-foreground/[0.05]' : 'hover:bg-foreground/[0.03]',
+                      // h:60, p:12, r:16. Hover'da subtle bg (orders pattern).
+                      // Seçili ise ayrı bg + hover'da daha koyu.
+                      'flex h-[60px] cursor-pointer items-center justify-between overflow-hidden rounded-2xl p-3 transition-colors',
+                      isChecked
+                        ? 'bg-foreground/[0.06] hover:bg-foreground/[0.08]'
+                        : 'hover:bg-foreground/[0.04]',
                     ].join(' ')}
                   >
                     {/* LEFT half — checkbox + image + name */}
                     <div className="flex flex-1 items-center gap-3">
-                      <Checkbox
-                        isSelected={isChecked}
-                        onChange={(next) => {
-                          setSelected((prev) => {
-                            const updated = new Set(prev);
-                            if (next) updated.add(product.id);
-                            else updated.delete(product.id);
-                            return updated;
-                          });
-                        }}
-                        aria-label={`${product.name} seç`}
-                      />
-                      <div className="flex items-center gap-3">
-                        <Link
-                          href={`/${companySlug}/products/${product.id}`}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default"
+                      {/* Checkbox click row-click'i tetiklemesin */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          isSelected={isChecked}
+                          onChange={(next) => {
+                            setSelected((prev) => {
+                              const updated = new Set(prev);
+                              if (next) updated.add(product.id);
+                              else updated.delete(product.id);
+                              return updated;
+                            });
+                          }}
+                          aria-label={`${product.name} seç`}
                         >
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
                           {product.imageUrl ? (
                             <Image
                               src={product.imageUrl}
@@ -439,62 +829,44 @@ export default function InventoryPage() {
                               className="h-9 w-9 object-cover"
                             />
                           ) : (
-                            <Package className="h-4 w-4 text-muted" />
+                            <Image
+                              src="/figma/balina-logo.svg"
+                              alt=""
+                              width={20}
+                              height={20}
+                              className="opacity-70"
+                            />
                           )}
-                        </Link>
-                        {editingNameId === product.id ? (
-                          <EditableTextCell
-                            value={product.name}
-                            onSave={async (newName) => {
-                              const ok = await saveProduct(product.id, { name: newName });
-                              setEditingNameId(null);
-                              return ok;
-                            }}
-                            className="w-full text-sm font-medium"
-                          />
-                        ) : (
-                          <div className="group inline-flex items-center gap-1">
-                            <Link
-                              href={`/${companySlug}/products/${product.id}`}
-                              className="truncate text-sm font-medium leading-5 text-black hover:underline"
-                            >
-                              {product.name}
-                            </Link>
-                            {!isStockist && (
-                              <button
-                                type="button"
-                                aria-label="Adı düzenle"
-                                onClick={() => setEditingNameId(product.id)}
-                                className="flex h-5 w-5 shrink-0 items-center justify-center rounded text-muted opacity-0 transition-opacity hover:bg-foreground/[0.06] hover:text-foreground group-hover:opacity-100"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        </div>
+                        <span className="truncate text-sm font-medium leading-5 text-foreground">
+                          {product.name}
+                        </span>
                       </div>
                     </div>
 
                     {/* RIGHT half — 5 cells, each flex-1, gap-20 */}
                     <div className="flex flex-1 items-center gap-20">
-                      {/* Satış Fiyatı */}
+                      {/* Satış Fiyatı — pazaryeri başına farklı fiyat varsa hover popover */}
                       <CellWrap>
-                        {!hideListPrice ? <PriceChip value={product.price} /> : null}
+                        {!hideListPrice ? (
+                          <PriceChip
+                            value={product.price}
+                            marketplacePrices={product.marketplacePrices}
+                          />
+                        ) : null}
                       </CellWrap>
 
-                      {/* Alış Fiyatı */}
+                      {/* Alış Fiyatı — null veya dolu, aynı chip + dropdown akışı */}
                       <CellWrap>
                         {!hidePurchasePrice ? (
-                          product.purchasePrice != null ? (
-                            <EditablePriceCell
+                          <div onClick={(e) => e.stopPropagation()}>
+                            <AddPricePopover
                               value={product.purchasePrice}
-                              onSave={(newPrice) =>
+                              onSubmit={(newPrice) =>
                                 handlePurchasePriceUpdate(product.id, newPrice)
                               }
                             />
-                          ) : (
-                            <PlaceholderChip>Eklenmedi</PlaceholderChip>
-                          )
+                          </div>
                         ) : null}
                       </CellWrap>
 
@@ -516,23 +888,17 @@ export default function InventoryPage() {
                         )}
                       </CellWrap>
 
-                      {/* Durum */}
+                      {/* Durum — chip trigger + dropdown ile aktif/pasif seç */}
                       <CellWrap>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            !isStockist &&
-                            saveProduct(product.id, { isActive: !product.isActive })
-                          }
-                          disabled={isStockist}
-                          className="disabled:cursor-default"
-                        >
-                          {product.isActive ? (
-                            <StatusChip variant="check">Aktif</StatusChip>
-                          ) : (
-                            <StatusChip variant="xmark">Pasif</StatusChip>
-                          )}
-                        </button>
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <StatusPopover
+                            isActive={product.isActive}
+                            isDisabled={isStockist}
+                            onSelect={(next) =>
+                              saveProduct(product.id, { isActive: next })
+                            }
+                          />
+                        </div>
                       </CellWrap>
                     </div>
                   </div>
@@ -544,48 +910,204 @@ export default function InventoryPage() {
           {/* ============== Bulk actions bar (Figma 12249:3298) ============== */}
           <BulkActionsBar
             count={selected.size}
-            onMap={() => {
+            onMap={async () => {
               if (!currentCompany?.id) return;
               const ids = Array.from(selected);
-              // Eşleştirme akışı: product-mappings sayfasına seçili id'leri ?ids=
-              // query param'i ile gönderir; orası "preselect" durumuyla açılır.
-              router.push(
-                `/${companySlug}/product-mappings?ids=${ids.join(',')}`
-              );
-            }}
-            onUnpublish={async () => {
-              if (!currentCompany?.id) return;
-              const ids = Array.from(selected);
-              const updated = await bulkSetActive(currentCompany.id, ids, false);
-              if (updated > 0) {
-                toast.success(`${updated} ürün satıştan kaldırıldı`);
+              if (ids.length < 2) {
+                toast.danger('En az 2 ürün seçmelisiniz');
+                return;
+              }
+              // Pre-flight: aynı mağazadan ürünler eşleştirilemez — backend
+              // de aynı kontrolü yapıyor ama UX için API çağrısı öncesi uyar.
+              const selectedProducts = products.filter((p) => selected.has(p.id));
+              const uniqueStores = new Set(selectedProducts.map((p) => p.storeId));
+              if (uniqueStores.size < 2) {
+                toast.danger(
+                  'Eşleştirme için en az 2 farklı mağazadan ürün seçilmeli',
+                );
+                return;
+              }
+              // Seçili ürünler birbiri arasında doğrudan eşleştirilir.
+              // masterSku — ilk ürünün SKU'su (varsa) veya id'sinin son 8 hanesi.
+              const first = products.find((p) => p.id === ids[0]);
+              const masterSku =
+                first?.sku?.trim() || ids[0].slice(-8).toUpperCase();
+              const mapping = await createMapping(currentCompany.id, {
+                masterSku,
+                productIds: ids,
+              });
+              if (mapping) {
+                toast.success(`${ids.length} ürün eşleştirildi`);
                 setSelected(new Set());
+                fetchData(productsPage);
+              } else {
+                // Backend'in döndüğü spesifik mesajı göster (zaten daha
+                // farklı bir hata, örn. masterSku çakışması olabilir).
+                const err = useProductMappingStore.getState().error;
+                toast.danger(err || 'Eşleştirme oluşturulamadı');
+              }
+            }}
+            allSelectedInactive={
+              selected.size > 0 &&
+              Array.from(selected)
+                .map((id) => products.find((p) => p.id === id))
+                .filter(Boolean)
+                .every((p) => p && !p.isActive)
+            }
+            onToggleActive={async () => {
+              if (!currentCompany?.id) return;
+              const ids = Array.from(selected);
+              // Seçilenlerin tamamı pasifse → aktif et; aksi halde pasife al.
+              const selectedProducts = products.filter((p) => selected.has(p.id));
+              const allInactive =
+                selectedProducts.length > 0 &&
+                selectedProducts.every((p) => !p.isActive);
+              const next = allInactive;
+              const updated = await bulkSetActive(currentCompany.id, ids, next);
+              if (updated > 0) {
+                toast.success(
+                  next
+                    ? `${updated} ürün tekrar aktif edildi`
+                    : `${updated} ürün satıştan kaldırıldı`,
+                );
+                setSelected(new Set());
+                fetchData(productsPage);
               } else {
                 toast.danger('Hiçbir ürün güncellenemedi');
               }
             }}
-            onDelete={async () => {
-              if (!currentCompany?.id) return;
-              const ids = Array.from(selected);
-              if (
-                !window.confirm(
-                  `${ids.length} ürün kalıcı olarak silinecek. Devam edilsin mi?`
-                )
-              ) {
-                return;
-              }
-              const deleted = await bulkDelete(currentCompany.id, ids);
-              if (deleted > 0) {
-                toast.success(`${deleted} ürün silindi`);
-                setSelected(new Set());
-              } else {
-                toast.danger('Hiçbir ürün silinemedi');
-              }
+            onDelete={() => {
+              // Confirm dialog AlertDialog ile açılır; native confirm yok.
+              if (selected.size === 0) return;
+              setBulkDeleteOpen(true);
             }}
           />
         </div>
       </div>
     </>
+  );
+}
+
+// ---- Tab pill (placeholder filter tab) -----------------------------------
+// Figma 12232:12828 — "Tüm Ürünler" tab'ı + saved filter seti placeholder'ı.
+// Aktif: bg #EBEBEC, pasif: hover'da hafif bg.
+
+function TabPill({
+  selected,
+  onPress,
+  children,
+}: {
+  selected?: boolean;
+  onPress?: () => void;
+  children: React.ReactNode;
+}) {
+  // 32px height, rounded-2xl, padding 6px 12px, Inter 500 14px.
+  // Renkler tema token'larından — text-foreground her durumda; seçili bg
+  // `bg-default` (HeroUI v3 neutral fill, FilterPopover trigger ile aynı ton).
+  return (
+    <button
+      type="button"
+      onClick={onPress}
+      className={[
+        'inline-flex h-8 cursor-pointer items-center justify-center rounded-full px-3 text-sm font-medium text-foreground transition-colors',
+        selected ? 'bg-foreground/[0.10]' : 'hover:bg-foreground/[0.10]',
+      ].join(' ')}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---- Saved filter tab — pill + (aktifse) chevron + dropdown ---------------
+// Aktif olduğunda sağ kenarda ChevronDown ikonu; tıklayınca Düzenle/Kopyala/Sil
+// dropdown'u açılır (HeroUI v3 Dropdown.Menu).
+
+function SavedTab({
+  name,
+  isActive,
+  onSelect,
+  onRename,
+  onDuplicate,
+  onDelete,
+}: {
+  name: string;
+  isActive: boolean;
+  onSelect: () => void;
+  onRename: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className={[
+        'inline-flex h-8 cursor-pointer items-center justify-center rounded-full text-sm font-medium text-foreground transition-colors',
+        isActive ? 'bg-foreground/[0.10]' : 'hover:bg-foreground/[0.10]',
+      ].join(' ')}
+    >
+      <button
+        type="button"
+        onClick={onSelect}
+        className={[
+          'inline-flex h-8 items-center px-3',
+          isActive ? 'rounded-l-full pr-2' : 'rounded-full',
+        ].join(' ')}
+      >
+        {name}
+      </button>
+      {isActive && (
+        <Dropdown>
+          <Dropdown.Trigger
+            aria-label="Filtre seti aksiyonları"
+            className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-muted transition-colors hover:bg-foreground/[0.10] hover:text-foreground"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Dropdown.Trigger>
+          <Dropdown.Popover
+            className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
+            style={{
+              border: '1px solid var(--border)',
+              boxShadow:
+                '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
+            }}
+          >
+            <Dropdown.Menu
+              aria-label="Filtre seti aksiyonları"
+              onAction={(key) => {
+                if (key === 'rename') onRename();
+                else if (key === 'duplicate') onDuplicate();
+                else if (key === 'delete') onDelete();
+              }}
+              className="flex flex-col gap-0 py-1 outline-none"
+            >
+              <Dropdown.Item
+                id="rename"
+                textValue="Düzenle"
+                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
+              >
+                <Pencil className="h-3.5 w-3.5 shrink-0 text-muted" />
+                <span className="flex-1">Düzenle</span>
+              </Dropdown.Item>
+              <Dropdown.Item
+                id="duplicate"
+                textValue="Kopyala"
+                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
+              >
+                <Copy className="h-3.5 w-3.5 shrink-0 text-muted" />
+                <span className="flex-1">Kopyala</span>
+              </Dropdown.Item>
+              <Dropdown.Item
+                id="delete"
+                textValue="Sil"
+                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-danger outline-none transition-colors data-[hovered=true]:bg-danger/10 data-[focused=true]:bg-danger/10"
+              >
+                <TrashBin className="h-3.5 w-3.5 shrink-0" />
+                <span className="flex-1">Sil</span>
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown.Popover>
+        </Dropdown>
+      )}
+    </div>
   );
 }
 
@@ -598,11 +1120,11 @@ function HeaderLabel({
   className?: string;
   children: React.ReactNode;
 }) {
-  // Figma 12232:15726 — Inter 500 12px #71717A, padding 0 4px inner.
+  // Inter 500 12px text-muted, padding 0 4px inner.
   return (
     <div className={['flex items-center gap-2', className ?? ''].join(' ')}>
       <div className="inline-flex flex-col items-start justify-center px-1">
-        <span className="text-xs font-medium leading-4 text-[#71717A]">{children}</span>
+        <span className="text-xs font-medium leading-4 text-muted">{children}</span>
       </div>
     </div>
   );
@@ -611,23 +1133,245 @@ function HeaderLabel({
 // ---- Cell wrap inside row right half -------------------------------------
 
 function CellWrap({ children }: { children: React.ReactNode }) {
+  // min-w-fit — flex-1 cell'in içeriği nowrap olduğunda taşmasın diye en az
+  // içerik genişliğinde kalır. Cell'ler farklı genişlikte olabilir (en uzun
+  // chip kadar) ama wrap olmaz.
   return (
-    <div className="inline-flex flex-1 flex-col items-start justify-start gap-2.5">
+    <div className="inline-flex min-w-fit flex-1 flex-col items-start justify-start gap-2.5">
       {children}
     </div>
   );
 }
 
-// ---- Placeholder chip (Eklenmedi etc) ------------------------------------
+// ---- Add price popover (Alış Fiyatı — null veya dolu, aynı chip + dropdown)
 
-function PlaceholderChip({ children }: { children: React.ReactNode }) {
+function AddPricePopover({
+  value,
+  onSubmit,
+}: {
+  value: number | null;
+  onSubmit: (value: number) => Promise<boolean> | void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [raw, setRaw] = useState('');
+
+  const submit = async () => {
+    const n = parsePriceInput(raw);
+    if (n == null || n < 0) {
+      toast.danger('Geçerli bir fiyat girin');
+      return;
+    }
+    await onSubmit(n);
+    setRaw('');
+    setIsOpen(false);
+  };
+
+  const hasValue = value != null;
+
   return (
-    <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-muted">
-      <CircleDashed className="h-3 w-3" />
-      {children}
-    </span>
+    <Dropdown
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        // Açılırken mevcut değerle pre-fill; kapanırken temizle.
+        if (open) setRaw(hasValue ? formatPrice(value as number) : '');
+        else setRaw('');
+      }}
+    >
+      <Dropdown.Trigger
+        aria-label={hasValue ? 'Alış fiyatını düzenle' : 'Alış fiyatı ekle'}
+        className={[
+          'inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 transition-colors',
+          hasValue
+            ? 'text-foreground hover:bg-foreground/[0.06]'
+            : 'text-muted hover:bg-foreground/[0.06] hover:text-foreground',
+        ].join(' ')}
+      >
+        {hasValue ? (
+          `₺${formatPrice(value as number)}`
+        ) : (
+          <>
+            <CircleDashed className="h-3 w-3" />
+            Eklenmedi
+          </>
+        )}
+      </Dropdown.Trigger>
+      <Dropdown.Popover
+        className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
+        style={{
+          border: '1px solid var(--border)',
+          boxShadow:
+            '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
+        }}
+      >
+        <div className="flex h-9 items-center px-3">
+          <span className="mr-1 text-[13px] text-muted">₺</span>
+          {/* type="text" — number spinner ok'larını kullanıcı görmemeli.
+              Kullanıcı 1234,56 / 1.234,56 / 1234.56 gibi yazabilir; submit'te
+              parse edilir. */}
+          <input
+            type="text"
+            inputMode="decimal"
+            value={raw}
+            onChange={(e) => setRaw(liveFormatPrice(e.target.value))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submit();
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setIsOpen(false);
+              }
+            }}
+            placeholder="0,00"
+            aria-label="Alış fiyatı"
+            autoFocus
+            className="h-9 w-full border-0 bg-transparent p-0 text-[13px] font-normal text-foreground outline-none ring-0 placeholder:text-muted focus:outline-none focus:ring-0"
+          />
+        </div>
+      </Dropdown.Popover>
+    </Dropdown>
   );
 }
+
+/** Kullanıcı girdisini sayıya çevirir. "1.234,56" / "1234,56" / "1234.56" /
+ *  "1,234.56" — tüm yaygın kombinasyonları destekler. */
+function parsePriceInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Son virgül veya nokta decimal separator kabul edilir; öncesindeki
+  // tüm , ve . karakterleri thousand separator olarak silinir.
+  const lastComma = trimmed.lastIndexOf(',');
+  const lastDot = trimmed.lastIndexOf('.');
+  let normalized: string;
+  if (lastComma > lastDot) {
+    normalized = trimmed.replace(/\./g, '').replace(',', '.');
+  } else {
+    normalized = trimmed.replace(/,/g, '');
+  }
+  const n = Number(normalized);
+  return Number.isNaN(n) ? null : n;
+}
+
+/** Sayıyı TR fiyat formatına çevirir: 1234.5 → "1.234,50". */
+function formatPrice(n: number): string {
+  return n.toLocaleString('tr-TR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Kullanıcı yazarken anlık TR fiyat formatı: "123123" → "123.123",
+ *  "1234,5" → "1.234,5". Decimal kısmı tamamlanmadığı sürece dokunulmaz
+ *  (kullanıcı henüz yazıyor olabilir). Yalnızca tamsayı kısmına thousand
+ *  separator (`.`) eklenir. */
+function liveFormatPrice(input: string): string {
+  // Geçersiz karakterleri ele
+  const cleaned = input.replace(/[^0-9.,]/g, '');
+  if (!cleaned) return '';
+  // Son virgül VEYA noktayı decimal separator olarak kabul et — sonrasında
+  // başka karakter yoksa "yazma halinde" demektir (henüz tamamlanmadı).
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  // Burada thousand separator bizim eklediğimiz "." karakterleridir. Onları
+  // ayırmak için: kullanıcı yeni karakter girdiğinde decimal separator
+  // olarak son virgül kabul edilir; son nokta da olabilir (ABD klavyesi).
+  let intPart: string;
+  let decPart: string | null = null;
+  if (lastComma > -1 && lastComma > lastDot) {
+    intPart = cleaned.slice(0, lastComma).replace(/[.,]/g, '');
+    decPart = cleaned
+      .slice(lastComma + 1)
+      .replace(/[.,]/g, '')
+      .slice(0, 2);
+  } else if (lastDot > -1 && lastDot > lastComma) {
+    // Eğer ondan önce başka noktalar varsa thousand olarak yorumla; son
+    // noktayı decimal kabul et.
+    intPart = cleaned.slice(0, lastDot).replace(/[.,]/g, '');
+    decPart = cleaned
+      .slice(lastDot + 1)
+      .replace(/[.,]/g, '')
+      .slice(0, 2);
+  } else {
+    intPart = cleaned.replace(/[.,]/g, '');
+  }
+  if (intPart === '') intPart = '0';
+  const intNum = Number(intPart);
+  if (Number.isNaN(intNum)) return cleaned;
+  const formattedInt = intNum.toLocaleString('tr-TR');
+  if (decPart != null) return `${formattedInt},${decPart}`;
+  return formattedInt;
+}
+
+// ---- Status popover (Durum chip trigger + Aktif/Pasif dropdown) ----------
+
+function StatusPopover({
+  isActive,
+  isDisabled,
+  onSelect,
+}: {
+  isActive: boolean;
+  isDisabled?: boolean;
+  onSelect: (next: boolean) => void;
+}) {
+  if (isDisabled) {
+    // Stockist için tıklanmaz — sadece chip görünür.
+    return isActive ? (
+      <StatusChip variant="check">Aktif</StatusChip>
+    ) : (
+      <StatusChip variant="xmark">Pasif</StatusChip>
+    );
+  }
+  return (
+    <Dropdown>
+      <Dropdown.Trigger
+        aria-label="Durum değiştir"
+        className="inline-flex rounded-xl outline-none transition-colors hover:bg-foreground/[0.06]"
+      >
+        {isActive ? (
+          <StatusChip variant="check">Aktif</StatusChip>
+        ) : (
+          <StatusChip variant="xmark">Pasif</StatusChip>
+        )}
+      </Dropdown.Trigger>
+      <Dropdown.Popover
+        className="w-[140px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
+        style={{
+          border: '1px solid var(--border)',
+          boxShadow:
+            '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
+        }}
+      >
+        <Dropdown.Menu
+          aria-label="Durum"
+          onAction={(key) => onSelect(key === 'active')}
+          className="flex flex-col gap-0 py-1 outline-none"
+        >
+          <Dropdown.Item
+            id="active"
+            textValue="Aktif"
+            className={MENU_ITEM_CLASS}
+          >
+            <Check className="h-4 w-4 shrink-0 text-success" />
+            <span className="flex-1 truncate">Aktif</span>
+          </Dropdown.Item>
+          <Dropdown.Item
+            id="inactive"
+            textValue="Pasif"
+            className={MENU_ITEM_CLASS}
+          >
+            <CircleXmark className="h-4 w-4 shrink-0 text-muted" />
+            <span className="flex-1 truncate">Pasif</span>
+          </Dropdown.Item>
+        </Dropdown.Menu>
+      </Dropdown.Popover>
+    </Dropdown>
+  );
+}
+
+// MENU_ITEM_CLASS — filter-popover ile birebir aynı görünüm.
+const MENU_ITEM_CLASS =
+  'flex h-8 cursor-pointer items-center gap-2 px-[14px] text-left text-[13px] font-medium leading-[1.193] text-foreground outline-none transition-colors data-[hovered=true]:bg-foreground/[0.04] data-[focused=true]:bg-foreground/[0.04]';
 
 // ---- Integration favicons cell -------------------------------------------
 
@@ -693,26 +1437,25 @@ function SortHeaderButton({
 }) {
   const isActive = currentField === field;
   return (
-    // Figma 12232:15726 — sort button: rounded-full, padding 0 4px, gap 4.
-    // Header text 12px Inter 500 #71717A. ArrowDown sadece active'de ya da
-    // hover'da görünür; ASC iken yukarı (rotate-180), DESC iken aşağı.
+    // Default: text-muted, bg yok, arrow gizli (sortField bu kolon olsa bile
+    //   aktif-stil uygulanmaz — kolon başlığı her zaman diğer muted
+    //   başlıklar gibi görünür).
+    // Hover: bg-default (HeroUI v3 neutral token), text-foreground, arrow
+    //   16×16 görünür. Aktif yön sadece hover sırasında okunabilir: ASC
+    //   iken arrow yukarı (rotate-180), DESC iken aşağı. Renkler tema
+    //   token'larından (text-muted, text-foreground, bg-default) geliyor —
+    //   hardcoded hex yok.
     <button
       type="button"
       onClick={() => onSort(field)}
-      className={[
-        'group inline-flex items-center gap-1 rounded-full px-1 text-xs font-medium leading-4 transition-colors',
-        isActive ? 'text-[#18181B]' : 'text-[#71717A] hover:text-[#18181B]',
-      ].join(' ')}
+      className="group inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
     >
       {children}
       <ArrowDown
         className={[
-          'h-3 w-3 transition-all',
-          isActive
-            ? currentOrder === 'asc'
-              ? 'rotate-180'
-              : ''
-            : 'opacity-0 group-hover:opacity-100',
+          // 12×12 — text-xs (12px) ile orantılı; 16×16 fazla büyük kalıyordu.
+          'h-3 w-3 opacity-0 transition-all group-hover:opacity-100',
+          isActive && currentOrder === 'asc' ? 'rotate-180' : '',
         ].join(' ')}
       />
     </button>
@@ -720,13 +1463,57 @@ function SortHeaderButton({
 }
 
 // ---- Price chip — plain text (Satış Fiyatı) ------------------------------
+// Pazaryeri başına fiyat varsa hover'da popover ile her platformun
+// fiyatını gösterir.
 
-function PriceChip({ value }: { value: number }) {
+function PriceChip({
+  value,
+  marketplacePrices,
+}: {
+  value: number;
+  marketplacePrices?: Array<{
+    storeId: string;
+    storeName: string;
+    price: number;
+  }>;
+}) {
   const formatted = `₺${value.toLocaleString('tr-TR')}`;
-  return (
-    <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground">
+  const hasMultiple =
+    marketplacePrices && marketplacePrices.length > 1;
+
+  const chip = (
+    <span
+      className={[
+        'inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground',
+        hasMultiple ? 'cursor-help underline decoration-dotted underline-offset-4' : '',
+      ].join(' ')}
+    >
       {formatted}
     </span>
+  );
+
+  if (!hasMultiple) return chip;
+
+  return (
+    <UITooltip delay={0}>
+      {chip}
+      <UITooltip.Content className="rounded-lg border border-border bg-surface px-3 py-2 shadow-md">
+        <div className="flex flex-col gap-1.5 text-xs">
+          <span className="font-medium text-muted">Pazaryeri Fiyatları</span>
+          {marketplacePrices!.map((mp) => (
+            <div
+              key={mp.storeId}
+              className="flex items-center justify-between gap-4"
+            >
+              <span className="text-foreground">{mp.storeName}</span>
+              <span className="font-medium text-foreground">
+                ₺{mp.price.toLocaleString('tr-TR')}
+              </span>
+            </div>
+          ))}
+        </div>
+      </UITooltip.Content>
+    </UITooltip>
   );
 }
 
@@ -741,15 +1528,15 @@ function StatusChip({
 }) {
   if (variant === 'check') {
     return (
-      <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground">
-        <Check className="h-3 w-3 text-success" />
+      <span className="inline-flex h-5 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground">
+        <Check className="h-3 w-3 shrink-0 text-success" />
         {children}
       </span>
     );
   }
   return (
-    <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-muted">
-      <CircleXmark className="h-3 w-3" />
+    <span className="inline-flex h-5 items-center justify-center gap-1 whitespace-nowrap rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-muted">
+      <CircleXmark className="h-3 w-3 shrink-0" />
       {children}
     </span>
   );

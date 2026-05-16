@@ -133,7 +133,11 @@ export function EditableTagsCell({
                     <Checkbox
                       isSelected={isOn}
                       onChange={(next) => toggle(tag, next)}
-                    />
+                    >
+                      <Checkbox.Control>
+                        <Checkbox.Indicator />
+                      </Checkbox.Control>
+                    </Checkbox>
                     <span className="flex-1 truncate text-foreground">{tag}</span>
                     {isOn && <Check className="h-3 w-3 text-accent" />}
                   </label>

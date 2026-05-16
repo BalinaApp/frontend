@@ -9,6 +9,10 @@ import type * as React from 'react';
 export interface FilterOption {
   value: string;
   label: string;
+  /** Opsiyonel 16×16 ikon — Figma 12249:4962'deki "Aktif/Pasif" satırlarındaki
+   *  circle-dashed / circle-xmark gibi semantic ikonlar. iconUrl ile birlikte
+   *  verilirse icon önceliklidir. */
+  icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }
 
 interface FilterDefBase {
@@ -35,7 +39,12 @@ export interface SelectFilterDef extends FilterDefBase {
   optionIconUrl?: (value: string) => string | null;
   /** Opsiyonel: listenin en altına "Yeni ekle" benzeri bir aksiyon satırı. */
   addNewLabel?: string;
-  onAddNew?: () => void;
+  /** "Yeni ekle" tıklanınca dropdown içinde inline input açılır; Enter'a
+   *  basınca girilen değer buraya iletilir. Validation callback içinde;
+   *  geçerliyse genelde `onChange(value)` çağırılır. */
+  onAddNew?: (value: string) => void;
+  /** Inline input placeholder'ı — opsiyonel. */
+  addNewPlaceholder?: string;
 }
 
 export interface MultiSelectFilterDef extends FilterDefBase {
@@ -50,6 +59,10 @@ export interface TextFilterDef extends FilterDefBase {
   placeholder?: string;
   value: string;
   onChange: (next: string) => void;
+  /** Render widget hint — default native input. `date-range` ise tarih
+   *  aralığı picker'ı; string formatı "YYYY-MM-DD..YYYY-MM-DD" olarak
+   *  serializasyon yapılır. */
+  widget?: 'date-range';
 }
 
 export type FilterDef =

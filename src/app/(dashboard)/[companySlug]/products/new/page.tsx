@@ -11,22 +11,26 @@ import {
   SquareCheck,
   ChevronDown,
   ChevronLeft,
+  Xmark,
+  Grip,
   TrashBin,
 } from '@gravity-ui/icons';
 import {
   AlertDialog,
   Button,
   Checkbox,
+  Chip,
   Dropdown,
   Input,
   ListBox,
+  Modal,
   Switch,
   TextArea,
   TextField,
   toast,
 } from '@heroui/react';
-import { useInventoryStore } from '@/stores/inventoryStore';
 import { useCompanyStore } from '@/stores/companyStore';
+import { useStoreStore } from '@/stores/storeStore';
 import { useAiStore } from '@/stores/aiStore';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -36,13 +40,17 @@ import { ProductAiImageModal } from '@/components/products/product-ai-image-moda
 import { VariationsTable } from '@/components/products/variations-table';
 
 /**
- * Ürün düzenleme sayfası — Figma node 12284:8882 birebir.
- * Yeni ürün sayfasıyla aynı stack layout, pre-filled + Durumu switch.
+ * Yeni ürün ekleme sayfası — Figma node 12284:5530 birebir uygulaması.
+ * Tek sütun stack layout, 616px max-width, her bölüm bg-white/60 + 12px radius.
+ * Input'lar visible outline (border-black/10) ile; "BalinaOS AI" butonu
+ * description bloğunda absolute positioned.
  */
 
 const MAX_IMAGES = 8;
+const MAX_AXES = 2;
 
 // HeroUI <Input variant="secondary" /> + base saydam, focus'ta hafif bg.
+// `data-[focused=true]` HeroUI'un kendi focus state'ini override eder.
 const FIELD_CLASS =
   'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
 
@@ -58,7 +66,9 @@ function SecondaryInput(props: React.ComponentProps<typeof Input>) {
   );
 }
 
-/** Fiyat input — type=text + inputMode=decimal, TR formatı (1.234,56), ₺ suffix. */
+/** Fiyat input — type=text + inputMode=decimal (spinner yok), TR formatı
+ *  (1.234,56) blur'da formatlanır, focus'ta raw gösterilir; canonical
+ *  numeric string parent'a iletilir. ₺ suffix sağda. */
 function PriceField({
   value,
   onChange,
@@ -84,8 +94,10 @@ function PriceField({
   };
 
   const handleChange = (next: string) => {
+    // Yalnızca rakam, virgül, nokta. (TR formatında binlik=., ondalık=,)
     const sanitized = next.replace(/[^0-9.,]/g, '');
     setDraft(sanitized);
+    // Canonical: TR "1.234,56" → "1234.56" (Number parse için).
     const canonical = sanitized.replace(/\./g, '').replace(',', '.');
     onChange(canonical);
   };
@@ -121,6 +133,41 @@ function PriceField({
 const PILL_BUTTON_CLASS =
   'h-9 rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground hover:bg-foreground/[0.08]';
 
+type AxisDraft = { name: string; options: string[] };
+type VariationOverride = {
+  sku?: string;
+  stockQuantity?: string;
+  imageIndex?: number;
+};
+
+const optionCode = (s: string): string =>
+  s.trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 3) || 'X';
+
+function cartesian(axes: AxisDraft[]): Record<string, string>[] {
+  const real = axes.filter((a) => a.name.trim() && a.options.length > 0);
+  if (real.length === 0) return [];
+  return real.reduce<Record<string, string>[]>(
+    (acc, axis) => {
+      const next: Record<string, string>[] = [];
+      for (const row of acc) {
+        for (const opt of axis.options) {
+          next.push({ ...row, [axis.name.trim()]: opt });
+        }
+      }
+      return next;
+    },
+    [{}],
+  );
+}
+
+const comboKey = (combo: Record<string, string>): string =>
+  Object.entries(combo).map(([k, v]) => `${k}=${v}`).join('|');
+
+const autoSku = (parentSku: string, combo: Record<string, string>): string => {
+  const codes = Object.values(combo).map(optionCode).join('-');
+  return parentSku ? `${parentSku}-${codes}` : codes;
+};
+
 /** public/logos/ veya /figma/integrations/'tan platform logo path'i. */
 function platformLogoSrc(
   platform: string | undefined,
@@ -129,8 +176,7 @@ function platformLogoSrc(
   const p = (platform || '').toUpperCase();
   const n = name.toLowerCase();
   if (p === 'TRENDYOL' || n.includes('trendyol')) return '/logos/trendyol.svg';
-  if (p === 'SHOPIFY' || n.includes('shopify'))
-    return '/figma/integrations/shopify.png';
+  if (p === 'SHOPIFY' || n.includes('shopify')) return '/figma/integrations/shopify.png';
   if (p === 'WOOCOMMERCE' || n.includes('woocommerce') || n.includes('woo'))
     return '/logos/woocommerce.svg';
   if (p === 'HEPSIBURADA' || n.includes('hepsiburada'))
@@ -143,7 +189,14 @@ function platformLogoSrc(
   return null;
 }
 
-function StoreIcon({ name, platform }: { name: string; platform?: string }) {
+/** Mağaza logosu — gerçek brand SVG/PNG; yoksa abbr fallback. */
+function StoreIcon({
+  name,
+  platform,
+}: {
+  name: string;
+  platform?: string;
+}) {
   const src = platformLogoSrc(platform, name);
   if (src) {
     return (
@@ -176,6 +229,7 @@ function storeFiyatLabel(store: { name: string; platform?: string }): string {
   return `${store.name.slice(0, 12)} F.`;
 }
 
+/** SKU/KDV/Fiyat satırı: solda 112px label, sağda input. */
 function FieldRow({
   icon,
   label,
@@ -196,6 +250,7 @@ function FieldRow({
   );
 }
 
+/** Card section — Figma'daki Content frame (bg-white/60 + 12px radius + 12px padding). */
 function Section({
   children,
   className = '',
@@ -214,7 +269,9 @@ function Section({
   );
 }
 
-/** Chat paneldeki AiMediaCard pattern'ı: hover'da kart gri bg + label fade out + Sil butonu fade in. */
+/** Görsel kartı — chat paneldeki AiMediaCard pattern'ı:
+ *  shadow'lu kare görsel + altta label, hover'da kart gri bg + label fade out,
+ *  aynı alanda "Sil" pill butonu fade in. */
 function ProductImageCard({
   url,
   label,
@@ -230,6 +287,7 @@ function ProductImageCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={label} className="h-full w-full object-cover" />
       </div>
+      {/* Action zone — image'in altında mt boşluğuyla, label/Sil aynı alanda swap */}
       <div className="relative mt-2 flex h-7 items-center justify-center">
         <span className="truncate px-2 text-[11px] font-medium text-foreground transition-opacity duration-200 group-hover:opacity-0">
           {label}
@@ -251,11 +309,13 @@ function ProductImageCard({
   );
 }
 
+/** BalinaOS AI buton — chroma-border animated gradient ring + BalinaOsMark.
+ *  AiChatFab ile aynı stil dili: dış renkli akan kenar, iç dolgu pill. */
 function BalinaAiButton({
   onPress,
   isPending,
   isDisabled,
-  label = 'Açıklama Oluştur',
+  label = 'BalinaOS AI',
   className = '',
 }: {
   onPress: () => void;
@@ -279,25 +339,50 @@ function BalinaAiButton({
   );
 }
 
-export default function ProductEditPage() {
-  usePageTitle('Ürün Düzenle');
+export default function NewProductPage() {
+  usePageTitle('Yeni ürün');
 
   const params = useParams();
   const router = useRouter();
   const companySlug = params.companySlug as string;
-  const productId = params.productId as string;
-
   const { currentCompany } = useCompanyStore();
-  const {
-    selectedProduct,
-    isLoading,
-    error: loadError,
-    fetchProduct,
-    clearSelectedProduct,
-    updateProduct,
-    updateVariationStock,
-  } = useInventoryStore();
+  const { stores, fetchStores } = useStoreStore();
 
+  useEffect(() => {
+    if (currentCompany?.id) fetchStores(currentCompany.id);
+  }, [currentCompany?.id, fetchStores]);
+
+  // ---- Genel ----
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [sku, setSku] = useState('');
+  const [vatRate, setVatRate] = useState('');
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [isActive, setIsActive] = useState(true);
+  const [storePrices, setStorePrices] = useState<Record<string, string>>({});
+
+  // ---- Varyant ----
+  const [axes, setAxes] = useState<AxisDraft[]>([]);
+  const [axisOptionDrafts, setAxisOptionDrafts] = useState<string[]>([]);
+  const [groupingAxis, setGroupingAxis] = useState<string>('');
+  const [variationOverrides, setVariationOverrides] = useState<
+    Record<string, VariationOverride>
+  >({});
+  const [selectedComboKeys, setSelectedComboKeys] = useState<Set<string>>(new Set());
+
+  // ---- Submit ----
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  /** Silme onayı için bekleyen görsel index'i. null = kapalı. */
+  const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
+
+  // ---- Media + AI ----
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
   const aiIntegrations = useAiStore((s) => s.integrations);
   const fetchAiIntegrations = useAiStore((s) => s.fetchIntegrations);
   const generateText = useAiStore((s) => s.generateText);
@@ -309,6 +394,11 @@ export default function ProductEditPage() {
   );
   const [isGeneratingDescription, setIsGeneratingDescription] = useState(false);
 
+  useEffect(() => {
+    if (currentCompany?.id) fetchAiIntegrations(currentCompany.id);
+  }, [currentCompany?.id, fetchAiIntegrations]);
+
+  /** AI modalını aç — Fashn yoksa /stores'a highlight ile yönlendir. */
   const openAiImageModalOrRedirect = () => {
     if (!hasAiIntegration) {
       toast.warning('Fashn.ai entegrasyonu yok — bağla sayfasından ekleyin');
@@ -318,6 +408,8 @@ export default function ProductEditPage() {
     setAiModalOpen(true);
   };
 
+  /** Ürün adı + SKU + (varsa) mevcut açıklamayı sistem mesajına gömerek
+   *  OpenAI'ya açıklama üretici prompt'u yollar. Sonuç description state'e yazar. */
   const generateProductDescription = async () => {
     if (!currentCompany?.id) return;
     if (!hasOpenAi) {
@@ -359,94 +451,13 @@ export default function ProductEditPage() {
     }
   };
 
-  useEffect(() => {
-    if (currentCompany?.id && productId) {
-      fetchProduct(currentCompany.id, productId);
-      fetchAiIntegrations(currentCompany.id);
-    }
-    return () => clearSelectedProduct();
-  }, [
-    currentCompany?.id,
-    productId,
-    fetchProduct,
-    clearSelectedProduct,
-    fetchAiIntegrations,
-  ]);
+  const activeStores = stores.filter((s) => s.status === 'ACTIVE');
 
-  // ---- Form ----
-  const [name, setName] = useState('');
-  const [description, setDescription] = useState('');
-  const [sku, setSku] = useState('');
-  const [vatRate, setVatRate] = useState('');
-  const [price, setPrice] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState('');
-  const [imageUrls, setImageUrls] = useState<string[]>([]);
-  const [isActive, setIsActive] = useState(true);
-  const [variationStockEdits, setVariationStockEdits] = useState<
-    Record<string, string>
-  >({});
-  const [groupingAxis, setGroupingAxis] = useState<string>('');
-  const [selectedVariationIds, setSelectedVariationIds] = useState<Set<string>>(
-    new Set(),
-  );
-
-  const [isUploading, setIsUploading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [aiModalOpen, setAiModalOpen] = useState(false);
-  /** Silme onayı bekleyen görsel index'i. null = kapalı. */
-  const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!selectedProduct) return;
-    setName(selectedProduct.name);
-    setSku(selectedProduct.sku ?? '');
-    const extra = selectedProduct as unknown as {
-      vatRate?: number | null;
-      description?: string | null;
-    };
-    setVatRate(extra.vatRate != null ? String(extra.vatRate) : '');
-    setPrice(selectedProduct.price?.toString() ?? '');
-    setPurchasePrice(selectedProduct.purchasePrice?.toString() ?? '');
-    setIsActive(selectedProduct.isActive);
-    setImageUrls(selectedProduct.imageUrl ? [selectedProduct.imageUrl] : []);
-    setDescription(extra.description ?? '');
-  }, [selectedProduct]);
-
-  // ---- Grouping ----
-  const variationAxisKeys = useMemo(() => {
-    if (!selectedProduct) return [] as string[];
-    const set = new Set<string>();
-    for (const v of selectedProduct.variations) {
-      if (v.attributes) Object.keys(v.attributes).forEach((k) => set.add(k));
-    }
-    return Array.from(set);
-  }, [selectedProduct]);
-
-  useEffect(() => {
-    if (variationAxisKeys.length > 0 && !groupingAxis) {
-      setGroupingAxis(variationAxisKeys[0]);
-    }
-  }, [variationAxisKeys, groupingAxis]);
-
-  const groupedVariations = useMemo(() => {
-    type V = NonNullable<typeof selectedProduct>['variations'][number];
-    if (!selectedProduct || !groupingAxis) return new Map<string, V[]>();
-    const map = new Map<string, V[]>();
-    for (const v of selectedProduct.variations) {
-      const groupVal = v.attributes?.[groupingAxis] ?? '—';
-      if (!map.has(groupVal)) map.set(groupVal, []);
-      map.get(groupVal)!.push(v);
-    }
-    return map;
-  }, [selectedProduct, groupingAxis]);
-
-  // ---- Image upload ----
   const addImageUrl = (url: string) =>
     setImageUrls((prev) => {
       if (prev.includes(url)) return prev;
       if (prev.length >= MAX_IMAGES) {
-        toast.danger(`En fazla ${MAX_IMAGES} görsel`);
+        toast.danger(`En fazla ${MAX_IMAGES} görsel ekleyebilirsin`);
         return prev;
       }
       return [...prev, url];
@@ -454,8 +465,9 @@ export default function ProductEditPage() {
 
   const handleFilePick = () => fileInputRef.current?.click();
 
+  /** Tek bir File'ı backend'e upload edip galeriye ekler. */
   const uploadFile = async (file: File) => {
-    if (!currentCompany?.id || !selectedProduct) return;
+    if (!currentCompany?.id) return;
     if (!/^image\/(png|jpeg|jpg|webp|gif)$/i.test(file.type)) {
       toast.danger('Sadece görsel dosyası');
       return;
@@ -473,15 +485,7 @@ export default function ProductEditPage() {
         formData,
         { headers: { 'Content-Type': 'multipart/form-data' } },
       );
-      // Local state + backend'e otomatik kaydet (refresh'te kaybolmasın).
-      // imageUrls state'i async — concat ile yeni listeyi hesaplayıp PATCH gönder.
-      const nextUrls = imageUrls.includes(data.url)
-        ? imageUrls
-        : [...imageUrls, data.url].slice(0, MAX_IMAGES);
-      setImageUrls(nextUrls);
-      await updateProduct(currentCompany.id, selectedProduct.id, {
-        imageUrls: nextUrls,
-      });
+      addImageUrl(data.url);
       toast.success('Görsel yüklendi');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -507,16 +511,19 @@ export default function ProductEditPage() {
     dragCounter.current++;
     if (e.dataTransfer.items?.length) setIsDragActive(true);
   };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
   };
+
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current--;
     if (dragCounter.current === 0) setIsDragActive(false);
   };
+
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -529,88 +536,225 @@ export default function ProductEditPage() {
     }
   };
 
-  const removeImage = async (idx: number) => {
-    if (!currentCompany?.id || !selectedProduct) return;
-    const next = imageUrls.filter((_, i) => i !== idx);
-    setImageUrls(next);
-    // Backend'e patch — refresh'te güncel kalsın
-    await updateProduct(currentCompany.id, selectedProduct.id, {
-      imageUrls: next,
-    });
+  const removeImage = (idx: number) =>
+    setImageUrls((prev) => prev.filter((_, i) => i !== idx));
+
+  // ---- Axes ----
+  const addAxis = () => {
+    if (axes.length >= MAX_AXES) return;
+    setAxes((prev) => [...prev, { name: '', options: [] }]);
+    setAxisOptionDrafts((prev) => [...prev, '']);
   };
 
-  // ---- Save ----
-  const handleKaydet = async () => {
-    if (!currentCompany?.id || !selectedProduct) return;
-    if (!name.trim()) {
-      toast.danger('Ürün başlığı gerekli');
+  const removeAxis = (idx: number) => {
+    setAxes((prev) => prev.filter((_, i) => i !== idx));
+    setAxisOptionDrafts((prev) => prev.filter((_, i) => i !== idx));
+    setVariationOverrides({});
+    setSelectedComboKeys(new Set());
+  };
+
+  const renameAxis = (idx: number, axisName: string) => {
+    setAxes((prev) => prev.map((a, i) => (i === idx ? { ...a, name: axisName } : a)));
+    setVariationOverrides({});
+  };
+
+  const setAxisOptionDraft = (idx: number, value: string) =>
+    setAxisOptionDrafts((prev) => prev.map((d, i) => (i === idx ? value : d)));
+
+  const commitAxisOption = (idx: number) => {
+    const draft = (axisOptionDrafts[idx] ?? '').trim();
+    if (!draft) return;
+    setAxes((prev) =>
+      prev.map((a, i) => {
+        if (i !== idx) return a;
+        if (a.options.includes(draft)) return a;
+        return { ...a, options: [...a.options, draft] };
+      }),
+    );
+    setAxisOptionDrafts((prev) => prev.map((d, i) => (i === idx ? '' : d)));
+    setVariationOverrides({});
+  };
+
+  const removeAxisOption = (axisIdx: number, optIdx: number) =>
+    setAxes((prev) =>
+      prev.map((a, i) =>
+        i === axisIdx
+          ? { ...a, options: a.options.filter((_, j) => j !== optIdx) }
+          : a,
+      ),
+    );
+
+  const realAxes = useMemo(
+    () => axes.filter((a) => a.name.trim() && a.options.length > 0),
+    [axes],
+  );
+  const hasVariations = realAxes.length > 0;
+  const variationRows = useMemo(
+    () => (hasVariations ? cartesian(axes) : []),
+    [hasVariations, axes],
+  );
+
+  useEffect(() => {
+    if (realAxes.length > 0 && !groupingAxis) {
+      setGroupingAxis(realAxes[0].name.trim());
+    } else if (realAxes.length === 0 && groupingAxis) {
+      setGroupingAxis('');
+    } else if (
+      groupingAxis &&
+      !realAxes.some((a) => a.name.trim() === groupingAxis)
+    ) {
+      setGroupingAxis(realAxes[0]?.name.trim() ?? '');
+    }
+  }, [realAxes, groupingAxis]);
+
+  const updateOverride = (key: string, patch: Partial<VariationOverride>) =>
+    setVariationOverrides((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], ...patch },
+    }));
+
+  const setStorePrice = (storeId: string, v: string) =>
+    setStorePrices((prev) => ({ ...prev, [storeId]: v }));
+
+  const selectedStores = useMemo(
+    () =>
+      activeStores
+        .filter((s) => {
+          const p = storePrices[s.id]?.trim();
+          return p && !Number.isNaN(Number(p));
+        })
+        .map((s) => ({ ...s, price: Number(storePrices[s.id]) })),
+    [activeStores, storePrices],
+  );
+
+  const groupedCombos = useMemo(() => {
+    if (!hasVariations || !groupingAxis)
+      return new Map<string, Record<string, string>[]>();
+    const map = new Map<string, Record<string, string>[]>();
+    for (const combo of variationRows) {
+      const groupVal = combo[groupingAxis];
+      if (!groupVal) continue;
+      if (!map.has(groupVal)) map.set(groupVal, []);
+      map.get(groupVal)!.push(combo);
+    }
+    return map;
+  }, [variationRows, groupingAxis, hasVariations]);
+
+  // ---- Validation ----
+  const validate = (): boolean => {
+    const errs: Record<string, string> = {};
+    if (!name.trim()) errs.name = 'Ürün başlığı gerekli';
+    if (!sku.trim()) errs.sku = 'SKU gerekli';
+
+    if (vatRate) {
+      const vatNum = Number(vatRate);
+      if (Number.isNaN(vatNum) || vatNum < 0 || vatNum > 100) {
+        errs.vatRate = 'KDV 0-100 arası olmalı';
+      }
+    }
+    if (purchasePrice) {
+      const ppNum = Number(purchasePrice);
+      if (Number.isNaN(ppNum) || ppNum < 0) {
+        errs.purchasePrice = 'Geçersiz alış fiyatı';
+      }
+    }
+    // Push hedefi: en az bir mağazaya fiyat girilmiş olmalı.
+    if (selectedStores.length === 0) {
+      errs.stores = 'En az bir mağazaya fiyat girin (push hedefi olur)';
+    }
+    if (!hasVariations && stockQuantity) {
+      const stockNum = Number(stockQuantity);
+      if (!Number.isInteger(stockNum) || stockNum < 0) {
+        errs.stockQuantity = 'Stok 0+ tam sayı';
+      }
+    }
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleKaydet = () => {
+    if (!validate()) {
+      toast.danger('Formda eksik veya hatalı alanlar var');
       return;
     }
-    setIsSaving(true);
-    try {
-      const patch = {
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!currentCompany?.id) return;
+    setIsSubmitting(true);
+
+    // Push hedefleri: fiyatı dolu mağazalar.
+    const targets = selectedStores;
+    const parentSku = sku.trim();
+    const buildPayload = (price: number, targetStoreId: string) => {
+      const payload: Record<string, unknown> = {
         name: name.trim(),
-        sku: sku.trim() || undefined,
-        description: description.trim(),
-        vatRate: vatRate ? Number(vatRate) : undefined,
-        price: price ? Number(price) : undefined,
+        sku: parentSku,
+        description: description.trim() || undefined,
         imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
-        isActive,
+        price,
+        purchasePrice: purchasePrice ? Number(purchasePrice) : undefined,
+        vatRate: vatRate ? Number(vatRate) : undefined,
+        stockQuantity:
+          !hasVariations && stockQuantity ? Number(stockQuantity) : 0,
+        targetStoreIds: [targetStoreId],
       };
-      const ok = await updateProduct(currentCompany.id, selectedProduct.id, patch);
-      if (!ok) {
-        toast.danger('Güncelleme başarısız');
-        return;
+      if (hasVariations) {
+        payload.attributes = realAxes.map((a) => ({
+          name: a.name.trim(),
+          options: a.options,
+        }));
+        payload.variations = variationRows.map((combo) => {
+          const key = comboKey(combo);
+          const o = variationOverrides[key] ?? {};
+          const v: Record<string, unknown> = {
+            sku: (o.sku?.trim() || autoSku(parentSku, combo)).trim(),
+            attributeValues: combo,
+          };
+          if (o.stockQuantity) v.stockQuantity = Number(o.stockQuantity);
+          if (
+            o.imageIndex !== undefined &&
+            o.imageIndex >= 0 &&
+            o.imageIndex < imageUrls.length
+          ) {
+            v.imageUrl = imageUrls[o.imageIndex];
+          }
+          return v;
+        });
       }
-      const stockUpdates = Object.entries(variationStockEdits).filter(
-        ([, v]) => v !== '' && !Number.isNaN(Number(v)),
-      );
-      let stockFailures = 0;
-      for (const [variationId, newStock] of stockUpdates) {
-        const success = await updateVariationStock(
-          currentCompany.id,
-          variationId,
-          Number(newStock),
-        );
-        if (!success) stockFailures++;
+      return payload;
+    };
+
+    try {
+      let okCount = 0;
+      let failCount = 0;
+      for (const tgt of targets) {
+        try {
+          await api.post(
+            `/company/${currentCompany.id}/inventory/products`,
+            buildPayload(tgt.price, tgt.id),
+          );
+          okCount++;
+        } catch {
+          failCount++;
+        }
       }
-      if (stockFailures === 0) {
-        toast.success('Ürün güncellendi');
-        router.push(`/${companySlug}/products`);
+      if (failCount === 0) {
+        toast.success(`Ürün ${okCount} mağazaya gönderildi`);
+      } else if (okCount > 0) {
+        toast.warning(`${okCount} başarılı, ${failCount} hata`);
       } else {
-        toast.warning(`Ürün güncellendi, ${stockFailures} varyasyon hata`);
+        toast.danger('Hiçbir mağazaya gönderilemedi');
       }
+      router.push(`/${companySlug}/products`);
     } finally {
-      setIsSaving(false);
+      setIsSubmitting(false);
+      setConfirmOpen(false);
     }
   };
 
-  if (!currentCompany || isLoading) return <PageHeader title="Ürün Adı" />;
-
-  if (loadError) {
-    return (
-      <>
-        <PageHeader title="Ürün Adı" />
-        <div className="p-6">
-          <div className="rounded-lg bg-danger/10 p-4 text-sm text-danger">
-            {loadError}
-          </div>
-        </div>
-      </>
-    );
-  }
-
-  if (!selectedProduct) {
-    return (
-      <>
-        <PageHeader title="Ürün Adı" />
-        <div className="p-6 text-sm text-zinc-500">Ürün bulunamadı</div>
-      </>
-    );
-  }
-
-  const hasVariations = selectedProduct.variations.length > 0;
-  const mappingStores = selectedProduct.mapping?.stores ?? [];
+  if (!currentCompany) return null;
 
   return (
     <>
@@ -633,8 +777,8 @@ export default function ProductEditPage() {
             variant="tertiary"
             size="sm"
             onPress={handleKaydet}
-            isPending={isSaving}
-            isDisabled={isSaving}
+            isPending={isSubmitting}
+            isDisabled={isSubmitting}
             className="h-8 rounded-full bg-foreground/[0.04] px-3 text-xs"
           >
             <Check className="h-3.5 w-3.5" />
@@ -645,18 +789,29 @@ export default function ProductEditPage() {
 
       <div className="flex flex-1 flex-col overflow-auto">
         <div className="mx-auto flex w-full max-w-[616px] flex-col gap-3 px-3 py-6">
-          {/* === 1) Başlık + Açıklama + AI === */}
+          {/* === 1) Başlık + Açıklama + AI butonu (absolute bottom-right of textarea) === */}
           <Section>
             <div className="flex flex-col gap-2">
-              <TextField value={name} onChange={setName} aria-label="Ürün başlığı">
+              {/* Başlık — HeroUI v3 secondary input, base bg transparent override */}
+              <TextField
+                value={name}
+                onChange={(v) => {
+                  setName(v);
+                  if (errors.name) setErrors((p) => ({ ...p, name: '' }));
+                }}
+                aria-label="Ürün başlığı"
+                isInvalid={!!errors.name}
+              >
                 <Input
                   fullWidth
                   variant="secondary"
                   placeholder="Ürün Başlığı"
-                  className="bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] text-lg font-medium leading-7 placeholder:text-zinc-500"
+                  className="bg-transparent text-lg font-medium leading-7 placeholder:text-zinc-500"
                 />
               </TextField>
-              <div>
+
+              {/* Açıklama — HeroUI v3 secondary textarea, resize kapalı, AI butonu absolute */}
+              <div className="relative">
                 <TextField
                   value={description}
                   onChange={setDescription}
@@ -665,20 +820,12 @@ export default function ProductEditPage() {
                   <TextArea
                     fullWidth
                     variant="secondary"
-                    placeholder="Açıklama Alanı"
+                    placeholder="Açıklama girin..."
                     rows={3}
-                    className="
-                      min-h-[88px]
-                      resize-none
-                      bg-transparent
-                      focus:outline-none
-                      focus:ring-0
-                      focus:bg-foreground/[0.06]
-                      placeholder:text-zinc-500
-                    "
+                    className="min-h-[88px] resize-none bg-transparent placeholder:text-zinc-500"
                   />
                 </TextField>
-                <div className="pointer-events-none flex flex-1 items-center justify-end mt-4">
+                <div className="pointer-events-none absolute bottom-2 right-2 z-10">
                   <div className="pointer-events-auto">
                     <BalinaAiButton
                       onPress={generateProductDescription}
@@ -690,9 +837,12 @@ export default function ProductEditPage() {
                 </div>
               </div>
             </div>
+            {errors.name && (
+              <p className="px-3 pt-1 text-xs text-danger">{errors.name}</p>
+            )}
           </Section>
 
-          {/* === 2) Görsel — dashed border + drag & drop === */}
+          {/* === 2) Görsel yükleme — dashed border + drag & drop === */}
           <Section>
             {imageUrls.length === 0 ? (
               <div
@@ -806,7 +956,7 @@ export default function ProductEditPage() {
 
           </Section>
 
-          {/* === 3) Durumu + SKU + KDV === */}
+          {/* === 3) Durumu + SKU + KDV (stack) === */}
           <Section>
             <FieldRow
               icon={<SquareCheck className="h-4 w-4 text-foreground/70" />}
@@ -831,7 +981,15 @@ export default function ProductEditPage() {
               icon={<Tag className="h-4 w-4 text-foreground/70" />}
               label="SKU"
             >
-              <TextField value={sku} onChange={setSku} aria-label="SKU">
+              <TextField
+                value={sku}
+                onChange={(v) => {
+                  setSku(v);
+                  if (errors.sku) setErrors((p) => ({ ...p, sku: '' }));
+                }}
+                aria-label="SKU"
+                isInvalid={!!errors.sku}
+              >
                 <SecondaryInput placeholder="Ekle" />
               </TextField>
             </FieldRow>
@@ -859,7 +1017,11 @@ export default function ProductEditPage() {
                 >
                   <Dropdown.Menu
                     aria-label="KDV oranı seç"
-                    onAction={(key) => setVatRate(String(key))}
+                    onAction={(key) => {
+                      setVatRate(String(key));
+                      if (errors.vatRate)
+                        setErrors((p) => ({ ...p, vatRate: '' }));
+                    }}
                     className="flex flex-col gap-0 py-1 outline-none"
                   >
                     {['0', '1', '10', '20'].map((rate) => (
@@ -879,32 +1041,32 @@ export default function ProductEditPage() {
                 </Dropdown.Popover>
               </Dropdown>
             </FieldRow>
+            {errors.sku && (
+              <p className="ml-[136px] pt-1 text-xs text-danger">{errors.sku}</p>
+            )}
           </Section>
 
-          {/* === 4) Fiyatlar — bağlı mağazalar (e-com + pazaryeri) + Alış === */}
+          {/* === 4) Fiyatlar — Aktif entegrasyonlar (e-ticaret + pazaryerleri) + Alış === */}
           <Section>
-            {mappingStores.length === 0 ? (
-              <FieldRow
-                icon={<StoreIcon name={selectedProduct.store.name} />}
-                label={storeFiyatLabel({ name: selectedProduct.store.name })}
-              >
-                <PriceField
-                  value={price}
-                  onChange={setPrice}
-                  ariaLabel="Mağaza fiyatı"
-                />
-              </FieldRow>
+            {activeStores.length === 0 ? (
+              <p className="px-3 py-2 text-xs text-zinc-500">
+                Aktif mağaza/entegrasyon yok. Önce bir mağaza bağlayın.
+              </p>
             ) : (
-              mappingStores.map((s) => (
+              activeStores.map((store) => (
                 <FieldRow
-                  key={s.storeId}
-                  icon={<StoreIcon name={s.storeName} />}
-                  label={storeFiyatLabel({ name: s.storeName })}
+                  key={store.id}
+                  icon={<StoreIcon name={store.name} platform={store.platform} />}
+                  label={storeFiyatLabel(store)}
                 >
                   <PriceField
-                    value={price}
-                    onChange={setPrice}
-                    ariaLabel={`${s.storeName} fiyatı`}
+                    value={storePrices[store.id] ?? ''}
+                    onChange={(v) => {
+                      setStorePrice(store.id, v);
+                      if (errors.stores)
+                        setErrors((p) => ({ ...p, stores: '' }));
+                    }}
+                    ariaLabel={`${store.name} fiyatı`}
                   />
                 </FieldRow>
               ))
@@ -915,78 +1077,189 @@ export default function ProductEditPage() {
             >
               <PriceField
                 value={purchasePrice}
-                onChange={setPurchasePrice}
+                onChange={(v) => {
+                  setPurchasePrice(v);
+                  if (errors.purchasePrice)
+                    setErrors((p) => ({ ...p, purchasePrice: '' }));
+                }}
                 ariaLabel="Alış Fiyatı"
               />
             </FieldRow>
+            {!hasVariations && (
+              <FieldRow
+                icon={<Box className="h-4 w-4 text-foreground/70" />}
+                label="Stok"
+              >
+                <TextField
+                  value={stockQuantity}
+                  onChange={(v) => {
+                    setStockQuantity(v);
+                    if (errors.stockQuantity)
+                      setErrors((p) => ({ ...p, stockQuantity: '' }));
+                  }}
+                  aria-label="Stok"
+                  isInvalid={!!errors.stockQuantity}
+                >
+                  <SecondaryInput type="number" placeholder="Ekle" />
+                </TextField>
+              </FieldRow>
+            )}
+            {errors.stores && (
+              <p className="pt-2 text-xs text-danger">{errors.stores}</p>
+            )}
           </Section>
 
-          {/* === 6) Varyasyonlar === */}
-          {hasVariations && (
-            <Section noPadding>
-              <div className="flex items-center gap-2 border-b border-black/5 p-4">
-                <span className="flex-1 text-sm font-medium text-foreground">
-                  Varyasyonlar
-                </span>
+          {/* === 5) Varyasyonlar === */}
+          <Section noPadding>
+            {/* Header */}
+            <div className="flex items-center gap-2 border-b border-black/5 p-4">
+              <span className="flex-1 text-sm font-medium text-foreground">
+                Varyasyonlar
+              </span>
+              {hasVariations && (
                 <span className="text-xs text-zinc-500">
-                  {selectedProduct.variations.length} varyasyon
+                  {variationRows.length} varyasyon
                 </span>
-              </div>
+              )}
+              <Button
+                variant="tertiary"
+                size="sm"
+                onPress={addAxis}
+                isDisabled={axes.length >= MAX_AXES}
+                className={PILL_BUTTON_CLASS}
+              >
+                Varyasyon Ekle
+              </Button>
+            </div>
 
-              <VariationsTable
-                groups={Array.from(groupedVariations.entries()).map(
-                  ([groupVal, vars]) => ({
-                    key: groupVal,
-                    label: groupVal,
-                    items: vars.map((v) => {
-                      const otherParts = v.attributes
-                        ? Object.entries(v.attributes)
-                            .filter(([axis]) => axis !== groupingAxis)
-                            .map(([, val]) => val)
-                        : [];
-                      return {
-                        key: v.id,
-                        label: otherParts.join(' / ') || groupVal,
-                        stock:
-                          variationStockEdits[v.id] ??
-                          v.stockQuantity.toString(),
-                      };
+            {/* Axis rows */}
+            {axes.map((axis, idx) => (
+              <div
+                key={idx}
+                className="flex items-start gap-3 border-b border-black/5 p-4"
+              >
+                {/* Drag handle (currently sadece görsel; ileride DnD) */}
+                <button
+                  type="button"
+                  onClick={() => removeAxis(idx)}
+                  aria-label={`${axis.name || 'Eksen'} sil`}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 hover:bg-foreground/[0.04] hover:text-danger"
+                >
+                  <Grip className="h-4 w-4" />
+                </button>
+
+                <div className="flex flex-1 flex-col gap-2">
+                  <input
+                    value={axis.name}
+                    onChange={(e) => renameAxis(idx, e.target.value)}
+                    placeholder="Eksen (örn. Beden, Renk)"
+                    className="h-5 bg-transparent text-sm font-medium leading-5 text-foreground outline-none placeholder:text-zinc-500"
+                  />
+                  <div className="flex flex-wrap items-center gap-1">
+                    {axis.options.map((opt, optIdx) => (
+                      <Chip
+                        key={`${opt}-${optIdx}`}
+                        variant="soft"
+                        className="h-8 gap-1 rounded-full bg-foreground/[0.06] px-3 text-xs font-medium"
+                      >
+                        {opt}
+                        <button
+                          type="button"
+                          onClick={() => removeAxisOption(idx, optIdx)}
+                          aria-label={`${opt} kaldır`}
+                          className="ml-0.5 -mr-1 rounded-full p-0.5 text-zinc-500 hover:bg-foreground/10 hover:text-danger"
+                        >
+                          <Xmark className="h-3 w-3" />
+                        </button>
+                      </Chip>
+                    ))}
+                    <input
+                      type="text"
+                      value={axisOptionDrafts[idx] ?? ''}
+                      onChange={(e) => setAxisOptionDraft(idx, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ',') {
+                          e.preventDefault();
+                          commitAxisOption(idx);
+                        }
+                      }}
+                      onBlur={() => commitAxisOption(idx)}
+                      placeholder={
+                        axis.options.length === 0 ? 'S, M, L… (Enter)' : '+ ekle'
+                      }
+                      className="h-8 min-w-[100px] flex-1 rounded-full bg-transparent px-3 text-xs outline-none placeholder:text-zinc-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {/* Seçenek Ekle — text link, button değil */}
+            {axes.length < MAX_AXES && (
+              <div className="flex h-12 items-center gap-2 px-4">
+                <Plus className="h-4 w-4 text-foreground/70" />
+                <button
+                  type="button"
+                  onClick={addAxis}
+                  className="text-sm font-medium text-foreground/85 underline-offset-2 hover:underline"
+                >
+                  Seçenek Ekle
+                </button>
+              </div>
+            )}
+
+            {/* Master + sub-row liste */}
+            {hasVariations && (
+              <>
+                <VariationsTable
+                  groups={Array.from(groupedCombos.entries()).map(
+                    ([groupVal, combos]) => ({
+                      key: groupVal,
+                      label: groupVal,
+                      items: combos.map((c) => {
+                        const key = comboKey(c);
+                        const o = variationOverrides[key] ?? {};
+                        // Sub-row label = grouping ekseni dışındaki axis değerleri
+                        const subParts = Object.entries(c)
+                          .filter(([axis]) => axis !== groupingAxis)
+                          .map(([, val]) => val);
+                        return {
+                          key,
+                          label: subParts.join(' / ') || groupVal,
+                          stock: o.stockQuantity ?? '',
+                        };
+                      }),
                     }),
-                  }),
-                )}
-                selectedKeys={selectedVariationIds}
-                onToggleSelect={(key) => {
-                  setSelectedVariationIds((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(key)) next.delete(key);
-                    else next.add(key);
-                    return next;
-                  });
-                }}
-                onToggleGroupSelect={(group) => {
-                  const ids = group.items.map((i) => i.key);
-                  const allSel = ids.every((id) =>
-                    selectedVariationIds.has(id),
-                  );
-                  setSelectedVariationIds((prev) => {
-                    const next = new Set(prev);
-                    ids.forEach((id) =>
-                      allSel ? next.delete(id) : next.add(id),
-                    );
-                    return next;
-                  });
-                }}
-                onStockChange={(key, value) => {
-                  setVariationStockEdits((prev) => ({
-                    ...prev,
-                    [key]: value,
-                  }));
-                }}
-                onImageAi={() => openAiImageModalOrRedirect()}
-                onImageFile={() => handleFilePick()}
-              />
-            </Section>
-          )}
+                  )}
+                  selectedKeys={selectedComboKeys}
+                  onToggleSelect={(key) => {
+                    setSelectedComboKeys((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(key)) next.delete(key);
+                      else next.add(key);
+                      return next;
+                    });
+                  }}
+                  onToggleGroupSelect={(group) => {
+                    const ids = group.items.map((i) => i.key);
+                    const allSel = ids.every((id) => selectedComboKeys.has(id));
+                    setSelectedComboKeys((prev) => {
+                      const next = new Set(prev);
+                      ids.forEach((id) =>
+                        allSel ? next.delete(id) : next.add(id),
+                      );
+                      return next;
+                    });
+                  }}
+                  onStockChange={(key, value) =>
+                    updateOverride(key, { stockQuantity: value })
+                  }
+                  onImageAi={() => openAiImageModalOrRedirect()}
+                  onImageFile={() => handleFilePick()}
+                />
+              </>
+            )}
+          </Section>
         </div>
       </div>
 
@@ -1013,11 +1286,10 @@ export default function ProductEditPage() {
                 </Button>
                 <Button
                   variant="danger"
-                  onPress={async () => {
+                  onPress={() => {
                     if (pendingDeleteIdx !== null) {
-                      const idx = pendingDeleteIdx;
+                      removeImage(pendingDeleteIdx);
                       setPendingDeleteIdx(null);
-                      await removeImage(idx);
                     }
                   }}
                 >
@@ -1029,13 +1301,69 @@ export default function ProductEditPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
 
+      {/* === Onay modalı === */}
+      <Modal
+        isOpen={confirmOpen}
+        onOpenChange={(open) => {
+          if (!isSubmitting && !open) setConfirmOpen(false);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[480px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Mağazalara gönderilecek</Modal.Heading>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Aşağıdaki mağazalara ürün pushlanacak. Onaylıyor musun?
+                </p>
+              </Modal.Header>
+              <Modal.Body className="px-3 pb-3">
+                <div className="flex flex-col gap-1.5">
+                  {selectedStores.map((s) => (
+                    <div
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-3 py-2"
+                    >
+                      <div className="flex items-center gap-2">
+                        <StoreIcon name={s.name} platform={s.platform} />
+                        <span className="text-sm font-medium">{s.name}</span>
+                      </div>
+                      <span className="text-sm tabular-nums text-foreground">
+                        ₺{s.price.toLocaleString('tr-TR')}
+                      </span>
+                    </div>
+                  ))}
+                  {selectedStores.length === 0 && activeStores.length === 0 && (
+                    <p className="text-xs text-zinc-500">Aktif mağaza yok.</p>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close" isDisabled={isSubmitting}>
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="primary"
+                  onPress={handleConfirmSubmit}
+                  isPending={isSubmitting}
+                  isDisabled={isSubmitting}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Onayla ve Yükle
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
       {currentCompany && (
         <ProductAiImageModal
           isOpen={aiModalOpen}
           onOpenChange={setAiModalOpen}
           companyId={currentCompany.id}
           onGenerated={(url) => addImageUrl(url)}
-          initialProductImage={imageUrls[0] ?? null}
           productName={name}
         />
       )}

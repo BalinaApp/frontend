@@ -74,6 +74,8 @@ export interface CriticalProduct {
 
 export interface Product {
   id: string;
+  /** URL-friendly slug — backend create/update'te auto-generate. Eski ürünlerde null olabilir. */
+  slug: string | null;
   name: string;
   sku: string | null;
   imageUrl: string | null;
@@ -92,6 +94,12 @@ export interface Product {
   /** Listing endpoint'i bu alanı zaten dolduruyor — Eşleştirme kolonu için. */
   isMapped?: boolean;
   mappingId?: string | null;
+  /** Pazaryeri başına liste fiyatı — Satış F. hover popover'ı için. */
+  marketplacePrices?: Array<{
+    storeId: string;
+    storeName: string;
+    price: number;
+  }>;
 }
 
 export interface ProductsResponse {
@@ -132,6 +140,8 @@ export interface ProductMappingInfo {
 
 export interface ProductDetail {
   id: string;
+  /** URL-friendly slug — null olabilir. */
+  slug: string | null;
   name: string;
   sku: string | null;
   imageUrl: string | null;
@@ -200,11 +210,20 @@ interface InventoryState {
   updateVariationStock: (companyId: string, variationId: string, stockQuantity: number) => Promise<boolean>;
   updateProductPurchasePrice: (companyId: string, productId: string, purchasePrice: number) => Promise<boolean>;
   updateVariationPurchasePrice: (companyId: string, variationId: string, purchasePrice: number) => Promise<boolean>;
-  /** Inline cell editor'lerin kullandığı multi-field PATCH (name, isActive). */
+  /** Multi-field PATCH — inline cell editor + edit sayfası için.
+   *  Backend: name, isActive, vatRate, sku, description, price, imageUrls[]. */
   updateProduct: (
     companyId: string,
     productId: string,
-    patch: Partial<Pick<Product, 'name' | 'isActive'>>
+    patch: {
+      name?: string;
+      isActive?: boolean;
+      vatRate?: number;
+      sku?: string;
+      description?: string;
+      price?: number;
+      imageUrls?: string[];
+    }
   ) => Promise<boolean>;
   updateProductInList: (productId: string, updates: Partial<Product>) => void;
   setCriticalThreshold: (threshold: number) => void;

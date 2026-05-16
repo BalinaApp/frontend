@@ -185,11 +185,14 @@ function KpiCard({
   compareLabel: string;
 }) {
   return (
-    <div className="flex h-32 items-stretch overflow-hidden rounded-2xl bg-surface">
+    // Mobilde sparkline alanı (sağ yarı) gizlenir; sol içerik tüm kart
+    // genişliğini alır ki "Toplam Sipariş" gibi başlıklar tek satıra otursun.
+    // Sparkline lg+ viewport'larda görünmeye devam eder.
+    <div className="flex h-28 items-stretch overflow-hidden rounded-2xl bg-surface lg:h-32">
       <div className="flex flex-1 flex-col justify-between gap-3 py-4">
         <div className="flex items-center gap-2 px-4">
-          <Icon className="h-4 w-4 text-muted" />
-          <span className="text-xs font-medium text-muted">{title}</span>
+          <Icon className="h-4 w-4 shrink-0 text-muted" />
+          <span className="truncate text-xs font-medium text-muted">{title}</span>
         </div>
         <div className="px-4">
           {loading ? null : (
@@ -197,11 +200,11 @@ function KpiCard({
           )}
         </div>
         <div className="flex items-center gap-2 px-4">
-          <span className="text-xs text-muted">{compareLabel}</span>
+          <span className="truncate text-xs text-muted">{compareLabel}</span>
           {!loading && <TrendChip change={change} />}
         </div>
       </div>
-      <div className="h-full flex-1">
+      <div className="hidden h-full flex-1 lg:block">
         {!loading && (!spark || spark.data.length === 0 || spark.data.every((d) => Number(d[spark.dataKey] ?? 0) === 0)) && (
           <FlatLine />
         )}

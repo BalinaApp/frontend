@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, ChevronLeft } from '@gravity-ui/icons';
-import { Button, Switch } from '@heroui/react';
+import { Button, Switch, toast } from '@heroui/react';
 import {
   useNotificationStore,
   NotificationType,
@@ -11,6 +11,7 @@ import {
 } from '@/stores/notificationStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
+import { usePushNotifications } from '@/hooks/use-push-notifications';
 
 interface NotificationRow {
   type: NotificationType;
@@ -30,8 +31,29 @@ export default function NotificationSettingsPage() {
   const router = useRouter();
   const { currentCompany } = useCompanyStore();
   const slug = currentCompany?.slug ?? '';
+  const userRole = currentCompany?.role;
+  const isAdminOrOwner = userRole === 'OWNER' || userRole === 'ADMIN';
 
   const { settings, fetchSettings, updateSetting } = useNotificationStore();
+  const push = usePushNotifications(currentCompany?.id);
+
+  const handleTogglePush = async (next: boolean) => {
+    if (next) {
+      const ok = await push.subscribe();
+      if (!ok) {
+        toast.danger(
+          push.permission === 'denied'
+            ? 'Tarayıcı bildirim izni engellenmiş — ayarlardan açın'
+            : 'Bildirim aboneliği başarısız',
+        );
+      } else {
+        toast.success('Bildirimler etkinleştirildi');
+      }
+    } else {
+      const ok = await push.unsubscribe();
+      if (ok) toast.success('Bildirimler kapatıldı');
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -83,10 +105,38 @@ export default function NotificationSettingsPage() {
                   Bildirimler
                 </span>
                 <span className="text-xs text-muted">
-                  E-posta bildirimlerini yönetin.
+                  E-posta ve cihaz bildirimlerini yönetin.
                 </span>
               </div>
             </div>
+
+            {/* Push notifications — yalnızca OWNER/ADMIN için ve tarayıcı
+                destekliyorsa görünür. Mevcut policy: yeni sipariş bildirimi
+                yönetim rollerine push olarak gider. */}
+            {isAdminOrOwner && push.isSupported && (
+              <div className="flex items-center gap-3 border-b border-black/[0.04] p-3">
+                <div className="flex flex-1 flex-col gap-1">
+                  <span className="text-sm font-medium text-foreground/85">
+                    Bu cihaza yeni sipariş bildirimi
+                  </span>
+                  <span className="text-xs text-muted">
+                    {push.permission === 'denied'
+                      ? 'Tarayıcı bildirim izni engellenmiş — site ayarlarından açabilirsiniz.'
+                      : 'Açıkken, yeni sipariş geldiğinde bu cihaza anında bildirim gönderilir.'}
+                  </span>
+                </div>
+                <Switch
+                  isSelected={push.isSubscribed}
+                  isDisabled={push.isLoading || push.permission === 'denied'}
+                  onChange={handleTogglePush}
+                  aria-label="Yeni sipariş push bildirimleri"
+                >
+                  <Switch.Control>
+                    <Switch.Thumb />
+                  </Switch.Control>
+                </Switch>
+              </div>
+            )}
 
             {/* Rows */}
             {NOTIFICATION_ROWS.map((row, index) => {

@@ -1,10 +1,11 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { AuthGuard } from '@/components/providers/AuthGuard';
 import { SuppressBenignErrors } from '@/components/providers/SuppressBenignErrors';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
+import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
 import { Toast } from '@heroui/react';
 
 const inter = Inter({
@@ -19,11 +20,26 @@ export const metadata: Metadata = {
   },
   description:
     'Çok mağazalı WooCommerce analitik dashboardu — BalinaOS',
+  // Next App Router otomatik olarak app/manifest.ts → /manifest.webmanifest.
+  manifest: '/manifest.webmanifest',
+  applicationName: 'BalinaOS',
+  appleWebApp: {
+    capable: true,
+    title: 'BalinaOS',
+    statusBarStyle: 'default',
+  },
   icons: {
     icon: [{ url: '/favicon.png', type: 'image/png' }],
     shortcut: '/favicon.png',
-    apple: '/favicon.png',
+    apple: [{ url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: '#18181b',
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -38,6 +54,7 @@ export default function RootLayout({
         suppressHydrationWarning
       >
         <SuppressBenignErrors />
+        <ServiceWorkerRegister />
         <ThemeProvider>
           <QueryProvider>
             <AuthGuard>{children}</AuthGuard>

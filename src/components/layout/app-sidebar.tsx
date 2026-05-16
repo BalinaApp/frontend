@@ -11,9 +11,8 @@ import {
   ShoppingBag,
   ChartColumn,
   Gear,
-  Xmark,
 } from '@gravity-ui/icons';
-import { Avatar, Button } from '@heroui/react';
+import { Avatar } from '@heroui/react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -46,37 +45,37 @@ export function AppSidebar() {
   const userRole = currentCompany?.role;
 
   const navItems: NavItemConfig[] = [
-    { title: 'Anasayfa', url: `/${companySlug}`, icon: House, roles: ['OWNER', 'ADMIN', 'MEMBER'] },
+    { title: 'Anasayfa', url: `/${companySlug}`, icon: House, roles: ['OWNER', 'ADMIN'] },
     {
       title: 'Entegrasyon',
       url: `/${companySlug}/stores`,
       icon: LinkChain,
-      roles: ['OWNER', 'ADMIN', 'MEMBER'],
+      roles: ['OWNER', 'ADMIN'],
     },
     {
       title: 'Ürünler',
       url: `/${companySlug}/products`,
       icon: Box,
-      roles: ['OWNER', 'ADMIN', 'MEMBER', 'STOCKIST', 'PRODUCT_UPLOADER'],
-      matchPaths: [`/${companySlug}/products`, `/${companySlug}/product-mappings`],
+      roles: ['OWNER', 'ADMIN', 'STOCKIST', 'PRODUCT_UPLOADER'],
+      matchPaths: [`/${companySlug}/products`],
     },
     {
       title: 'Siparişler',
       url: `/${companySlug}/orders`,
       icon: ShoppingBag,
-      roles: ['OWNER', 'ADMIN', 'MEMBER'],
+      roles: ['OWNER', 'ADMIN'],
     },
     {
       title: 'Raporlar',
       url: `/${companySlug}/reports`,
       icon: ChartColumn,
-      roles: ['OWNER', 'ADMIN', 'MEMBER'],
+      roles: ['OWNER', 'ADMIN'],
     },
     {
       title: 'Ayarlar',
       url: `/${companySlug}/settings`,
       icon: Gear,
-      roles: ['OWNER', 'ADMIN', 'MEMBER'],
+      roles: ['OWNER', 'ADMIN', 'STOCKIST', 'PRODUCT_UPLOADER'],
     },
   ];
 
@@ -98,10 +97,19 @@ export function AppSidebar() {
   const sidebarBody = (
     <div className="flex h-full w-full flex-col items-center gap-3 px-5 py-4">
       {/* Logo (32x32) — multiply blend so the silhouette darkens against
-          the theme-tinted sidebar instead of looking like a stark cutout. */}
+          the theme-tinted sidebar instead of looking like a stark cutout.
+          Sınırlı rollerde (STOCKIST/PRODUCT_UPLOADER) anasayfa yok → /products. */}
       <Link
-        href={`/${companySlug}`}
-        aria-label="Anasayfa"
+        href={
+          userRole === 'STOCKIST' || userRole === 'PRODUCT_UPLOADER'
+            ? `/${companySlug}/products`
+            : `/${companySlug}`
+        }
+        aria-label={
+          userRole === 'STOCKIST' || userRole === 'PRODUCT_UPLOADER'
+            ? 'Ürünler'
+            : 'Anasayfa'
+        }
         className="flex h-8 w-8 items-center justify-center"
       >
         <Image
@@ -163,39 +171,24 @@ export function AppSidebar() {
 
   return (
     <>
-      {/* Desktop sidebar — fixed left, w-20 = 80px */}
-      <aside className="fixed left-0 top-0 z-30 hidden h-screen w-20 md:block">
+      {/* Sidebar — fixed left, w-20 = 80px. Desktop'ta her zaman görünür;
+          mobilde isMobileOpen=true iken slide-in (translate-x). Overlay
+          değil — push: spacer width animasyonuyla main content sağa kayar. */}
+      <aside
+        className={`fixed left-0 top-0 z-30 h-screen w-20 transition-transform duration-300 ease-out md:translate-x-0 ${
+          isMobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         {sidebarBody}
       </aside>
-      {/* Spacer — main flex layout için boş bir 80px sütun bırakır */}
-      <div className="hidden w-20 shrink-0 md:block" aria-hidden="true" />
-
-      {/* Mobile sidebar overlay */}
-      {isMobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
-          <button
-            type="button"
-            aria-label="Kapat"
-            className="absolute inset-0 bg-black/40"
-            onClick={() => setIsMobileOpen(false)}
-          />
-          <aside className="relative flex h-screen w-20 flex-col bg-background">
-            <div className="flex justify-end p-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                isIconOnly
-                aria-label="Kapat"
-                onPress={() => setIsMobileOpen(false)}
-              >
-                <Xmark className="h-4 w-4" />
-              </Button>
-            </div>
-            {sidebarBody}
-          </aside>
-        </div>
-      )}
-
+      {/* Spacer — flex layout'ta yer kapatır. Desktop'ta sabit 80px;
+          mobilde open=80px, closed=0 (smooth width transition). */}
+      <div
+        className={`shrink-0 transition-[width] duration-300 ease-out md:w-20 ${
+          isMobileOpen ? 'w-20' : 'w-0'
+        }`}
+        aria-hidden="true"
+      />
     </>
   );
 }

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 import { ArrowsRotateRight as Loader2, TrashBin as Trash2, ArrowUpRightFromSquare as ExternalLink, Check, Sparkles, Gear as Settings, Key } from '@gravity-ui/icons';
 import { ArrowsRotateRight as Loader, ArrowsRotateRight as RefreshCw, CircleExclamation as AlertCircle, Link as LinkIcon, PlugConnection as Plug, Copy, Eye, EyeSlash as EyeOff } from '@gravity-ui/icons';
 import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, Modal, SearchField, Switch, Tabs, TextField, toast } from '@heroui/react';
@@ -10,6 +12,7 @@ import { useProductMappingStore } from '@/stores/productMappingStore';
 import { useAiStore, FAL_MODEL_CATALOG, type ProductType } from '@/stores/aiStore';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
 import { FalMark } from '@/components/icons/fal-mark';
+import { MobileSidebarToggle } from '@/components/layout/mobile-sidebar-toggle';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
@@ -183,6 +186,13 @@ const integrationCategories: IntegrationCategory[] = [
         logo: '',
         comingSoon: false,
       },
+      {
+        id: 'OPENAI',
+        name: 'OpenAI',
+        description: 'GPT modelleri ile ürün açıklaması ve sohbet üretimi.',
+        logo: '',
+        comingSoon: false,
+      },
     ],
   },
 ];
@@ -281,6 +291,39 @@ const getStoreDisplay = (
 export default function StoresPage() {
   usePageTitle('Entegrasyon');
 
+  const router = useRouter();
+  const routeParams = useParams();
+  const searchParams = useSearchParams();
+  const companySlug = routeParams?.companySlug as string | undefined;
+
+  // ?highlight=OPENAI / FASHN_AI / FAL_AI — drawer'dan yönlendirme sonrası ilgili
+  // tile'ı kısa süre scale animasyonu ile vurgula + viewport'a kaydır, sonra
+  // query'yi temizle.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const highlightRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const h = searchParams?.get('highlight');
+    if (!h) return;
+    setHighlightId(h);
+    // Tile mount olunca scrollIntoView yap — ref bir sonraki render'da set olur.
+    const scrollT = window.setTimeout(() => {
+      highlightRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 50);
+    const t = window.setTimeout(() => {
+      setHighlightId(null);
+      if (companySlug) {
+        router.replace(`/${companySlug}/stores`, { scroll: false });
+      }
+    }, 1600);
+    return () => {
+      window.clearTimeout(t);
+      window.clearTimeout(scrollT);
+    };
+  }, [searchParams, companySlug, router]);
+
   const { currentCompany } = useCompanyStore();
   const { stores, fetchStores, updateStore, deleteStore, syncStore } =
     useStoreStore();
@@ -330,14 +373,22 @@ export default function StoresPage() {
     isSavingFal,
   } = useAiStore();
   const fashns = integrations.filter((i) => i.provider === 'fashn');
+  const openais = integrations.filter((i) => i.provider === 'openai');
 
-  // "Bağla" akışı (yeni hesap ekleme) — Fal ve Fashn aynı dialog'u paylaşıyor.
+  // "Bağla" akışı — Fal/Fashn/OpenAI aynı dialog'u paylaşıyor.
   const [isFalDialogOpen, setIsFalDialogOpen] = useState(false);
-  const [falDialogProvider, setFalDialogProvider] = useState<'fal' | 'fashn'>('fal');
+  const [falDialogProvider, setFalDialogProvider] = useState<
+    'fal' | 'fashn' | 'openai'
+  >('fal');
   const [falForm, setFalForm] = useState({ apiKey: '', name: '' });
   const [falShowKey, setFalShowKey] = useState(false);
   const [falCurrentStep, setFalCurrentStep] = useState(0);
-  const falProviderLabel = falDialogProvider === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
+  const falProviderLabel =
+    falDialogProvider === 'fashn'
+      ? 'Fashn.ai'
+      : falDialogProvider === 'openai'
+        ? 'OpenAI'
+        : 'Fal.ai';
 
   // "Yönet" akışı (mevcut hesabı düzenle)
   const [manageFalId, setManageFalId] = useState<string | null>(null);
@@ -358,8 +409,13 @@ export default function StoresPage() {
   const manageFal = manageFalId
     ? integrations.find((i) => i.id === manageFalId) ?? null
     : null;
-  const manageProvider: 'fal' | 'fashn' = manageFal?.provider ?? 'fal';
-  const manageProviderLabel = manageProvider === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
+  const manageProvider: 'fal' | 'fashn' | 'openai' = manageFal?.provider ?? 'fal';
+  const manageProviderLabel =
+    manageProvider === 'fashn'
+      ? 'Fashn.ai'
+      : manageProvider === 'openai'
+        ? 'OpenAI'
+        : 'Fal.ai';
 
   // E-Fatura entegrasyonları (Bizim Hesap + Paraşüt) — Fal.ai ile aynı
   // pattern: birden fazla hesap, stepper modal, "Bağlı Olanlar" listesinde
@@ -587,15 +643,24 @@ export default function StoresPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCompany?.id]);
 
+  const falKeyPlaceholder =
+    falDialogProvider === 'fashn'
+      ? 'fa-...'
+      : falDialogProvider === 'openai'
+        ? 'sk-...'
+        : 'fal-...';
+  const falKeyDescription =
+    falDialogProvider === 'fashn'
+      ? 'Fashn.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.'
+      : falDialogProvider === 'openai'
+        ? 'OpenAI Platform (platform.openai.com) üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.'
+        : 'Fal.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.';
   const falSteps = [
     {
       key: 'apiKey' as const,
       label: 'API Anahtarı',
-      placeholder: falDialogProvider === 'fashn' ? 'fa-...' : 'fal-...',
-      description:
-        falDialogProvider === 'fashn'
-          ? 'Fashn.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.'
-          : 'Fal.ai dashboard üzerinden oluşturduğunuz API anahtarınızı girin. Anahtar şifreli saklanır.',
+      placeholder: falKeyPlaceholder,
+      description: falKeyDescription,
       isPassword: true,
     },
   ];
@@ -972,9 +1037,9 @@ export default function StoresPage() {
       name: falForm.name.trim() || undefined,
     };
     const result =
-      falDialogProvider === 'fashn'
-        ? await createIntegration(currentCompany.id, 'fashn', args)
-        : await createFalIntegration(currentCompany.id, args);
+      falDialogProvider === 'fal'
+        ? await createFalIntegration(currentCompany.id, args)
+        : await createIntegration(currentCompany.id, falDialogProvider, args);
     if (result) {
       toast.success(`${falProviderLabel} hesabı eklendi`);
       setFalForm({ apiKey: '', name: '' });
@@ -1489,9 +1554,19 @@ export default function StoresPage() {
       setDhlModalOpen(true);
       return;
     }
-    // Fal.ai / Fashn.ai — tek alanlı API key formu, mağaza akışından bağımsız.
-    if (marketplace.id === 'FAL_AI' || marketplace.id === 'FASHN_AI') {
-      setFalDialogProvider(marketplace.id === 'FASHN_AI' ? 'fashn' : 'fal');
+    // Fal.ai / Fashn.ai / OpenAI — tek alanlı API key formu.
+    if (
+      marketplace.id === 'FAL_AI' ||
+      marketplace.id === 'FASHN_AI' ||
+      marketplace.id === 'OPENAI'
+    ) {
+      const provider: 'fal' | 'fashn' | 'openai' =
+        marketplace.id === 'FASHN_AI'
+          ? 'fashn'
+          : marketplace.id === 'OPENAI'
+            ? 'openai'
+            : 'fal';
+      setFalDialogProvider(provider);
       setFalForm({ apiKey: '', name: '' });
       setFalCurrentStep(0);
       setFalShowKey(false);
@@ -2025,7 +2100,11 @@ export default function StoresPage() {
 
   return (
     <>
-      <div className="relative flex flex-1 flex-col overflow-y-auto p-4">
+      <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto p-4">
+        {/* Mobil sidebar toggle — bu sayfanın PageHeader'ı yok, bu yüzden
+            sol-üst köşede absolute olarak gösteriyoruz. Desktop'ta gizli. */}
+        <MobileSidebarToggle className="absolute left-4 top-4 z-20" />
+
         {/* Soft blurred blob — Figma 12107:16370. 952×160 pill horizontally
         centered at -80 so it bleeds a subtle shadow behind the title. Black
         on the neutral grey page; switches to white when a theme accent is
@@ -2057,10 +2136,11 @@ export default function StoresPage() {
         </div>
 
         <div className="flex flex-col gap-8 px-4 pb-8 pt-8">
-          {/* Bağlı Olanlar — mağazalar + fal + fashn + e-fatura hesapları aynı şeritte */}
+          {/* Bağlı Olanlar — mağazalar + fal + fashn + openai + e-fatura hesapları aynı şeritte */}
           {(filteredStores.length > 0 ||
             fals.length > 0 ||
             fashns.length > 0 ||
+            openais.length > 0 ||
             bizimhesaps.length > 0 ||
             parasuts.length > 0 ||
             cargoConnections.length > 0) && (
@@ -2208,6 +2288,41 @@ export default function StoresPage() {
                   </div>
                 ))}
 
+                {/* Bağlı OpenAI hesapları */}
+                {openais.map((oa) => (
+                  <div key={oa.id} className="flex items-center gap-3 p-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="/figma/integrations/openai.svg"
+                      alt="OpenAI"
+                      className="h-10 w-10 shrink-0 rounded-xl"
+                    />
+                    <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {oa.name}
+                      </span>
+                      <span className="truncate text-xs text-[#737373]">
+                        OpenAI • <span className="font-mono">••••{oa.apiKeyTail ?? '----'}</span>
+                      </span>
+                    </div>
+                    <Button
+                      variant="tertiary"
+                      size="sm"
+                      onPress={() => {
+                        setManageFalId(oa.id);
+                        setManageFalKey('');
+                        setManageFalShowKey(false);
+                        setManageFalTestResult(null);
+                        setManageFalActive(oa.isActive);
+                        setManageFalCodePrefix(oa.codePrefix ?? '');
+                      }}
+                      className={pillBtnClass}
+                    >
+                      Yönet
+                    </Button>
+                  </div>
+                ))}
+
                 {/* Bağlı Bizim Hesap hesapları */}
                 {bizimhesaps.map((bh) => (
                   <div key={bh.id} className="flex items-center gap-3 p-3">
@@ -2330,11 +2445,17 @@ export default function StoresPage() {
                   // hesap ekleyebilsin diye Yönet'i kart üstünde değil,
                   // Bağlı Olanlar listesinde gösteriyoruz.
                   const buttonLabel = isDisabled ? 'Yakında' : 'Bağla';
+                  const isHighlighted = highlightId === item.id;
                   return (
                     <div
                       key={item.id}
-                      className={`flex items-center gap-3 p-3 ${
+                      ref={isHighlighted ? highlightRef : undefined}
+                      className={`flex items-center gap-3 p-3 transition-all duration-500 ${
                         isDisabled ? 'opacity-40' : ''
+                      } ${
+                        isHighlighted
+                          ? 'scale-[1.04] rounded-2xl bg-foreground/[0.06]'
+                          : 'scale-100'
                       }`}
                     >
                       {item.id === 'FAL_AI' ? (
@@ -2351,6 +2472,15 @@ export default function StoresPage() {
                         >
                           Fn
                         </div>
+                      ) : item.id === 'OPENAI' ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src="/figma/integrations/openai.svg"
+                          alt={item.name}
+                          className="h-10 w-10 shrink-0 rounded-xl"
+                          role="img"
+                          aria-label={item.name}
+                        />
                       ) : item.id === 'BIZIMHESAP' ? (
                         <BizimhesapMark
                           className="h-10 w-10 shrink-0 rounded-xl"
@@ -2870,6 +3000,13 @@ export default function StoresPage() {
                     <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-fuchsia-500 to-violet-600 text-[8px] font-bold text-white">
                       Fn
                     </div>
+                  ) : falDialogProvider === 'openai' ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/figma/integrations/openai.svg"
+                      alt="OpenAI"
+                      className="h-6 w-6 rounded-md"
+                    />
                   ) : (
                     <FalMark className="h-6 w-6 rounded-md" />
                   )}
@@ -2877,11 +3014,19 @@ export default function StoresPage() {
                 </Modal.Heading>
               </Modal.Header>
               <Modal.Body>
-                {(falDialogProvider === 'fashn' ? fashns.length : fals.length) > 0 && (
-                  <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-foreground/80">
-                    {falDialogProvider === 'fashn' ? fashns.length : fals.length} bağlı hesap mevcut. Yeni bir anahtar girerek ek hesap ekleyebilirsiniz.
-                  </div>
-                )}
+                {(() => {
+                  const count =
+                    falDialogProvider === 'fashn'
+                      ? fashns.length
+                      : falDialogProvider === 'openai'
+                        ? openais.length
+                        : fals.length;
+                  return count > 0 ? (
+                    <div className="mb-3 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-foreground/80">
+                      {count} bağlı hesap mevcut. Yeni bir anahtar girerek ek hesap ekleyebilirsiniz.
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="py-2">
                   {falSteps.map((step, index) => {
@@ -3552,56 +3697,11 @@ export default function StoresPage() {
         </Modal.Backdrop>
       </Modal>
 
-      <Modal isOpen={showUpgradeDialog} onOpenChange={setShowUpgradeDialog}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-warning" />
-                  Mağaza Limitine Ulaştınız
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="flex flex-col gap-4">
-                <p className="text-sm text-muted">
-                  Mevcut planınızın mağaza limitine ulaştınız. Daha fazla mağaza eklemek için
-                  planınızı yükseltin.
-                </p>
-                <div className="flex flex-col gap-2 rounded-lg bg-surface-secondary/50 p-4">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">Free Plan</span>
-                    <span>2 mağaza</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">Pro Plan</span>
-                    <span>5 mağaza</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted">Enterprise Plan</span>
-                    <span>Sınırsız</span>
-                  </div>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" className="flex-1">
-                  Kapat
-                </Button>
-                <Button
-                  className="flex-1"
-                  onPress={() => {
-                    toast.info('Fiyatlandırma sayfası yakında eklenecek');
-                    setShowUpgradeDialog(false);
-                  }}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  Planı Yükselt
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <UpgradePlanModal
+        isOpen={showUpgradeDialog}
+        onOpenChange={setShowUpgradeDialog}
+        description="Maalesef Free plan'da 1 mağazadan fazla ekleyemezsiniz. Daha fazla mağaza eklemek için planınızı yükseltin."
+      />
 
       <Modal
         isOpen={!!settingsModalStoreId}
@@ -3641,28 +3741,33 @@ export default function StoresPage() {
                       !currentStore?.platform ||
                       currentStore.platform === 'WOOCOMMERCE';
                     const isTrendyol = currentStore?.platform === 'TRENDYOL';
+                    // "Genel" dışında ek tab varsa (WCSC veya Trendyol) tab list
+                    // göster; tek başına Genel duruyorsa anlamsız → list gizli.
+                    const hasExtraTabs = isWoocommerce || isTrendyol;
                     return (
                       <Tabs defaultSelectedKey="general">
-                        <Tabs.ListContainer>
-                          <Tabs.List aria-label="Ayar sekmeleri">
-                            <Tabs.Tab id="general">
-                              Genel
-                              <Tabs.Indicator />
-                            </Tabs.Tab>
-                            {isWoocommerce && (
-                              <Tabs.Tab id="wcsc">
-                                Stok Sync
+                        {hasExtraTabs && (
+                          <Tabs.ListContainer>
+                            <Tabs.List aria-label="Ayar sekmeleri">
+                              <Tabs.Tab id="general">
+                                Genel
                                 <Tabs.Indicator />
                               </Tabs.Tab>
-                            )}
-                            {isTrendyol && (
-                              <Tabs.Tab id="trendyol">
-                                Trendyol
-                                <Tabs.Indicator />
-                              </Tabs.Tab>
-                            )}
-                          </Tabs.List>
-                        </Tabs.ListContainer>
+                              {isWoocommerce && (
+                                <Tabs.Tab id="wcsc">
+                                  Stok Sync
+                                  <Tabs.Indicator />
+                                </Tabs.Tab>
+                              )}
+                              {isTrendyol && (
+                                <Tabs.Tab id="trendyol">
+                                  Trendyol
+                                  <Tabs.Indicator />
+                                </Tabs.Tab>
+                              )}
+                            </Tabs.List>
+                          </Tabs.ListContainer>
+                        )}
                         <Tabs.Panel
                           id="general"
                           className="mt-4 flex flex-col gap-4"
@@ -4814,30 +4919,24 @@ export default function StoresPage() {
                     şifreyi de girin.
                   </p>
 
-                  <div className="flex items-center justify-between gap-2 pt-2">
+                  <div className="flex gap-2 pt-2">
                     <Button
-                      variant="danger-soft"
+                      variant="tertiary"
                       onPress={handleManageCargoDelete}
                       isDisabled={isManagingCargo}
+                      className={`flex-1 text-danger ${pillBtnClass}`}
                     >
-                      Sil
+                      <Trash2 className="h-4 w-4" />
+                      Bağlantıyı Sil
                     </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onPress={handleManageCargoClose}
-                        isDisabled={isManagingCargo}
-                      >
-                        İptal
-                      </Button>
-                      <Button
-                        onPress={handleManageCargoSave}
-                        isPending={isManagingCargo}
-                        isDisabled={isManagingCargo}
-                      >
-                        Kaydet
-                      </Button>
-                    </div>
+                    <Button
+                      className="flex-1"
+                      onPress={handleManageCargoSave}
+                      isPending={isManagingCargo}
+                      isDisabled={isManagingCargo}
+                    >
+                      Kaydet
+                    </Button>
                   </div>
                 </div>
               </Modal.Body>

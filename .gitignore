@@ -42,3 +42,9 @@ next-env.d.ts
 
 # claude code
 .claude/
+
+# Claude Code temp dir
+/.claude-tmp
+
+# Local scratch / figma reference dumps
+/tmp

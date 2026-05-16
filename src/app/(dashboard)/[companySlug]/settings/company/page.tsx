@@ -76,7 +76,7 @@ export default function CompanySettingsPage() {
 
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<AssignableRole>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<AssignableRole>('ADMIN');
   const [isInviting, setIsInviting] = useState(false);
 
   const slug = company?.slug ?? '';
@@ -135,7 +135,7 @@ export default function CompanySettingsPage() {
       toast.success('Davet gönderildi');
       setIsInviteOpen(false);
       setInviteEmail('');
-      setInviteRole('MEMBER');
+      setInviteRole('ADMIN');
       fetchMembers();
     } catch (err: any) {
       toast.danger(err.response?.data?.message || 'Davet gönderilemedi');
@@ -145,45 +145,69 @@ export default function CompanySettingsPage() {
   };
 
   // ---- Role change ----
-  const handleChangeRole = (member: Member, role: AssignableRole) => {
+  // Backend: PATCH /company/:id/members/:memberId/role { role }. OWNER role
+  // değiştirilemez; OWNER'a yükseltilemez (sahiplik transferi ayrı akış).
+  const handleChangeRole = async (member: Member, role: AssignableRole) => {
+    if (!company?.id) return;
     if (member.role === role) return;
-    // Backend role-update endpoint isn't wired yet; flag and revert UI.
-    toast.danger('Rol değişikliği henüz aktif değil.');
-    void role;
+    if (pendingMemberIds.has(member.id)) return;
+
+    setPendingMemberIds((prev) => new Set(prev).add(member.id));
+    const previousRole = member.role;
+    setMembers((prev) =>
+      prev.map((m) => (m.id === member.id ? { ...m, role } : m))
+    );
+    try {
+      await api.patch(`/company/${company.id}/members/${member.id}/role`, {
+        role,
+      });
+      toast.success(
+        `${member.user?.name || member.email} rolü güncellendi`
+      );
+    } catch (err: any) {
+      setMembers((prev) =>
+        prev.map((m) => (m.id === member.id ? { ...m, role: previousRole } : m))
+      );
+      toast.danger(err.response?.data?.message || 'Rol değiştirilemedi');
+    } finally {
+      setPendingMemberIds((prev) => {
+        const next = new Set(prev);
+        next.delete(member.id);
+        return next;
+      });
+    }
   };
 
-  // ---- Active toggle ----
-  // Owners can't be deactivated. For everyone else, the switch hits
-  // PATCH /company/:id/members/:memberId/status. On success we patch the
-  // local row's isActive; on failure we revert and toast the server message.
+  // ---- Switch off = takımdan çıkar ----
+  // Switch off DELETE /company/:id/members/:memberId çağırır (üyeyi siler).
+  // Switch on no-op'tur — üye zaten takımda.
   const handleToggleActive = async (member: Member, isActive: boolean) => {
     if (!company?.id) return;
     if (member.role === 'OWNER') return;
     if (pendingMemberIds.has(member.id)) return;
+    // Switch on → no-op; üye zaten listede (deaktif konsepti kaldırıldı).
+    if (isActive) return;
+
+    const display = member.user?.name || member.email;
+    if (
+      !window.confirm(`${display} kullanıcısı takımdan çıkarılacak. Emin misiniz?`)
+    ) {
+      // Onay yoksa state değişmiyor — Switch controlled olduğu için
+      // member.inviteStatus üzerinden true kalmaya devam edecek.
+      return;
+    }
 
     setPendingMemberIds((prev) => new Set(prev).add(member.id));
-    // Optimistic update.
-    setMembers((prev) =>
-      prev.map((m) => (m.id === member.id ? { ...m, isActive } : m))
-    );
+    // Optimistic remove.
+    const snapshot = members;
+    setMembers((prev) => prev.filter((m) => m.id !== member.id));
     try {
-      await api.patch(
-        `/company/${company.id}/members/${member.id}/status`,
-        { isActive }
-      );
-      toast.success(
-        isActive
-          ? `${member.user?.name || member.email} yeniden etkinleştirildi`
-          : `${member.user?.name || member.email} deaktif edildi`
-      );
+      await api.delete(`/company/${company.id}/members/${member.id}`);
+      toast.success(`${display} takımdan çıkarıldı`);
     } catch (err: any) {
       // Revert.
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === member.id ? { ...m, isActive: !isActive } : m
-        )
-      );
-      toast.danger(err.response?.data?.message || 'İşlem başarısız');
+      setMembers(snapshot);
+      toast.danger(err.response?.data?.message || 'Üye çıkarılamadı');
     } finally {
       setPendingMemberIds((prev) => {
         const next = new Set(prev);
@@ -296,18 +320,16 @@ export default function CompanySettingsPage() {
                         </Dropdown.Popover>
                       </Dropdown>
                     )}
-                    {/* Active switch — toggling off deactivates the account */}
+                    {/* Switch off → takımdan çıkar (DELETE). On no-op. */}
                     <Switch
-                      isSelected={
-                        member.inviteStatus === 'ACCEPTED' && member.isActive
-                      }
+                      isSelected={member.inviteStatus === 'ACCEPTED'}
                       isDisabled={
                         isOwner ||
                         member.inviteStatus !== 'ACCEPTED' ||
                         pendingMemberIds.has(member.id)
                       }
                       onChange={(value) => handleToggleActive(member, value)}
-                      aria-label={`${display} aktif`}
+                      aria-label={`${display} takımdan çıkar`}
                     >
                       <Switch.Control>
                         <Switch.Thumb />

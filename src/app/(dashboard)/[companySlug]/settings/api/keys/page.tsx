@@ -27,6 +27,7 @@ import { ApiKey, useApiKeyStore } from '@/stores/apiKeyStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
 import { usePageTitle } from '@/hooks/use-page-title';
+import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 
 type Permission = 'read' | 'write';
 
@@ -52,13 +53,18 @@ export default function ApiKeysListPage() {
     clearNewKeySecret,
   } = useApiKeyStore();
 
-  const { hasFeature, fetchMyPlan, fetchPricingStatus, isPricingEnabled } =
+  const { hasFeature, fetchMyPlan, fetchPricingStatus, isPricingEnabled, myPlan } =
     usePricingStore();
 
   const hasApiAccess = hasFeature('apiAccess');
+  // Plan/pricing state belirlenene kadar upgrade banner flash etmesin.
+  // isPricingEnabled false ise zaten upgradeBlocked false; true ise myPlan
+  // gelene kadar gating'i bekletiyoruz.
+  const isPlanResolved = !isPricingEnabled || myPlan !== null;
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState('');
+  const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [newKeyWrite, setNewKeyWrite] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
@@ -119,7 +125,10 @@ export default function ApiKeysListPage() {
 
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col px-3">
-          {upgradeBlocked ? (
+          {!isPlanResolved ? (
+            // Plan henüz çözülmedi — flash etmesin diye boş tut.
+            <div className="h-32" aria-hidden="true" />
+          ) : upgradeBlocked ? (
             <div className="flex flex-col items-center gap-4 rounded-xl bg-surface p-8">
               <div className="flex h-12 w-12 items-center justify-center rounded-full bg-default">
                 <TriangleExclamation className="h-6 w-6 text-muted" />
@@ -135,10 +144,10 @@ export default function ApiKeysListPage() {
               <Button
                 variant="tertiary"
                 size="sm"
-                onPress={() => router.push(`/${slug}/pricing`)}
+                onPress={() => setIsUpgradeOpen(true)}
                 className="h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
               >
-                Planları Görüntüle
+                Planı Yükselt
               </Button>
             </div>
           ) : (
@@ -299,6 +308,13 @@ export default function ApiKeysListPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+
+      <UpgradePlanModal
+        isOpen={isUpgradeOpen}
+        onOpenChange={setIsUpgradeOpen}
+        defaultPlan="ENTERPRISE"
+        description="API erişimi Enterprise plan ile kullanılabilir."
+      />
     </>
   );
 }

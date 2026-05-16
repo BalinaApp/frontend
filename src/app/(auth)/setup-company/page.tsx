@@ -56,7 +56,7 @@ export default function SetupCompanyPage() {
 
   const [companyName, setCompanyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<MemberRole>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<MemberRole>('ADMIN');
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 

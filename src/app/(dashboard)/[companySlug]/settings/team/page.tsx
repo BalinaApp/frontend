@@ -32,7 +32,6 @@ const roleLabels = ROLE_LABELS;
 const roleIcons: Record<CompanyRoleId, React.ElementType> = {
   OWNER: Crown,
   ADMIN: Shield,
-  MEMBER: Users,
   STOCKIST: Package,
   PRODUCT_UPLOADER: Upload,
 };
@@ -47,7 +46,7 @@ export default function TeamSettingsPage() {
   const [isInviting, setIsInviting] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<InvitableRoleId>('MEMBER');
+  const [inviteRole, setInviteRole] = useState<InvitableRoleId>('ADMIN');
 
   const fetchMembers = async () => {
     if (!company?.id) return;
@@ -79,7 +78,7 @@ export default function TeamSettingsPage() {
       toast.success('Davet gönderildi');
       setIsInviteOpen(false);
       setInviteEmail('');
-      setInviteRole('MEMBER');
+      setInviteRole('ADMIN');
       fetchMembers();
     } catch (error: any) {
       toast.danger(error.response?.data?.message || 'Davet gönderilemedi');

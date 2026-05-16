@@ -6,6 +6,7 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { Gear, AbbrApi } from '@gravity-ui/icons';
 import { Avatar } from '@heroui/react';
 import { useAuthStore } from '@/stores/authStore';
+import { useCompanyStore } from '@/stores/companyStore';
 import { userDisplayName } from '@/lib/user-display';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
@@ -27,15 +28,22 @@ export default function SettingsLayout({
   const params = useParams();
   const pathname = usePathname();
   const { user } = useAuthStore();
+  const { currentCompany } = useCompanyStore();
+  const role = currentCompany?.role;
+  const isLimitedRole = role === 'STOCKIST' || role === 'PRODUCT_UPLOADER';
 
   const slug = (params.companySlug as string) || '';
   const userInitial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
 
-  const items: RailItem[] = [
+  // STOCKIST + PRODUCT_UPLOADER: yalnızca "Genel" rail item'ı görünür.
+  const allItems: RailItem[] = [
     { id: 'general', label: 'Genel', href: `/${slug}/settings`, icon: Gear, tile: 'bg-red-500' },
     { id: 'api', label: 'API', href: `/${slug}/settings/api`, icon: AbbrApi, tile: 'bg-indigo-500' },
     { id: 'about', label: 'Hakkımızda', href: `/${slug}/settings/about`, icon: BalinaOsMark, tile: 'bg-zinc-500' },
   ];
+  const items = isLimitedRole
+    ? allItems.filter((i) => i.id === 'general')
+    : allItems;
 
   // /settings/api activates "API"; /settings/about activates "Hakkımızda";
   // everything else under /settings (including the index and sub-pages like

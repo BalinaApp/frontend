@@ -9,7 +9,6 @@
 export type CompanyRoleId =
   | 'OWNER'
   | 'ADMIN'
-  | 'MEMBER'
   | 'STOCKIST'
   | 'PRODUCT_UPLOADER';
 
@@ -32,12 +31,6 @@ export const COMPANY_ROLES: Record<CompanyRoleId, CompanyRoleDefinition> = {
     id: 'ADMIN',
     label: 'Yönetici',
     description: 'Tüm sayfalara erişebilir, üyeleri ve mağazaları yönetir.',
-    invitable: true,
-  },
-  MEMBER: {
-    id: 'MEMBER',
-    label: 'Üye',
-    description: 'Tüm sayfalara erişebilir; üyeleri kaldıramaz.',
     invitable: true,
   },
   STOCKIST: {

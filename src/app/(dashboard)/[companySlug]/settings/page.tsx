@@ -18,6 +18,7 @@ import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { userDisplayName } from '@/lib/user-display';
+import { MobileSidebarToggle } from '@/components/layout/mobile-sidebar-toggle';
 
 interface SettingsItem {
   id: string;
@@ -30,6 +31,9 @@ interface SettingsItem {
   requiresPricing?: boolean;
   /** Hide unless user has OWNER/ADMIN role on the current company. */
   requiresOwnerAdmin?: boolean;
+  /** Sınırlı roller (STOCKIST + PRODUCT_UPLOADER) için görünür mü? Default
+   *  false — sınırlı roller yalnızca kendi profillerini görür. */
+  limitedRoleVisible?: boolean;
 }
 
 export default function SettingsGeneralPage() {
@@ -54,6 +58,7 @@ export default function SettingsGeneralPage() {
       href: `/${slug}/settings/profile`,
       icon: Person,
       tile: 'bg-zinc-500',
+      limitedRoleVisible: true,
     },
     {
       id: 'security',
@@ -104,10 +109,14 @@ export default function SettingsGeneralPage() {
 
   const userRole = currentCompany?.role;
   const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN';
+  const isLimitedRole =
+    userRole === 'STOCKIST' || userRole === 'PRODUCT_UPLOADER';
   const items = allItems.filter(
     (item) =>
       (!item.requiresPricing || isPricingEnabled) &&
-      (!item.requiresOwnerAdmin || isOwnerOrAdmin),
+      (!item.requiresOwnerAdmin || isOwnerOrAdmin) &&
+      // Sınırlı roller için sadece limitedRoleVisible=true satırlar görünür.
+      (!isLimitedRole || item.limitedRoleVisible === true),
   );
 
   const handleLogout = () => {
@@ -118,8 +127,10 @@ export default function SettingsGeneralPage() {
   return (
     <>
       {/* Section header — fixed 61px to align with the back-button rows on
-          subpages (32px button + 14px padding ≈ 60.5px). */}
-      <div className="flex h-[61px] items-center border-b border-black/[0.02] px-3.5">
+          subpages (32px button + 14px padding ≈ 60.5px). Mobilde settings
+          rail'i gizli olduğu için başlığın solunda sidebar toggle. */}
+      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
+        <MobileSidebarToggle />
         <h2 className="text-sm font-medium text-foreground">Genel</h2>
       </div>
 

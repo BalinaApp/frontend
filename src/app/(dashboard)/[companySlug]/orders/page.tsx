@@ -845,6 +845,10 @@ function OrderDetailDrawer({
           additionalContent2: '',
           additionalContent3: '',
           packagingType: 1,
+          // MNG yalnızca '', TRND, GG, N11 kabul ediyor; geçersizse Code 26029.
+          // WC = kendi site → boş string. Pazaryeri eklendiğinde ilgili kod
+          // (TRND/GG/N11) gönderilmeli.
+          marketPlaceShortCode: '',
           orderPieceList: [
             {
               barcode: mngReferenceId,

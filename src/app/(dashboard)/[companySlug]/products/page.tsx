@@ -140,7 +140,10 @@ export default function InventoryPage() {
   // Tablo
   const [sortField, setSortField] = useState<SortField>('price');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
-  const perPage = 100;
+  // Şu an pagination UI'ı yok — tek seferde tüm ürünleri çekiyoruz. Çoğu
+  // satıcı 1000'in altında ürün taşıyor; bu sınırın üstüne çıkanlar için
+  // ileride load-more / infinite scroll eklenecek.
+  const perPage = 1000;
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Mağaza listesini bir kere çek (Bağlı filtresi + entegrasyon kolonu için).
@@ -1234,21 +1237,12 @@ function AddPricePopover({
   );
 }
 
-/** Kullanıcı girdisini sayıya çevirir. "1.234,56" / "1234,56" / "1234.56" /
- *  "1,234.56" — tüm yaygın kombinasyonları destekler. */
+/** Kullanıcı girdisini sayıya çevirir. TR locale: "," decimal, "." thousand.
+ *  "2.250" → 2250, "2,50" → 2.5, "1.234,56" → 1234.56. */
 function parsePriceInput(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
-  // Son virgül veya nokta decimal separator kabul edilir; öncesindeki
-  // tüm , ve . karakterleri thousand separator olarak silinir.
-  const lastComma = trimmed.lastIndexOf(',');
-  const lastDot = trimmed.lastIndexOf('.');
-  let normalized: string;
-  if (lastComma > lastDot) {
-    normalized = trimmed.replace(/\./g, '').replace(',', '.');
-  } else {
-    normalized = trimmed.replace(/,/g, '');
-  }
+  const normalized = trimmed.replace(/\./g, '').replace(',', '.');
   const n = Number(normalized);
   return Number.isNaN(n) ? null : n;
 }
@@ -1262,38 +1256,25 @@ function formatPrice(n: number): string {
 }
 
 /** Kullanıcı yazarken anlık TR fiyat formatı: "123123" → "123.123",
- *  "1234,5" → "1.234,5". Decimal kısmı tamamlanmadığı sürece dokunulmaz
- *  (kullanıcı henüz yazıyor olabilir). Yalnızca tamsayı kısmına thousand
- *  separator (`.`) eklenir. */
+ *  "1234,5" → "1.234,5", "2.250" → "2.250". TR locale'de "." thousand
+ *  separator, "," decimal separator; "." ASLA decimal olarak yorumlanmaz. */
 function liveFormatPrice(input: string): string {
   // Geçersiz karakterleri ele
   const cleaned = input.replace(/[^0-9.,]/g, '');
   if (!cleaned) return '';
-  // Son virgül VEYA noktayı decimal separator olarak kabul et — sonrasında
-  // başka karakter yoksa "yazma halinde" demektir (henüz tamamlanmadı).
-  const lastComma = cleaned.lastIndexOf(',');
-  const lastDot = cleaned.lastIndexOf('.');
-  // Burada thousand separator bizim eklediğimiz "." karakterleridir. Onları
-  // ayırmak için: kullanıcı yeni karakter girdiğinde decimal separator
-  // olarak son virgül kabul edilir; son nokta da olabilir (ABD klavyesi).
+  // Sadece "," decimal separator — varsa ilk virgüle göre böl, kalan tüm
+  // "." karakterleri thousand separator olarak strip edilir.
+  const commaIdx = cleaned.indexOf(',');
   let intPart: string;
   let decPart: string | null = null;
-  if (lastComma > -1 && lastComma > lastDot) {
-    intPart = cleaned.slice(0, lastComma).replace(/[.,]/g, '');
+  if (commaIdx > -1) {
+    intPart = cleaned.slice(0, commaIdx).replace(/[.,]/g, '');
     decPart = cleaned
-      .slice(lastComma + 1)
-      .replace(/[.,]/g, '')
-      .slice(0, 2);
-  } else if (lastDot > -1 && lastDot > lastComma) {
-    // Eğer ondan önce başka noktalar varsa thousand olarak yorumla; son
-    // noktayı decimal kabul et.
-    intPart = cleaned.slice(0, lastDot).replace(/[.,]/g, '');
-    decPart = cleaned
-      .slice(lastDot + 1)
+      .slice(commaIdx + 1)
       .replace(/[.,]/g, '')
       .slice(0, 2);
   } else {
-    intPart = cleaned.replace(/[.,]/g, '');
+    intPart = cleaned.replace(/\./g, '');
   }
   if (intPart === '') intPart = '0';
   const intNum = Number(intPart);

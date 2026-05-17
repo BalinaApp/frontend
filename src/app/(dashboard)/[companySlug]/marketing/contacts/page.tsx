@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   Calendar,
@@ -13,25 +13,17 @@ import {
   Tag,
   TrashBin,
 } from '@gravity-ui/icons';
-import {
-  AlertDialog,
-  Button,
-  Checkbox,
-  FieldError,
-  Input,
-  Label,
-  Modal,
-  TextField,
-  toast,
-} from '@heroui/react';
+import { AlertDialog, Button, Checkbox, toast } from '@heroui/react';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useSavedFilterStore } from '@/stores/savedFilterStore';
+import { useSidePanel } from '@/components/providers/SidePanel';
 import { FilterPopover } from '@/components/products/filter-popover';
 import { ActiveFilterChips } from '@/components/products/active-filter-chips';
 import { SavedTab } from '@/components/products/saved-tab';
+import { AddContactPanel } from '@/components/marketing/add-contact-panel';
 import {
   applyFilterPayload,
   clearFilters as clearAllFilters,
@@ -105,40 +97,10 @@ export default function MarketingContactsPage() {
     setUnsubscribed,
     deleteContact,
     backfillFromOrders,
-    importCsv,
   } = useMarketingStore();
 
-  // Manuel kontak ekleme modal'ı
-  const [addOpen, setAddOpen] = useState(false);
-  const [addEmail, setAddEmail] = useState('');
-  const [addFirst, setAddFirst] = useState('');
-  const [addLast, setAddLast] = useState('');
-  const [addPhone, setAddPhone] = useState('');
-  const [addError, setAddError] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
-
-  // CSV import — gizli file input + spinner state.
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isImporting, setIsImporting] = useState(false);
-
-  const handleImportClick = () => fileInputRef.current?.click();
-  const handleImportChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!currentCompany?.id) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsImporting(true);
-    const result = await importCsv(currentCompany.id, file);
-    setIsImporting(false);
-    e.target.value = ''; // aynı dosyayı tekrar seçebilmek için
-    if (!result) {
-      toast.danger('CSV içe aktarılamadı');
-      return;
-    }
-    const { totalRows, created, updated, skipped } = result;
-    toast.success(
-      `${totalRows} satırdan ${created} yeni, ${updated} güncel, ${skipped} atlandı`,
-    );
-  };
+  // Manuel kontak ekleme — sağ drawer (useSidePanel ile).
+  const { setSidePanel } = useSidePanel();
 
   // Filter state — products page ile birebir aynı pattern (useState'ler
   // + filterDefs[] + applyFilterPayload kullanımı).
@@ -403,32 +365,10 @@ export default function MarketingContactsPage() {
     }
   };
 
-  const handleAddContact = async () => {
-    if (!currentCompany?.id) return;
-    const email = addEmail.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setAddError('Geçerli bir e-posta girin');
-      return;
-    }
-    setIsAdding(true);
-    setAddError(null);
-    const created = await createContact(currentCompany.id, {
-      email,
-      firstName: addFirst.trim() || undefined,
-      lastName: addLast.trim() || undefined,
-      phone: addPhone.trim() || undefined,
-    });
-    setIsAdding(false);
-    if (created) {
-      toast.success('Kontak eklendi');
-      setAddOpen(false);
-      setAddEmail('');
-      setAddFirst('');
-      setAddLast('');
-      setAddPhone('');
-    } else {
-      setAddError(useMarketingStore.getState().error ?? 'Eklenemedi');
-    }
+  const openAddContact = () => {
+    setSidePanel(
+      <AddContactPanel onClose={() => setSidePanel(null)} />,
+    );
   };
 
   // ---- Bulk operations ----------------------------------------------------
@@ -553,111 +493,20 @@ export default function MarketingContactsPage() {
       </AlertDialog>
 
       <PageHeader
-        title="Pazarlama"
+        title="Kontaklar"
         action={
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,text/csv"
-              hidden
-              onChange={handleImportChange}
-            />
-            <Button
-              variant="tertiary"
-              size="sm"
-              onPress={handleImportClick}
-              isPending={isImporting}
-              isDisabled={isImporting || !currentCompany?.id}
-              className="h-8 rounded-full px-3 text-xs"
-            >
-              CSV içe aktar
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={() => setAddOpen(true)}
-              isDisabled={!currentCompany?.id}
-              className="h-8 rounded-full px-3 text-xs"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Kontak ekle
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            onPress={openAddContact}
+            isDisabled={!currentCompany?.id}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Kontak ekle
+          </Button>
         }
       />
-
-      {/* Manuel kontak ekleme modal'ı */}
-      <Modal
-        isOpen={addOpen}
-        onOpenChange={(open) => {
-          if (!isAdding && !open) setAddOpen(false);
-        }}
-      >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[440px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Yeni kontak ekle</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="px-4">
-                <div className="flex flex-col gap-3">
-                  <TextField
-                    value={addEmail}
-                    onChange={(v) => {
-                      setAddEmail(v);
-                      if (addError) setAddError(null);
-                    }}
-                    isInvalid={!!addError}
-                    isRequired
-                    autoFocus
-                  >
-                    <Label>E-posta</Label>
-                    <Input
-                      placeholder="ornek@adres.com"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddContact();
-                        }
-                      }}
-                    />
-                    {addError && <FieldError>{addError}</FieldError>}
-                  </TextField>
-                  <div className="grid grid-cols-2 gap-2">
-                    <TextField value={addFirst} onChange={setAddFirst}>
-                      <Label>Ad</Label>
-                      <Input placeholder="Ad" />
-                    </TextField>
-                    <TextField value={addLast} onChange={setAddLast}>
-                      <Label>Soyad</Label>
-                      <Input placeholder="Soyad" />
-                    </TextField>
-                  </div>
-                  <TextField value={addPhone} onChange={setAddPhone}>
-                    <Label>Telefon (opsiyonel)</Label>
-                    <Input placeholder="+90 ..." />
-                  </TextField>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isAdding}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={handleAddContact}
-                  isPending={isAdding}
-                  isDisabled={isAdding || !addEmail.trim()}
-                >
-                  Ekle
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
 
       <div className="flex flex-col">
         {/* ============== Filter row (Products page ile birebir) ============== */}
@@ -703,19 +552,23 @@ export default function MarketingContactsPage() {
 
         {/* ============== Header + rows ============== */}
         <div className="flex flex-col gap-2.5 p-2.5">
+          {/* Header — row cells ile aynı CellWrap kullan ki flex behavior
+              ve içerik hizası birebir eşleşsin. */}
           <div className="flex items-center justify-between">
-            <div className="flex flex-1 items-center gap-2">
-              <SortHeaderButton
-                field="email"
-                currentField={sortField}
-                currentOrder={sortOrder}
-                onSort={handleSort}
-              >
-                Müşteri
-              </SortHeaderButton>
+            <div className="flex flex-1 items-center gap-3">
+              <CellWrap>
+                <SortHeaderButton
+                  field="email"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Müşteri
+                </SortHeaderButton>
+              </CellWrap>
             </div>
             <div className="flex flex-1 items-center gap-20">
-              <div className="flex flex-1 items-center gap-2">
+              <CellWrap>
                 <SortHeaderButton
                   field="orderCount"
                   currentField={sortField}
@@ -724,8 +577,8 @@ export default function MarketingContactsPage() {
                 >
                   Siparişler
                 </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <SortHeaderButton
                   field="totalSpent"
                   currentField={sortField}
@@ -734,8 +587,8 @@ export default function MarketingContactsPage() {
                 >
                   Toplam Harcama
                 </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <SortHeaderButton
                   field="lastOrderAt"
                   currentField={sortField}
@@ -744,12 +597,12 @@ export default function MarketingContactsPage() {
                 >
                   Son Sipariş
                 </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Durum
                 </span>
-              </div>
+              </CellWrap>
             </div>
           </div>
 

@@ -83,6 +83,8 @@ export default function CampaignEditorPage() {
   const [testSendOpen, setTestSendOpen] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isReadOnly =
     !!campaign &&
@@ -269,14 +271,17 @@ export default function CampaignEditorPage() {
     }
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => setDeleteOpen(true);
+  const handleConfirmDelete = async () => {
     if (!currentCompany?.id || !campaign) return;
-    if (!confirm('Bu kampanyayı silmek istiyor musunuz?')) return;
+    setIsDeleting(true);
     const ok = await deleteCampaign(currentCompany.id, campaign.id);
+    setIsDeleting(false);
     if (ok) {
       router.push(`/${slug}/marketing/campaigns`);
     } else {
       toast.danger('Silinemedi');
+      setDeleteOpen(false);
     }
   };
 
@@ -310,6 +315,46 @@ export default function CampaignEditorPage() {
           )
         }
       />
+
+      {/* Kampanya silme onayı — native confirm yerine AlertDialog. */}
+      <AlertDialog
+        isOpen={deleteOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting && !open) setDeleteOpen(false);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Kampanyayı sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                Bu kampanya kalıcı olarak silinecek. Geri alınamaz; gönderilen
+                istatistikler de kaybolur.
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={isDeleting}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleConfirmDelete}
+                  isPending={isDeleting}
+                  isDisabled={isDeleting}
+                >
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
 
       {/* Test gönder modal'ı — Resend ile gerçek mail yollar (marketing key). */}
       <Modal

@@ -9,6 +9,7 @@ import {
   CircleXmark,
   Envelope,
   Person,
+  Plus,
   Tag,
   TrashBin,
 } from '@gravity-ui/icons';
@@ -16,6 +17,11 @@ import {
   AlertDialog,
   Button,
   Checkbox,
+  FieldError,
+  Input,
+  Label,
+  Modal,
+  TextField,
   toast,
 } from '@heroui/react';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -95,10 +101,20 @@ export default function MarketingContactsPage() {
     contacts,
     isLoading,
     fetchContacts,
+    createContact,
     setUnsubscribed,
     deleteContact,
     backfillFromOrders,
   } = useMarketingStore();
+
+  // Manuel kontak ekleme modal'ı
+  const [addOpen, setAddOpen] = useState(false);
+  const [addEmail, setAddEmail] = useState('');
+  const [addFirst, setAddFirst] = useState('');
+  const [addLast, setAddLast] = useState('');
+  const [addPhone, setAddPhone] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   // Filter state — products page ile birebir aynı pattern (useState'ler
   // + filterDefs[] + applyFilterPayload kullanımı).
@@ -363,6 +379,34 @@ export default function MarketingContactsPage() {
     }
   };
 
+  const handleAddContact = async () => {
+    if (!currentCompany?.id) return;
+    const email = addEmail.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setAddError('Geçerli bir e-posta girin');
+      return;
+    }
+    setIsAdding(true);
+    setAddError(null);
+    const created = await createContact(currentCompany.id, {
+      email,
+      firstName: addFirst.trim() || undefined,
+      lastName: addLast.trim() || undefined,
+      phone: addPhone.trim() || undefined,
+    });
+    setIsAdding(false);
+    if (created) {
+      toast.success('Kontak eklendi');
+      setAddOpen(false);
+      setAddEmail('');
+      setAddFirst('');
+      setAddLast('');
+      setAddPhone('');
+    } else {
+      setAddError(useMarketingStore.getState().error ?? 'Eklenemedi');
+    }
+  };
+
   // ---- Bulk operations ----------------------------------------------------
 
   const allSelectedUnsubscribed =
@@ -484,7 +528,93 @@ export default function MarketingContactsPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
 
-      <PageHeader title="Pazarlama" />
+      <PageHeader
+        title="Pazarlama"
+        action={
+          <Button
+            variant="primary"
+            size="sm"
+            onPress={() => setAddOpen(true)}
+            isDisabled={!currentCompany?.id}
+            className="h-8 rounded-full px-3 text-xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Kontak ekle
+          </Button>
+        }
+      />
+
+      {/* Manuel kontak ekleme modal'ı */}
+      <Modal
+        isOpen={addOpen}
+        onOpenChange={(open) => {
+          if (!isAdding && !open) setAddOpen(false);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[440px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Yeni kontak ekle</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="px-4">
+                <div className="flex flex-col gap-3">
+                  <TextField
+                    value={addEmail}
+                    onChange={(v) => {
+                      setAddEmail(v);
+                      if (addError) setAddError(null);
+                    }}
+                    isInvalid={!!addError}
+                    isRequired
+                    autoFocus
+                  >
+                    <Label>E-posta</Label>
+                    <Input
+                      placeholder="ornek@adres.com"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddContact();
+                        }
+                      }}
+                    />
+                    {addError && <FieldError>{addError}</FieldError>}
+                  </TextField>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextField value={addFirst} onChange={setAddFirst}>
+                      <Label>Ad</Label>
+                      <Input placeholder="Ad" />
+                    </TextField>
+                    <TextField value={addLast} onChange={setAddLast}>
+                      <Label>Soyad</Label>
+                      <Input placeholder="Soyad" />
+                    </TextField>
+                  </div>
+                  <TextField value={addPhone} onChange={setAddPhone}>
+                    <Label>Telefon (opsiyonel)</Label>
+                    <Input placeholder="+90 ..." />
+                  </TextField>
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close" isDisabled={isAdding}>
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="primary"
+                  onPress={handleAddContact}
+                  isPending={isAdding}
+                  isDisabled={isAdding || !addEmail.trim()}
+                >
+                  Ekle
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
       <div className="flex flex-col">
         {/* ============== Filter row (Products page ile birebir) ============== */}

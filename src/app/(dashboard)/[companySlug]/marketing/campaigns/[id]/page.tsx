@@ -5,18 +5,33 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Check,
+  CircleXmark,
   Clock,
   Eye,
+  Magnifier,
   PaperPlane,
+  Plus,
   TrashBin,
 } from '@gravity-ui/icons';
-import { Button, Input, Label, TextField, toast } from '@heroui/react';
+import Image from 'next/image';
+import {
+  AlertDialog,
+  Button,
+  Input,
+  Label,
+  Modal,
+  TextField,
+  toast,
+} from '@heroui/react';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useCompanyStore } from '@/stores/companyStore';
+import { useStoreStore } from '@/stores/storeStore';
+import { useInventoryStore } from '@/stores/inventoryStore';
 import {
   useMarketingCampaignStore,
+  type AudienceFilter,
   type AudiencePreview,
   type MarketingCampaign,
 } from '@/stores/marketingCampaignStore';
@@ -28,6 +43,7 @@ export default function CampaignEditorPage() {
   const slug = params?.companySlug ?? '';
   const campaignId = params?.id ?? '';
   const { currentCompany } = useCompanyStore();
+  const { stores, fetchStores } = useStoreStore();
   const {
     fetchOne,
     updateCampaign,
@@ -51,12 +67,18 @@ export default function CampaignEditorPage() {
   const [aiTone, setAiTone] = useState('');
   const [productIds, setProductIds] = useState<string[]>([]);
 
+  // Audience filter — boş bırakılırsa tüm aktif (subscribed) kontaklar.
+  const [audienceStoreIds, setAudienceStoreIds] = useState<string[]>([]);
+  const [audienceTagsRaw, setAudienceTagsRaw] = useState('');
+  const [audienceLastOrderAfter, setAudienceLastOrderAfter] = useState('');
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
 
   const isReadOnly =
     !!campaign &&
@@ -74,6 +96,10 @@ export default function CampaignEditorPage() {
       setAiPrompt(c.bodyMeta?.aiPrompt ?? '');
       setAiTone(c.bodyMeta?.aiTone ?? '');
       setProductIds(c.bodyMeta?.productIds ?? []);
+      // Audience filter alanları
+      setAudienceStoreIds(c.audienceFilter?.storeIds ?? []);
+      setAudienceTagsRaw((c.audienceFilter?.tags ?? []).join(', '));
+      setAudienceLastOrderAfter(c.audienceFilter?.lastOrderAfter ?? '');
       if (c.scheduledAt) {
         const d = new Date(c.scheduledAt);
         const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -89,10 +115,36 @@ export default function CampaignEditorPage() {
     loadCampaign();
   }, [loadCampaign]);
 
+  // Mağaza listesi audience filter için.
+  useEffect(() => {
+    if (currentCompany?.id) fetchStores(currentCompany.id);
+  }, [currentCompany?.id, fetchStores]);
+
+  // Audience filter değiştikçe preview'ı tazele.
   useEffect(() => {
     if (!currentCompany?.id || !campaign) return;
     fetchAudience(currentCompany.id, campaign.id).then(setAudience);
-  }, [currentCompany?.id, campaign, fetchAudience]);
+  }, [
+    currentCompany?.id,
+    campaign,
+    fetchAudience,
+    // Save sonrası audience değiştiğinde tetiklensin.
+    campaign?.audienceFilter,
+  ]);
+
+  const buildAudienceFilter = (): AudienceFilter => {
+    const tags = audienceTagsRaw
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean);
+    return {
+      storeIds: audienceStoreIds.length ? audienceStoreIds : undefined,
+      tags: tags.length ? tags : undefined,
+      lastOrderAfter: audienceLastOrderAfter
+        ? new Date(audienceLastOrderAfter).toISOString()
+        : undefined,
+    };
+  };
 
   const handleSave = async () => {
     if (!currentCompany?.id || !campaign) return;
@@ -102,6 +154,7 @@ export default function CampaignEditorPage() {
       subject: subject.trim(),
       bodyHtml,
       bodyMeta: { productIds, aiPrompt, aiTone },
+      audienceFilter: buildAudienceFilter(),
     });
     setIsSaving(false);
     if (updated) {
@@ -125,6 +178,7 @@ export default function CampaignEditorPage() {
       subject: subject.trim(),
       bodyHtml,
       bodyMeta: { productIds, aiPrompt, aiTone },
+      audienceFilter: buildAudienceFilter(),
     });
     const result = await generateContent(currentCompany.id, campaign.id, {
       prompt: aiPrompt,
@@ -223,6 +277,16 @@ export default function CampaignEditorPage() {
 
   return (
     <>
+      <ProductPickerInline
+        isOpen={productPickerOpen}
+        onClose={() => setProductPickerOpen(false)}
+        selectedIds={productIds}
+        onToggle={(id) =>
+          setProductIds((prev) =>
+            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+          )
+        }
+      />
       <PageHeader
         title="Pazarlama"
         action={
@@ -311,25 +375,35 @@ export default function CampaignEditorPage() {
                 <Input placeholder="Örn. samimi, espirili, resmi" />
               </TextField>
             </div>
-            <div className="mt-2 text-xs text-muted">
-              Ürünleri eklemek için aşağıdaki ürün id listesine ekle —{' '}
-              <code>{'{{product:id}}'}</code> placeholder'ı gövdede render edilir.
+            <div className="mt-3">
+              <div className="mb-1 flex items-center justify-between">
+                <Label>Eklenen ürünler</Label>
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  onPress={() => setProductPickerOpen(true)}
+                  isDisabled={isReadOnly}
+                  className="h-7 rounded-full px-2 text-xs"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Ürün ekle
+                </Button>
+              </div>
+              {productIds.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-foreground/[0.08] bg-surface-secondary p-3 text-xs text-muted">
+                  Henüz ürün eklenmedi — gövdede{' '}
+                  <code>{'{{product:id}}'}</code> placeholder'ı olarak yer alır.
+                </div>
+              ) : (
+                <ProductChips
+                  ids={productIds}
+                  onRemove={(id) =>
+                    setProductIds(productIds.filter((p) => p !== id))
+                  }
+                  disabled={isReadOnly}
+                />
+              )}
             </div>
-            <input
-              type="text"
-              value={productIds.join(', ')}
-              onChange={(e) =>
-                setProductIds(
-                  e.target.value
-                    .split(',')
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                )
-              }
-              disabled={isReadOnly}
-              placeholder="Ürün id'leri, virgülle ayırarak"
-              className="mt-2 h-9 w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary px-3 text-xs text-foreground outline-none focus:border-accent"
-            />
           </div>
 
           {/* Body */}
@@ -387,6 +461,81 @@ export default function CampaignEditorPage() {
                 {s.email}
               </div>
             ))}
+
+            {/* Audience filter editör — kaydedince audience preview tazelenir. */}
+            <div className="mt-4 border-t border-foreground/[0.06] pt-3">
+              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+                Filtreler
+              </div>
+              <div className="mb-3">
+                <Label>Mağazalar</Label>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {stores.length === 0 ? (
+                    <div className="text-xs text-muted">Mağaza yok</div>
+                  ) : (
+                    stores.map((s) => {
+                      const selected = audienceStoreIds.includes(s.id);
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          disabled={isReadOnly}
+                          onClick={() =>
+                            setAudienceStoreIds((prev) =>
+                              prev.includes(s.id)
+                                ? prev.filter((x) => x !== s.id)
+                                : [...prev, s.id],
+                            )
+                          }
+                          className={[
+                            'inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium transition-colors',
+                            selected
+                              ? 'bg-foreground/[0.10] text-foreground'
+                              : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+                          ].join(' ')}
+                        >
+                          {s.name}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                <div className="mt-1 text-[10px] text-muted">
+                  Hiç seçilmezse tüm mağazalardan kontaklar dahil olur.
+                </div>
+              </div>
+              <div className="mb-3">
+                <TextField
+                  value={audienceTagsRaw}
+                  onChange={setAudienceTagsRaw}
+                  isDisabled={isReadOnly}
+                >
+                  <Label>Tag&apos;ler (virgülle ayır)</Label>
+                  <Input placeholder="vip, kampanya-mart, ..." />
+                </TextField>
+              </div>
+              <div>
+                <Label>Son sipariş tarihinden sonra</Label>
+                <input
+                  type="date"
+                  value={audienceLastOrderAfter}
+                  onChange={(e) => setAudienceLastOrderAfter(e.target.value)}
+                  disabled={isReadOnly}
+                  className="mt-1 h-9 w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary px-2 text-xs text-foreground outline-none focus:border-accent"
+                />
+              </div>
+              <Button
+                variant="tertiary"
+                size="sm"
+                onPress={handleSave}
+                isPending={isSaving}
+                isDisabled={isReadOnly || isSaving}
+                className="mt-3 w-full rounded-full"
+                fullWidth
+              >
+                Filtreyi uygula
+              </Button>
+            </div>
           </div>
 
           <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
@@ -480,5 +629,187 @@ function Stat({ label, value }: { label: string; value: number }) {
       </div>
       <div className="text-sm font-medium text-foreground">{value}</div>
     </div>
+  );
+}
+
+// ---- Product chips — eklenmiş ürünleri görsel + ad ile gösterir ---------
+
+function ProductChips({
+  ids,
+  onRemove,
+  disabled,
+}: {
+  ids: string[];
+  onRemove: (id: string) => void;
+  disabled?: boolean;
+}) {
+  const products = useInventoryStore((s) => s.products);
+  const items = ids.map(
+    (id) => products.find((p) => p.id === id) ?? { id, name: id, imageUrl: null },
+  );
+  return (
+    <div className="flex flex-col gap-1">
+      {items.map((p) => (
+        <div
+          key={p.id}
+          className="flex items-center gap-2 rounded-lg border border-foreground/[0.06] bg-surface-secondary p-2"
+        >
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
+            {p.imageUrl ? (
+              <Image
+                src={p.imageUrl}
+                alt=""
+                width={32}
+                height={32}
+                className="h-8 w-8 object-cover"
+                unoptimized
+              />
+            ) : (
+              <BalinaOsMark className="h-5 w-5 opacity-50" />
+            )}
+          </div>
+          <span className="flex-1 truncate text-xs text-foreground" title={p.name}>
+            {p.name}
+          </span>
+          <button
+            type="button"
+            onClick={() => onRemove(p.id)}
+            disabled={disabled}
+            aria-label="Ürünü kaldır"
+            className="rounded p-1 text-muted hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-50"
+          >
+            <CircleXmark className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ---- Product picker modal — products store'dan listeler -------------------
+
+interface ProductPickerProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedIds: string[];
+  onToggle: (id: string) => void;
+}
+
+export function ProductPickerInline({
+  isOpen,
+  onClose,
+  selectedIds,
+  onToggle,
+}: ProductPickerProps) {
+  const { currentCompany } = useCompanyStore();
+  const { products, isLoading, fetchProducts } = useInventoryStore();
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (!isOpen || !currentCompany?.id) return;
+    fetchProducts(currentCompany.id, {
+      limit: 200,
+      search: search.trim() || undefined,
+      sortBy: 'name',
+      sortOrder: 'asc',
+    });
+  }, [isOpen, currentCompany?.id, search, fetchProducts]);
+
+  return (
+    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Modal.Backdrop>
+        <Modal.Container>
+          <Modal.Dialog className="sm:max-w-[560px]">
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>Ürün seç</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="px-4 pb-0">
+              <div className="mb-2 flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
+                <Magnifier className="h-3.5 w-3.5 text-muted" />
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Ürün adı veya SKU"
+                  className="w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted"
+                />
+              </div>
+              <div className="max-h-[400px] overflow-y-auto">
+                {isLoading && products.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted">
+                    Yükleniyor…
+                  </div>
+                ) : products.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-muted">
+                    Ürün bulunamadı
+                  </div>
+                ) : (
+                  products.map((p) => {
+                    const selected = selectedIds.includes(p.id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => onToggle(p.id)}
+                        className={[
+                          'flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors',
+                          selected
+                            ? 'bg-foreground/[0.06]'
+                            : 'hover:bg-foreground/[0.04]',
+                        ].join(' ')}
+                      >
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
+                          {p.imageUrl ? (
+                            <Image
+                              src={p.imageUrl}
+                              alt=""
+                              width={36}
+                              height={36}
+                              className="h-9 w-9 object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <BalinaOsMark className="h-5 w-5 opacity-50" />
+                          )}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <span
+                            className="truncate text-sm font-medium leading-5 text-foreground"
+                            title={p.name}
+                          >
+                            {p.name}
+                          </span>
+                          <span className="truncate text-xs text-muted">
+                            {p.sku ?? '—'} · ₺
+                            {Number(p.price).toLocaleString('tr-TR')}
+                          </span>
+                        </div>
+                        <div
+                          className={[
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                            selected
+                              ? 'bg-accent text-accent-foreground'
+                              : 'border border-foreground/[0.12]',
+                          ].join(' ')}
+                          aria-hidden="true"
+                        >
+                          {selected && <Check className="h-3 w-3" />}
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="primary" slot="close">
+                Tamam
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }

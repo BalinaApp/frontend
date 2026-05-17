@@ -7,7 +7,6 @@ import {
   Check,
   CircleDashed,
   CircleXmark,
-  Database,
   Envelope,
   Person,
   Tag,
@@ -48,13 +47,6 @@ const statusOptions = [
   { value: 'active', label: 'Aktif', icon: Check },
   { value: 'unsubscribed', label: 'Aboneliği iptal', icon: CircleXmark },
   { value: 'bounced', label: 'Bounce / Şikayet', icon: CircleXmark },
-];
-
-const sourceOptions = [
-  { value: 'all', label: 'Tümü' },
-  { value: 'order', label: 'Sipariş' },
-  { value: 'manual', label: 'Manuel' },
-  { value: 'import', label: 'İçe aktarım' },
 ];
 
 function storeFaviconUrl(url?: string | null): string | null {
@@ -112,7 +104,6 @@ export default function MarketingContactsPage() {
   // + filterDefs[] + applyFilterPayload kullanımı).
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [storeFilter, setStoreFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [emailQuery, setEmailQuery] = useState('');
   const [dateFilter, setDateFilter] = useState('');
 
@@ -247,17 +238,6 @@ export default function MarketingContactsPage() {
       },
     },
     {
-      id: 'source',
-      label: 'Kaynak',
-      icon: Database,
-      searchPlaceholder: 'Kaynak seç...',
-      type: 'select',
-      defaultValue: 'all',
-      value: sourceFilter,
-      onChange: setSourceFilter,
-      options: sourceOptions,
-    },
-    {
       id: 'email',
       label: 'E-posta',
       icon: Envelope,
@@ -325,13 +305,9 @@ export default function MarketingContactsPage() {
     backfillFromOrders,
   ]);
 
-  // Source + date frontend-side filter + sort.
+  // Tarih aralığı client-side; status + storeId + search backend'de.
   const visibleContacts = useMemo(() => {
     let list = contacts;
-
-    if (sourceFilter !== 'all') {
-      list = list.filter((c) => c.source === sourceFilter);
-    }
 
     if (dateFilter.trim()) {
       const [fromStr, toStr] = dateFilter.split('..').map((s) => s.trim());
@@ -370,7 +346,7 @@ export default function MarketingContactsPage() {
         }
       }
     });
-  }, [contacts, sourceFilter, dateFilter, sortField, sortOrder]);
+  }, [contacts, dateFilter, sortField, sortOrder]);
 
   // ---- Handlers -----------------------------------------------------------
 

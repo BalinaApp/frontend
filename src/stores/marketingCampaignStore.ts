@@ -75,7 +75,12 @@ interface MarketingCampaignState {
   ) => Promise<MarketingCampaign | null>;
   createCampaign: (
     companyId: string,
-    input: { name: string; subject?: string; bodyHtml?: string },
+    input: {
+      name: string;
+      subject?: string;
+      bodyHtml?: string;
+      bodyMeta?: Record<string, unknown>;
+    },
   ) => Promise<MarketingCampaign | null>;
   updateCampaign: (
     companyId: string,

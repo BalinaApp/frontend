@@ -12,7 +12,12 @@ import {
   Magnifier,
   Plus,
 } from '@gravity-ui/icons';
-import { Button, toast } from '@heroui/react';
+import { Button, Modal, toast } from '@heroui/react';
+import {
+  compileBlocksToHtml,
+  collectProductIds,
+} from '@/components/marketing/mail-blocks';
+import { MAIL_TEMPLATES, type MailTemplate } from '@/components/marketing/mail-templates';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -102,26 +107,83 @@ export default function MarketingCampaignsPage() {
     });
   }, [campaigns, sortField, sortOrder]);
 
-  const handleCreate = async () => {
+  const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+
+  const handleCreateFromTemplate = async (tpl: MailTemplate) => {
     if (!currentCompany?.id) return;
     setCreating(true);
+    const productIds = collectProductIds(tpl.blocks);
+    const bodyHtml = compileBlocksToHtml(tpl.blocks);
     const created = await createCampaign(currentCompany.id, {
-      name: 'Yeni Kampanya',
+      name: tpl.name === 'Boş tema' ? 'Yeni Kampanya' : tpl.name,
+      subject: tpl.subject,
+      bodyHtml,
+      bodyMeta: { blocks: tpl.blocks, productIds },
     });
     setCreating(false);
+    setTemplatePickerOpen(false);
     if (created) router.push(`/${slug}/marketing/campaigns/${created.id}`);
     else toast.danger('Kampanya oluşturulamadı');
   };
 
   return (
     <>
+      {/* Şablon seçim modal'ı — yeni kampanya akışı buradan başlar. */}
+      <Modal
+        isOpen={templatePickerOpen}
+        onOpenChange={(o) => {
+          if (!creating && !o) setTemplatePickerOpen(false);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[640px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Şablon seç</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="px-4 pb-2">
+                <p className="mb-3 text-xs text-muted">
+                  Hızlı başlangıç için bir şablonla aç — sonra blokları
+                  düzenleyebilirsin.
+                </p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {MAIL_TEMPLATES.map((tpl) => (
+                    <button
+                      key={tpl.id}
+                      type="button"
+                      onClick={() => handleCreateFromTemplate(tpl)}
+                      disabled={creating}
+                      className="flex flex-col items-start gap-1 rounded-xl border border-foreground/[0.06] bg-surface p-3 text-left transition-colors hover:bg-foreground/[0.04] disabled:opacity-50"
+                    >
+                      <span className="text-sm font-medium text-foreground">
+                        {tpl.name}
+                      </span>
+                      <span className="text-xs text-muted">{tpl.description}</span>
+                      <span className="mt-1 text-[10px] uppercase tracking-wide text-muted">
+                        {tpl.blocks.length} blok
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close" isDisabled={creating}>
+                  Vazgeç
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
       <PageHeader
         title="Pazarlama"
         action={
           <Button
             variant="primary"
             size="sm"
-            onPress={handleCreate}
+            onPress={() => setTemplatePickerOpen(true)}
             isPending={creating}
             isDisabled={creating || !currentCompany?.id}
             className="h-8 rounded-full px-3 text-xs"

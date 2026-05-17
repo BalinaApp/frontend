@@ -50,6 +50,8 @@ export function MailBlockEditor({
   disabled,
 }: MailBlockEditorProps) {
   const [productPickerFor, setProductPickerFor] = useState<string | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const update = (id: string, patch: Partial<MailBlock>) => {
     onChange(
@@ -66,8 +68,60 @@ export function MailBlockEditor({
     [copy[idx], copy[next]] = [copy[next], copy[idx]];
     onChange(copy);
   };
+  const duplicate = (id: string) => {
+    const idx = blocks.findIndex((b) => b.id === id);
+    if (idx === -1) return;
+    const original = blocks[idx];
+    const clone: MailBlock = {
+      ...original,
+      id: `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`,
+    } as MailBlock;
+    const copy = [...blocks];
+    copy.splice(idx + 1, 0, clone);
+    onChange(copy);
+  };
   const add = (type: MailBlock['type']) => {
     onChange([...blocks, makeDefaultBlock(type)]);
+  };
+
+  /** Drag handle'dan ID transfer + drop hedefi'nin önüne yerleştir. */
+  const handleDragStart = (id: string) => (e: React.DragEvent) => {
+    if (disabled) return;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+  const handleDragOver = (id: string) => (e: React.DragEvent) => {
+    if (disabled || !draggingId || draggingId === id) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverId(id);
+  };
+  const handleDragLeave = () => setDragOverId(null);
+  const handleDrop = (targetId: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    if (disabled || !draggingId || draggingId === targetId) {
+      setDraggingId(null);
+      setDragOverId(null);
+      return;
+    }
+    const fromIdx = blocks.findIndex((b) => b.id === draggingId);
+    const toIdx = blocks.findIndex((b) => b.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) {
+      setDraggingId(null);
+      setDragOverId(null);
+      return;
+    }
+    const copy = [...blocks];
+    const [moved] = copy.splice(fromIdx, 1);
+    copy.splice(toIdx, 0, moved);
+    onChange(copy);
+    setDraggingId(null);
+    setDragOverId(null);
+  };
+  const handleDragEnd = () => {
+    setDraggingId(null);
+    setDragOverId(null);
   };
 
   return (
@@ -78,17 +132,35 @@ export function MailBlockEditor({
         </div>
       ) : (
         blocks.map((b, idx) => (
-          <BlockCard
+          <div
             key={b.id}
-            block={b}
-            isFirst={idx === 0}
-            isLast={idx === blocks.length - 1}
-            disabled={disabled}
-            onUpdate={(patch) => update(b.id, patch)}
-            onRemove={() => remove(b.id)}
-            onMove={(dir) => move(b.id, dir)}
-            onOpenProductPicker={() => setProductPickerFor(b.id)}
-          />
+            onDragOver={handleDragOver(b.id)}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop(b.id)}
+            className={[
+              'transition-all',
+              dragOverId === b.id && draggingId !== b.id
+                ? 'translate-y-0.5'
+                : '',
+              draggingId === b.id ? 'opacity-50' : '',
+            ].join(' ')}
+          >
+            <BlockCard
+              block={b}
+              isFirst={idx === 0}
+              isLast={idx === blocks.length - 1}
+              disabled={disabled}
+              isDragging={draggingId === b.id}
+              isDropTarget={dragOverId === b.id && draggingId !== b.id}
+              onUpdate={(patch) => update(b.id, patch)}
+              onRemove={() => remove(b.id)}
+              onMove={(dir) => move(b.id, dir)}
+              onDuplicate={() => duplicate(b.id)}
+              onOpenProductPicker={() => setProductPickerFor(b.id)}
+              onDragStart={handleDragStart(b.id)}
+              onDragEnd={handleDragEnd}
+            />
+          </div>
         ))
       )}
 
@@ -127,26 +199,59 @@ function BlockCard({
   isFirst,
   isLast,
   disabled,
+  isDragging,
+  isDropTarget,
   onUpdate,
   onRemove,
   onMove,
+  onDuplicate,
   onOpenProductPicker,
+  onDragStart,
+  onDragEnd,
 }: {
   block: MailBlock;
   isFirst: boolean;
   isLast: boolean;
   disabled?: boolean;
+  isDragging?: boolean;
+  isDropTarget?: boolean;
   onUpdate: (patch: Partial<MailBlock>) => void;
   onRemove: () => void;
   onMove: (dir: -1 | 1) => void;
+  onDuplicate: () => void;
   onOpenProductPicker: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
 }) {
   return (
-    <div className="group rounded-xl border border-foreground/[0.06] bg-surface-secondary p-3">
+    <div
+      className={[
+        'group rounded-xl border bg-surface-secondary p-3 transition-colors',
+        isDropTarget
+          ? 'border-accent/40 bg-accent/[0.04]'
+          : 'border-foreground/[0.06]',
+        isDragging ? 'cursor-grabbing' : '',
+      ].join(' ')}
+    >
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
-          {BLOCK_LABELS[block.type]}
-        </span>
+        <div className="flex items-center gap-1.5">
+          {/* Drag handle */}
+          <button
+            type="button"
+            draggable={!disabled}
+            onDragStart={onDragStart}
+            onDragEnd={onDragEnd}
+            disabled={disabled}
+            aria-label="Sürükle"
+            className="-ml-1 inline-flex h-5 w-5 cursor-grab items-center justify-center rounded text-muted hover:bg-foreground/[0.06] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 active:cursor-grabbing"
+            title="Sürükleyerek taşı"
+          >
+            <DragHandleIcon />
+          </button>
+          <span className="text-[10px] font-medium uppercase tracking-wide text-muted">
+            {BLOCK_LABELS[block.type]}
+          </span>
+        </div>
         <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
           <Button
             variant="tertiary"
@@ -169,6 +274,17 @@ function BlockCard({
             className="h-6 w-6 rounded-md"
           >
             <ArrowDown className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="tertiary"
+            size="sm"
+            isIconOnly
+            onPress={onDuplicate}
+            isDisabled={disabled}
+            aria-label="Bloğu çoğalt"
+            className="h-6 w-6 rounded-md"
+          >
+            <CopyIcon />
           </Button>
           <Button
             variant="tertiary"
@@ -386,6 +502,44 @@ function BlockBody({
 }
 
 // ---- Product preview + picker -----------------------------------------
+
+/** 6-dot drag handle — gravity-ui'da direkt yok, inline SVG. */
+function DragHandleIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <circle cx="4" cy="2.5" r="1" fill="currentColor" />
+      <circle cx="4" cy="6" r="1" fill="currentColor" />
+      <circle cx="4" cy="9.5" r="1" fill="currentColor" />
+      <circle cx="8" cy="2.5" r="1" fill="currentColor" />
+      <circle cx="8" cy="6" r="1" fill="currentColor" />
+      <circle cx="8" cy="9.5" r="1" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** Duplicate ikonu — küçük overlapping kareler. */
+function CopyIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect x="2" y="3" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="4" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
 
 function ProductCardPreview({ productId }: { productId: string }) {
   const product = useInventoryStore((s) =>

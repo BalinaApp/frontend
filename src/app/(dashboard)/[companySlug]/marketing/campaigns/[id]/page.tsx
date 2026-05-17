@@ -176,6 +176,9 @@ export default function CampaignEditorPage() {
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>(
+    'desktop',
+  );
   const [testSendOpen, setTestSendOpen] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
@@ -493,25 +496,49 @@ export default function CampaignEditorPage() {
         </Modal.Backdrop>
       </Modal>
 
-      {/* Preview modal — iframe ile gerçek render */}
+      {/* Preview modal — iframe ile gerçek render, mobil/masaüstü toggle. */}
       <Modal
         isOpen={previewHtml !== null}
         onOpenChange={(o) => !o && setPreviewHtml(null)}
       >
         <Modal.Backdrop>
           <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[700px]">
+            <Modal.Dialog className="sm:max-w-[760px]">
               <Modal.CloseTrigger />
               <Modal.Header>
                 <Modal.Heading>Mail önizleme</Modal.Heading>
               </Modal.Header>
-              <Modal.Body className="px-2">
+              <Modal.Body className="px-2 pb-2">
+                <div className="mb-2 flex items-center justify-center gap-1">
+                  {(['desktop', 'mobile'] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setPreviewDevice(d)}
+                      className={[
+                        'inline-flex h-7 items-center justify-center rounded-full px-3 text-[11px] font-medium transition-colors',
+                        previewDevice === d
+                          ? 'bg-foreground/[0.10] text-foreground'
+                          : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+                      ].join(' ')}
+                    >
+                      {d === 'desktop' ? 'Masaüstü' : 'Mobil'}
+                    </button>
+                  ))}
+                </div>
                 {previewHtml && (
-                  <iframe
-                    title="Mail önizleme"
-                    srcDoc={previewHtml}
-                    className="h-[600px] w-full rounded-lg border-0"
-                  />
+                  <div className="flex justify-center bg-foreground/[0.03] py-3">
+                    <iframe
+                      title="Mail önizleme"
+                      srcDoc={previewHtml}
+                      style={{
+                        width:
+                          previewDevice === 'mobile' ? '375px' : '680px',
+                        height: '600px',
+                      }}
+                      className="rounded-lg border-0 transition-[width] duration-200"
+                    />
+                  </div>
                 )}
               </Modal.Body>
               <Modal.Footer>

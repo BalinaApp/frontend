@@ -10,6 +10,7 @@ import {
   Box,
   ShoppingBag,
   ChartColumn,
+  Envelope,
   Gear,
 } from '@gravity-ui/icons';
 import { Avatar } from '@heroui/react';
@@ -70,6 +71,13 @@ export function AppSidebar() {
       url: `/${companySlug}/reports`,
       icon: ChartColumn,
       roles: ['OWNER', 'ADMIN'],
+    },
+    {
+      title: 'Pazarlama',
+      url: `/${companySlug}/marketing`,
+      icon: Envelope,
+      roles: ['OWNER', 'ADMIN'],
+      matchPaths: [`/${companySlug}/marketing`],
     },
     {
       title: 'Ayarlar',

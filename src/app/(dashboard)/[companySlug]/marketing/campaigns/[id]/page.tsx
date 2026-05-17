@@ -3,23 +3,23 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
+  Calendar,
   Check,
-  CircleXmark,
+  ChevronLeft,
   Clock,
   Eye,
-  Magnifier,
   PaperPlane,
-  Plus,
+  Pencil,
+  Tag,
   TrashBin,
 } from '@gravity-ui/icons';
-import Image from 'next/image';
 import {
   AlertDialog,
   Button,
   Input,
   Label,
   Modal,
+  TextArea,
   TextField,
   toast,
 } from '@heroui/react';
@@ -28,13 +28,111 @@ import { PageHeader } from '@/components/layout/page-header';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
-import { useInventoryStore } from '@/stores/inventoryStore';
 import {
   useMarketingCampaignStore,
   type AudienceFilter,
   type AudiencePreview,
   type MarketingCampaign,
 } from '@/stores/marketingCampaignStore';
+import { MailBlockEditor } from '@/components/marketing/mail-block-editor';
+import {
+  collectProductIds,
+  compileBlocksToHtml,
+  makeDefaultBlock,
+  type MailBlock,
+} from '@/components/marketing/mail-blocks';
+
+const FIELD_CLASS =
+  'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
+
+/** Section card — products/new pattern'i ile aynı (bg-white/60 + 12px). */
+function Section({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`w-full rounded-xl bg-white/60 p-3 ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+/** Sol 112px label + sağ input — products/new FieldRow. */
+function FieldRow({
+  icon,
+  label,
+  children,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex w-full items-center gap-6">
+      <div className="flex h-9 w-28 shrink-0 items-center gap-2 py-2">
+        {icon}
+        <span className="text-sm font-medium text-foreground">{label}</span>
+      </div>
+      <div className="flex-1">{children}</div>
+    </div>
+  );
+}
+
+/** balinaOS AI chroma-border pill — products/new BalinaAiButton. */
+function BalinaAiButton({
+  onPress,
+  isPending,
+  isDisabled,
+  label = 'balinaOS AI',
+  className = '',
+}: {
+  onPress: () => void;
+  isPending?: boolean;
+  isDisabled?: boolean;
+  label?: string;
+  className?: string;
+}) {
+  return (
+    <Button
+      variant="tertiary"
+      size="sm"
+      onPress={onPress}
+      isPending={isPending}
+      isDisabled={isDisabled}
+      className={`chroma-border h-9 cursor-pointer rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
+    >
+      <BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />
+      {label}
+    </Button>
+  );
+}
+
+/** Tarih input. */
+function DateRow({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <input
+      type="datetime-local"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      placeholder={placeholder}
+      className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors placeholder:text-zinc-500 hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
+    />
+  );
+}
 
 export default function CampaignEditorPage() {
   usePageTitle('Pazarlama');
@@ -61,25 +159,23 @@ export default function CampaignEditorPage() {
   const [loading, setLoading] = useState(true);
   const [audience, setAudience] = useState<AudiencePreview | null>(null);
 
+  // Form state
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
-  const [bodyHtml, setBodyHtml] = useState('');
+  const [blocks, setBlocks] = useState<MailBlock[]>([]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiTone, setAiTone] = useState('');
-  const [productIds, setProductIds] = useState<string[]>([]);
-
-  // Audience filter — boş bırakılırsa tüm aktif (subscribed) kontaklar.
   const [audienceStoreIds, setAudienceStoreIds] = useState<string[]>([]);
   const [audienceTagsRaw, setAudienceTagsRaw] = useState('');
   const [audienceLastOrderAfter, setAudienceLastOrderAfter] = useState('');
 
+  // UI state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
   const [scheduleAt, setScheduleAt] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
-  const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [testSendOpen, setTestSendOpen] = useState(false);
   const [testEmail, setTestEmail] = useState('');
   const [isTestSending, setIsTestSending] = useState(false);
@@ -87,8 +183,12 @@ export default function CampaignEditorPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isReadOnly =
-    !!campaign &&
-    ['sending', 'sent'].includes(campaign.status);
+    !!campaign && ['sending', 'sent'].includes(campaign.status);
+
+  // Body html derive — her blok değişiminde hesaplanır, kaydederken
+  // bodyHtml + productIds güncellenir.
+  const compiledHtml = compileBlocksToHtml(blocks);
+  const compiledProductIds = collectProductIds(blocks);
 
   const loadCampaign = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -98,11 +198,18 @@ export default function CampaignEditorPage() {
       setCampaign(c);
       setName(c.name);
       setSubject(c.subject);
-      setBodyHtml(c.bodyHtml);
+      const storedBlocks =
+        (c.bodyMeta as { blocks?: MailBlock[] } | null)?.blocks ?? null;
+      if (storedBlocks && storedBlocks.length > 0) {
+        setBlocks(storedBlocks);
+      } else if (c.bodyHtml) {
+        // Eski format — sade text block olarak migrate et.
+        setBlocks([{ ...makeDefaultBlock('text'), text: stripTagsBrief(c.bodyHtml) } as MailBlock]);
+      } else {
+        setBlocks([]);
+      }
       setAiPrompt(c.bodyMeta?.aiPrompt ?? '');
       setAiTone(c.bodyMeta?.aiTone ?? '');
-      setProductIds(c.bodyMeta?.productIds ?? []);
-      // Audience filter alanları
       setAudienceStoreIds(c.audienceFilter?.storeIds ?? []);
       setAudienceTagsRaw((c.audienceFilter?.tags ?? []).join(', '));
       setAudienceLastOrderAfter(c.audienceFilter?.lastOrderAfter ?? '');
@@ -121,22 +228,14 @@ export default function CampaignEditorPage() {
     loadCampaign();
   }, [loadCampaign]);
 
-  // Mağaza listesi audience filter için.
   useEffect(() => {
     if (currentCompany?.id) fetchStores(currentCompany.id);
   }, [currentCompany?.id, fetchStores]);
 
-  // Audience filter değiştikçe preview'ı tazele.
   useEffect(() => {
     if (!currentCompany?.id || !campaign) return;
     fetchAudience(currentCompany.id, campaign.id).then(setAudience);
-  }, [
-    currentCompany?.id,
-    campaign,
-    fetchAudience,
-    // Save sonrası audience değiştiğinde tetiklensin.
-    campaign?.audienceFilter,
-  ]);
+  }, [currentCompany?.id, campaign, fetchAudience]);
 
   const buildAudienceFilter = (): AudienceFilter => {
     const tags = audienceTagsRaw
@@ -152,23 +251,24 @@ export default function CampaignEditorPage() {
     };
   };
 
-  const handleSave = async () => {
-    if (!currentCompany?.id || !campaign) return;
+  const handleSave = async (silent = false) => {
+    if (!currentCompany?.id || !campaign) return null;
     setIsSaving(true);
     const updated = await updateCampaign(currentCompany.id, campaign.id, {
-      name: name.trim(),
+      name: name.trim() || 'İsimsiz kampanya',
       subject: subject.trim(),
-      bodyHtml,
-      bodyMeta: { productIds, aiPrompt, aiTone },
+      bodyHtml: compiledHtml,
+      bodyMeta: { blocks, productIds: compiledProductIds, aiPrompt, aiTone },
       audienceFilter: buildAudienceFilter(),
     });
     setIsSaving(false);
     if (updated) {
       setCampaign(updated);
-      toast.success('Kaydedildi');
-    } else {
-      toast.danger('Kaydedilemedi');
+      if (!silent) toast.success('Kaydedildi');
+      return updated;
     }
+    if (!silent) toast.danger('Kaydedilemedi');
+    return null;
   };
 
   const handleGenerate = async () => {
@@ -178,18 +278,11 @@ export default function CampaignEditorPage() {
       return;
     }
     setIsGenerating(true);
-    // Generate öncesi en güncel state'i sunucuya yaz — AI bunları context olarak okuyor.
-    await updateCampaign(currentCompany.id, campaign.id, {
-      name: name.trim(),
-      subject: subject.trim(),
-      bodyHtml,
-      bodyMeta: { productIds, aiPrompt, aiTone },
-      audienceFilter: buildAudienceFilter(),
-    });
+    await handleSave(true);
     const result = await generateContent(currentCompany.id, campaign.id, {
       prompt: aiPrompt,
       tone: aiTone || undefined,
-      productIds: productIds.length ? productIds : undefined,
+      productIds: compiledProductIds.length ? compiledProductIds : undefined,
     });
     setIsGenerating(false);
     if (!result) {
@@ -197,40 +290,25 @@ export default function CampaignEditorPage() {
       return;
     }
     setSubject(result.subject);
-    setBodyHtml(result.bodyHtml);
-    toast.success('İçerik üretildi');
+    // AI üretimi tek text block olarak — kullanıcı sonra blokları düzenler.
+    const base = makeDefaultBlock('text');
+    if (base.type === 'text') {
+      base.text = stripHtmlToText(result.bodyHtml);
+    }
+    setBlocks([base]);
+    toast.success('İçerik üretildi — blok olarak eklendi, düzenleyebilirsin');
   };
 
   const handlePreview = async () => {
     if (!currentCompany?.id || !campaign) return;
-    // Önce kaydet — preview backend'den render gelir.
-    await handleSave();
+    await handleSave(true);
     const result = await fetchPreview(currentCompany.id, campaign.id);
     if (result) setPreviewHtml(result.html);
   };
 
-  const handleTestSend = async () => {
-    if (!currentCompany?.id || !campaign) return;
-    const email = testEmail.trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      toast.danger('Geçerli bir e-posta girin');
-      return;
-    }
-    await handleSave();
-    setIsTestSending(true);
-    const result = await testSend(currentCompany.id, campaign.id, email);
-    setIsTestSending(false);
-    if (result?.ok) {
-      toast.success('Test maili gönderildi');
-      setTestSendOpen(false);
-    } else {
-      toast.danger('Test gönderilemedi');
-    }
-  };
-
   const handleSendNow = async () => {
     if (!currentCompany?.id || !campaign) return;
-    await handleSave();
+    await handleSave(true);
     setIsSending(true);
     const updated = await sendNow(currentCompany.id, campaign.id);
     setIsSending(false);
@@ -244,7 +322,7 @@ export default function CampaignEditorPage() {
 
   const handleSchedule = async () => {
     if (!currentCompany?.id || !campaign || !scheduleAt) return;
-    await handleSave();
+    await handleSave(true);
     setIsScheduling(true);
     const updated = await schedule(
       currentCompany.id,
@@ -277,27 +355,44 @@ export default function CampaignEditorPage() {
     setIsDeleting(true);
     const ok = await deleteCampaign(currentCompany.id, campaign.id);
     setIsDeleting(false);
-    if (ok) {
-      router.push(`/${slug}/marketing/campaigns`);
-    } else {
+    if (ok) router.push(`/${slug}/marketing/campaigns`);
+    else {
       toast.danger('Silinemedi');
       setDeleteOpen(false);
+    }
+  };
+
+  const handleTestSend = async () => {
+    if (!currentCompany?.id || !campaign) return;
+    const email = testEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.danger('Geçerli bir e-posta girin');
+      return;
+    }
+    await handleSave(true);
+    setIsTestSending(true);
+    const result = await testSend(currentCompany.id, campaign.id, email);
+    setIsTestSending(false);
+    if (result?.ok) {
+      toast.success('Test maili gönderildi');
+      setTestSendOpen(false);
+    } else {
+      toast.danger('Test gönderilemedi');
     }
   };
 
   if (loading) {
     return (
       <>
-        <PageHeader title="Pazarlama" />
-        <div className="p-6 text-sm text-muted">Yükleniyor…</div>
+        <PageHeader title="Yükleniyor…" />
+        <div className="p-6 text-sm text-muted">Kampanya yükleniyor…</div>
       </>
     );
   }
-
   if (!campaign) {
     return (
       <>
-        <PageHeader title="Pazarlama" />
+        <PageHeader title="Kampanya bulunamadı" />
         <div className="p-6 text-sm text-muted">Kampanya bulunamadı.</div>
       </>
     );
@@ -305,18 +400,7 @@ export default function CampaignEditorPage() {
 
   return (
     <>
-      <ProductPickerInline
-        isOpen={productPickerOpen}
-        onClose={() => setProductPickerOpen(false)}
-        selectedIds={productIds}
-        onToggle={(id) =>
-          setProductIds((prev) =>
-            prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-          )
-        }
-      />
-
-      {/* Kampanya silme onayı — native confirm yerine AlertDialog. */}
+      {/* Kampanya silme onayı — products/new ile aynı AlertDialog. */}
       <AlertDialog
         isOpen={deleteOpen}
         onOpenChange={(open) => {
@@ -331,15 +415,10 @@ export default function CampaignEditorPage() {
                 <AlertDialog.Heading>Kampanyayı sil</AlertDialog.Heading>
               </AlertDialog.Header>
               <AlertDialog.Body className="px-2 pb-0">
-                Bu kampanya kalıcı olarak silinecek. Geri alınamaz; gönderilen
-                istatistikler de kaybolur.
+                Bu kampanya kalıcı olarak silinecek. Geri alınamaz.
               </AlertDialog.Body>
               <AlertDialog.Footer className="!mt-3 px-2">
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={isDeleting}
-                >
+                <Button variant="tertiary" slot="close" isDisabled={isDeleting}>
                   Vazgeç
                 </Button>
                 <Button
@@ -356,11 +435,11 @@ export default function CampaignEditorPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
 
-      {/* Test gönder modal'ı — Resend ile gerçek mail yollar (marketing key). */}
+      {/* Test gönder modal */}
       <Modal
         isOpen={testSendOpen}
-        onOpenChange={(open) => {
-          if (!isTestSending && !open) setTestSendOpen(false);
+        onOpenChange={(o) => {
+          if (!isTestSending && !o) setTestSendOpen(false);
         }}
       >
         <Modal.Backdrop>
@@ -389,8 +468,7 @@ export default function CampaignEditorPage() {
                   />
                 </TextField>
                 <p className="mt-2 text-xs text-muted">
-                  Sadece bu adrese gönderilir, audience etkilenmez. Konu
-                  başına <code>[TEST]</code> eklenir.
+                  Yalnızca bu adrese gönderilir, audience etkilenmez.
                 </p>
               </Modal.Body>
               <Modal.Footer>
@@ -414,20 +492,58 @@ export default function CampaignEditorPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+
+      {/* Preview modal — iframe ile gerçek render */}
+      <Modal
+        isOpen={previewHtml !== null}
+        onOpenChange={(o) => !o && setPreviewHtml(null)}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[700px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Mail önizleme</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="px-2">
+                {previewHtml && (
+                  <iframe
+                    title="Mail önizleme"
+                    srcDoc={previewHtml}
+                    className="h-[600px] w-full rounded-lg border-0"
+                  />
+                )}
+              </Modal.Body>
+              <Modal.Footer>
+                <Button variant="tertiary" slot="close">
+                  Kapat
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {/* === PageHeader — products/new ile birebir === */}
       <PageHeader
-        title="Pazarlama"
+        title={name.trim() || 'İsimsiz Kampanya'}
+        leading={
+          <Button
+            variant="tertiary"
+            size="sm"
+            isIconOnly
+            aria-label="Geri"
+            onPress={() => router.push(`/${slug}/marketing/campaigns`)}
+            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        }
         action={
           <div className="flex items-center gap-2">
-            <Button
-              variant="tertiary"
-              size="sm"
-              onPress={() => router.push(`/${slug}/marketing/campaigns`)}
-              className="h-8 rounded-full px-3 text-xs"
-            >
-              <ArrowLeft className="h-3.5 w-3.5" />
-              Liste
-            </Button>
-            {campaign.status === 'draft' || campaign.status === 'cancelled' || campaign.status === 'failed' ? (
+            {(campaign.status === 'draft' ||
+              campaign.status === 'cancelled' ||
+              campaign.status === 'failed') && (
               <Button
                 variant="danger"
                 size="sm"
@@ -438,111 +554,114 @@ export default function CampaignEditorPage() {
               >
                 <TrashBin className="h-3.5 w-3.5" />
               </Button>
-            ) : null}
+            )}
+            <Button
+              variant="tertiary"
+              size="sm"
+              onPress={() => handleSave()}
+              isPending={isSaving}
+              isDisabled={isSaving || isReadOnly}
+              className="h-8 rounded-full bg-foreground/[0.04] px-3 text-xs"
+            >
+              <Check className="h-3.5 w-3.5" />
+              Kaydet
+            </Button>
           </div>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-[1fr_320px]">
-        {/* Main editor */}
-        <div className="flex flex-col gap-4">
-          {/* Name + subject */}
-          <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-            <TextField
-              value={name}
-              onChange={setName}
-              isDisabled={isReadOnly}
-              isRequired
-            >
-              <Label>Kampanya adı (iç kullanım)</Label>
-              <Input placeholder="Örn. Bahar Kampanyası 2026" />
-            </TextField>
-            <div className="mt-3">
+      <div className="flex flex-1 flex-col overflow-auto">
+        <div className="mx-auto flex w-full max-w-[616px] flex-col gap-3 px-3 py-6">
+          {/* === 1) Başlık + Konu + AI butonu (textarea içinde absolute) === */}
+          <Section>
+            <div className="flex flex-col gap-2">
               <TextField
-                value={subject}
-                onChange={setSubject}
+                value={name}
+                onChange={setName}
+                aria-label="Kampanya başlığı"
                 isDisabled={isReadOnly}
               >
-                <Label>Mail konusu</Label>
-                <Input placeholder="Alıcının inbox'unda görünecek başlık" />
-              </TextField>
-            </div>
-          </div>
-
-          {/* AI prompt + generate */}
-          <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <Label>AI ile içerik üret</Label>
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={isGenerating || isReadOnly || !aiPrompt.trim()}
-                className="chroma-border inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-foreground transition-colors hover:bg-foreground/[0.06] disabled:opacity-50"
-              >
-                <BalinaOsMark className="h-4 w-4" />
-                {isGenerating ? 'Üretiliyor…' : 'AI Üret'}
-              </button>
-            </div>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              disabled={isReadOnly}
-              rows={3}
-              placeholder='Brief: "Bahar indirimi, %20 tüm elbiseler, 3 gün sürer, samimi ton"'
-              className="w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary p-2 text-sm text-foreground outline-none focus:border-accent"
-            />
-            <div className="mt-2 flex items-center gap-3">
-              <TextField
-                value={aiTone}
-                onChange={setAiTone}
-                isDisabled={isReadOnly}
-                className="flex-1"
-              >
-                <Label>Ton (opsiyonel)</Label>
-                <Input placeholder="Örn. samimi, espirili, resmi" />
-              </TextField>
-            </div>
-            <div className="mt-3">
-              <div className="mb-1 flex items-center justify-between">
-                <Label>Eklenen ürünler</Label>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onPress={() => setProductPickerOpen(true)}
-                  isDisabled={isReadOnly}
-                  className="h-7 rounded-full px-2 text-xs"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Ürün ekle
-                </Button>
-              </div>
-              {productIds.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-foreground/[0.08] bg-surface-secondary p-3 text-xs text-muted">
-                  Henüz ürün eklenmedi — gövdede{' '}
-                  <code>{'{{product:id}}'}</code> placeholder'ı olarak yer alır.
-                </div>
-              ) : (
-                <ProductChips
-                  ids={productIds}
-                  onRemove={(id) =>
-                    setProductIds(productIds.filter((p) => p !== id))
-                  }
-                  disabled={isReadOnly}
+                <Input
+                  fullWidth
+                  variant="secondary"
+                  placeholder="Kampanya Başlığı (iç kullanım)"
+                  className="bg-transparent text-lg font-medium leading-7 placeholder:text-zinc-500"
                 />
-              )}
-            </div>
-          </div>
+              </TextField>
 
-          {/* Body */}
-          <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <Label>Mail gövdesi (HTML)</Label>
+              <div className="relative">
+                <TextField
+                  value={subject}
+                  onChange={setSubject}
+                  aria-label="Mail konusu"
+                  isDisabled={isReadOnly}
+                >
+                  <Input
+                    fullWidth
+                    variant="secondary"
+                    placeholder="Mail konusu — alıcının inbox'unda görünecek"
+                    className={FIELD_CLASS}
+                  />
+                </TextField>
+              </div>
+
+              {/* AI brief textarea + AI butonu — products/new ile aynı pattern */}
+              <div className="relative">
+                <TextField
+                  value={aiPrompt}
+                  onChange={setAiPrompt}
+                  aria-label="AI içerik brief'i"
+                  isDisabled={isReadOnly}
+                >
+                  <TextArea
+                    fullWidth
+                    variant="secondary"
+                    placeholder='AI ile içerik üret — brief: "Bahar indirimi, %20 tüm elbiseler, 3 gün sürer, samimi ton"'
+                    rows={3}
+                    className="min-h-[88px] resize-none bg-transparent placeholder:text-zinc-500"
+                  />
+                </TextField>
+                <div className="pointer-events-none absolute bottom-2 right-2 z-10">
+                  <div className="pointer-events-auto">
+                    <BalinaAiButton
+                      onPress={handleGenerate}
+                      isPending={isGenerating}
+                      isDisabled={isGenerating || isReadOnly || !aiPrompt.trim()}
+                      label="İçerik Üret"
+                    />
+                  </div>
+                </div>
+              </div>
+              <FieldRow icon={<Pencil className="h-4 w-4 text-muted" />} label="Ton">
+                <TextField
+                  value={aiTone}
+                  onChange={setAiTone}
+                  isDisabled={isReadOnly}
+                  aria-label="Ton"
+                >
+                  <Input
+                    fullWidth
+                    variant="secondary"
+                    placeholder="Örn. samimi, espirili, resmi"
+                    className={FIELD_CLASS}
+                  />
+                </TextField>
+              </FieldRow>
+            </div>
+          </Section>
+
+          {/* === 2) Mail tasarımı — blok bazlı görsel editör === */}
+          <Section>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-foreground">
+                Mail tasarımı
+              </h3>
               <div className="flex items-center gap-1">
                 <Button
                   variant="tertiary"
                   size="sm"
                   onPress={() => setTestSendOpen(true)}
-                  isDisabled={isReadOnly || !subject.trim() || !bodyHtml.trim()}
+                  isDisabled={isReadOnly || !subject.trim() || blocks.length === 0}
                   className="h-7 rounded-full px-2 text-xs"
                 >
                   <PaperPlane className="h-3.5 w-3.5" />
@@ -552,7 +671,7 @@ export default function CampaignEditorPage() {
                   variant="tertiary"
                   size="sm"
                   onPress={handlePreview}
-                  isDisabled={isReadOnly}
+                  isDisabled={isReadOnly || blocks.length === 0}
                   className="h-7 rounded-full px-2 text-xs"
                 >
                   <Eye className="h-3.5 w-3.5" />
@@ -560,57 +679,31 @@ export default function CampaignEditorPage() {
                 </Button>
               </div>
             </div>
-            <textarea
-              value={bodyHtml}
-              onChange={(e) => setBodyHtml(e.target.value)}
+            <MailBlockEditor
+              blocks={blocks}
+              onChange={setBlocks}
               disabled={isReadOnly}
-              rows={16}
-              placeholder="<p>Selam {{firstName}},</p><p>...</p>"
-              className="w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary p-3 font-mono text-xs text-foreground outline-none focus:border-accent"
             />
-          </div>
+          </Section>
 
-          {previewHtml && (
-            <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-2">
-              <iframe
-                title="Mail önizleme"
-                srcDoc={previewHtml}
-                className="h-[800px] w-full rounded-lg border-0"
-              />
+          {/* === 3) Hedef kitle === */}
+          <Section>
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-foreground">
+                Hedef kitle
+              </h3>
+              <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
+                {audience?.count ?? '—'} kişi
+              </span>
             </div>
-          )}
-        </div>
-
-        {/* Right sidebar — audience + actions */}
-        <div className="flex flex-col gap-4">
-          <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-            <div className="text-xs text-muted">Hedef kitle</div>
-            <div className="mt-1 text-2xl font-semibold text-foreground">
-              {audience?.count ?? '—'}
-            </div>
-            <div className="mt-1 text-xs text-muted">
-              Aktif, mailing'den çıkmamış kontaklar
-            </div>
-            {audience?.sample.slice(0, 3).map((s) => (
-              <div
-                key={s.email}
-                className="mt-2 truncate text-xs text-foreground"
-                title={s.email}
+            <div className="flex flex-col gap-3">
+              <FieldRow
+                icon={<Tag className="h-4 w-4 text-muted" />}
+                label="Mağazalar"
               >
-                {s.email}
-              </div>
-            ))}
-
-            {/* Audience filter editör — kaydedince audience preview tazelenir. */}
-            <div className="mt-4 border-t border-foreground/[0.06] pt-3">
-              <div className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Filtreler
-              </div>
-              <div className="mb-3">
-                <Label>Mağazalar</Label>
-                <div className="mt-1 flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1">
                   {stores.length === 0 ? (
-                    <div className="text-xs text-muted">Mağaza yok</div>
+                    <span className="text-xs text-muted">Mağaza yok</span>
                   ) : (
                     stores.map((s) => {
                       const selected = audienceStoreIds.includes(s.id);
@@ -627,7 +720,7 @@ export default function CampaignEditorPage() {
                             )
                           }
                           className={[
-                            'inline-flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-medium transition-colors',
+                            'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors',
                             selected
                               ? 'bg-foreground/[0.10] text-foreground'
                               : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
@@ -639,120 +732,128 @@ export default function CampaignEditorPage() {
                     })
                   )}
                 </div>
-                <div className="mt-1 text-[10px] text-muted">
-                  Hiç seçilmezse tüm mağazalardan kontaklar dahil olur.
-                </div>
-              </div>
-              <div className="mb-3">
+              </FieldRow>
+              <FieldRow
+                icon={<Tag className="h-4 w-4 text-muted" />}
+                label="Tag'ler"
+              >
                 <TextField
                   value={audienceTagsRaw}
                   onChange={setAudienceTagsRaw}
                   isDisabled={isReadOnly}
+                  aria-label="Tag'ler"
                 >
-                  <Label>Tag&apos;ler (virgülle ayır)</Label>
-                  <Input placeholder="vip, kampanya-mart, ..." />
+                  <Input
+                    fullWidth
+                    variant="secondary"
+                    placeholder="vip, mart-2026, ... (virgülle ayır)"
+                    className={FIELD_CLASS}
+                  />
                 </TextField>
-              </div>
-              <div>
-                <Label>Son sipariş tarihinden sonra</Label>
+              </FieldRow>
+              <FieldRow
+                icon={<Calendar className="h-4 w-4 text-muted" />}
+                label="Son sipariş"
+              >
                 <input
                   type="date"
                   value={audienceLastOrderAfter}
                   onChange={(e) => setAudienceLastOrderAfter(e.target.value)}
                   disabled={isReadOnly}
-                  className="mt-1 h-9 w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary px-2 text-xs text-foreground outline-none focus:border-accent"
+                  className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
                 />
-              </div>
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={handleSave}
-                isPending={isSaving}
-                isDisabled={isReadOnly || isSaving}
-                className="mt-3 w-full rounded-full"
-                fullWidth
-              >
-                Filtreyi uygula
-              </Button>
+              </FieldRow>
             </div>
-          </div>
+          </Section>
 
-          <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-            <div className="text-xs font-medium text-foreground">Durum</div>
-            <div className="mt-1 text-sm capitalize text-foreground">
-              {campaign.status}
-            </div>
-            {campaign.status === 'sent' && (
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+          {/* === 4) Gönderim === */}
+          {!isReadOnly && (
+            <Section>
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-medium text-foreground">Gönderim</h3>
+                {campaign.status !== 'draft' && (
+                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
+                    {campaign.status}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-3">
+                <FieldRow
+                  icon={<Clock className="h-4 w-4 text-muted" />}
+                  label="Planla"
+                >
+                  <DateRow
+                    value={scheduleAt}
+                    onChange={setScheduleAt}
+                    disabled={isScheduling || isSending}
+                  />
+                </FieldRow>
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onPress={handleSendNow}
+                      isPending={isSending}
+                      isDisabled={
+                        isSending ||
+                        !subject.trim() ||
+                        blocks.length === 0 ||
+                        (audience?.count ?? 0) === 0
+                      }
+                      className="rounded-full"
+                    >
+                      <PaperPlane className="h-3.5 w-3.5" />
+                      Hemen gönder
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onPress={handleSchedule}
+                      isPending={isScheduling}
+                      isDisabled={
+                        isScheduling || !scheduleAt || !subject.trim() || blocks.length === 0
+                      }
+                      className="rounded-full"
+                    >
+                      <Clock className="h-3.5 w-3.5" />
+                      Planla
+                    </Button>
+                  </div>
+                  {(campaign.status === 'scheduled' ||
+                    campaign.status === 'sending') && (
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onPress={handleCancel}
+                      className="rounded-full"
+                    >
+                      İptal et
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </Section>
+          )}
+
+          {/* === 5) Stat'lar (gönderilen kampanya için) === */}
+          {campaign.status === 'sent' && (
+            <Section>
+              <h3 className="mb-3 text-sm font-medium text-foreground">
+                Performans
+              </h3>
+              <div className="grid grid-cols-2 gap-2 text-xs">
                 <Stat label="Gönderildi" value={campaign.sentCount} />
                 <Stat label="Açıldı" value={campaign.openedCount} />
                 <Stat label="Tıklandı" value={campaign.clickedCount} />
                 <Stat label="Başarısız" value={campaign.failedCount} />
+                <Stat label="Bounce/şikayet" value={0} />
+                <Stat
+                  label="Aboneliği iptal"
+                  value={campaign.unsubscribedCount}
+                />
               </div>
-            )}
-          </div>
-
-          {!isReadOnly && (
-            <>
-              <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onPress={handleSendNow}
-                  isPending={isSending}
-                  isDisabled={isSending || !subject.trim() || !bodyHtml.trim()}
-                  className="w-full rounded-full"
-                  fullWidth
-                >
-                  <PaperPlane className="h-3.5 w-3.5" />
-                  Hemen gönder
-                </Button>
-                <div className="mt-3 border-t border-foreground/[0.06] pt-3">
-                  <Label>veya planla</Label>
-                  <input
-                    type="datetime-local"
-                    value={scheduleAt}
-                    onChange={(e) => setScheduleAt(e.target.value)}
-                    className="mt-1 h-9 w-full rounded-lg border border-foreground/[0.06] bg-surface-secondary px-2 text-xs text-foreground outline-none focus:border-accent"
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onPress={handleSchedule}
-                    isPending={isScheduling}
-                    isDisabled={isScheduling || !scheduleAt}
-                    className="mt-2 w-full rounded-full"
-                    fullWidth
-                  >
-                    <Clock className="h-3.5 w-3.5" />
-                    Planla
-                  </Button>
-                </div>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onPress={handleSave}
-                  isPending={isSaving}
-                  className="mt-3 w-full rounded-full"
-                  fullWidth
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Taslağı kaydet
-                </Button>
-              </div>
-            </>
-          )}
-
-          {(campaign.status === 'scheduled' || campaign.status === 'sending') && (
-            <Button
-              variant="danger"
-              size="sm"
-              onPress={handleCancel}
-              className="rounded-full"
-              fullWidth
-            >
-              Kampanyayı iptal et
-            </Button>
+            </Section>
           )}
         </div>
       </div>
@@ -771,184 +872,18 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-// ---- Product chips — eklenmiş ürünleri görsel + ad ile gösterir ---------
-
-function ProductChips({
-  ids,
-  onRemove,
-  disabled,
-}: {
-  ids: string[];
-  onRemove: (id: string) => void;
-  disabled?: boolean;
-}) {
-  const products = useInventoryStore((s) => s.products);
-  const items = ids.map(
-    (id) => products.find((p) => p.id === id) ?? { id, name: id, imageUrl: null },
-  );
-  return (
-    <div className="flex flex-col gap-1">
-      {items.map((p) => (
-        <div
-          key={p.id}
-          className="flex items-center gap-2 rounded-lg border border-foreground/[0.06] bg-surface-secondary p-2"
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
-            {p.imageUrl ? (
-              <Image
-                src={p.imageUrl}
-                alt=""
-                width={32}
-                height={32}
-                className="h-8 w-8 object-cover"
-                unoptimized
-              />
-            ) : (
-              <BalinaOsMark className="h-5 w-5 opacity-50" />
-            )}
-          </div>
-          <span className="flex-1 truncate text-xs text-foreground" title={p.name}>
-            {p.name}
-          </span>
-          <button
-            type="button"
-            onClick={() => onRemove(p.id)}
-            disabled={disabled}
-            aria-label="Ürünü kaldır"
-            className="rounded p-1 text-muted hover:bg-foreground/[0.06] hover:text-foreground disabled:opacity-50"
-          >
-            <CircleXmark className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
+/** AI üretiminden gelen HTML'i tek paragraf text'e çevir — block-text init için. */
+function stripHtmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/?[^>]+>/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-// ---- Product picker modal — products store'dan listeler -------------------
-
-interface ProductPickerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  selectedIds: string[];
-  onToggle: (id: string) => void;
+/** Migrasyon — eski raw HTML kampanyaları için kısa metin çıkart. */
+function stripTagsBrief(html: string): string {
+  return stripHtmlToText(html).slice(0, 4000);
 }
 
-export function ProductPickerInline({
-  isOpen,
-  onClose,
-  selectedIds,
-  onToggle,
-}: ProductPickerProps) {
-  const { currentCompany } = useCompanyStore();
-  const { products, isLoading, fetchProducts } = useInventoryStore();
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    if (!isOpen || !currentCompany?.id) return;
-    fetchProducts(currentCompany.id, {
-      limit: 200,
-      search: search.trim() || undefined,
-      sortBy: 'name',
-      sortOrder: 'asc',
-    });
-  }, [isOpen, currentCompany?.id, search, fetchProducts]);
-
-  return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[560px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Ürün seç</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="px-4 pb-0">
-              <div className="mb-2 flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
-                <Magnifier className="h-3.5 w-3.5 text-muted" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Ürün adı veya SKU"
-                  className="w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted"
-                />
-              </div>
-              <div className="max-h-[400px] overflow-y-auto">
-                {isLoading && products.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-muted">
-                    Yükleniyor…
-                  </div>
-                ) : products.length === 0 ? (
-                  <div className="py-8 text-center text-xs text-muted">
-                    Ürün bulunamadı
-                  </div>
-                ) : (
-                  products.map((p) => {
-                    const selected = selectedIds.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => onToggle(p.id)}
-                        className={[
-                          'flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors',
-                          selected
-                            ? 'bg-foreground/[0.06]'
-                            : 'hover:bg-foreground/[0.04]',
-                        ].join(' ')}
-                      >
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
-                          {p.imageUrl ? (
-                            <Image
-                              src={p.imageUrl}
-                              alt=""
-                              width={36}
-                              height={36}
-                              className="h-9 w-9 object-cover"
-                              unoptimized
-                            />
-                          ) : (
-                            <BalinaOsMark className="h-5 w-5 opacity-50" />
-                          )}
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-col">
-                          <span
-                            className="truncate text-sm font-medium leading-5 text-foreground"
-                            title={p.name}
-                          >
-                            {p.name}
-                          </span>
-                          <span className="truncate text-xs text-muted">
-                            {p.sku ?? '—'} · ₺
-                            {Number(p.price).toLocaleString('tr-TR')}
-                          </span>
-                        </div>
-                        <div
-                          className={[
-                            'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
-                            selected
-                              ? 'bg-accent text-accent-foreground'
-                              : 'border border-foreground/[0.12]',
-                          ].join(' ')}
-                          aria-hidden="true"
-                        >
-                          {selected && <Check className="h-3 w-3" />}
-                        </div>
-                      </button>
-                    );
-                  })
-                )}
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="primary" slot="close">
-                Tamam
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
-  );
-}

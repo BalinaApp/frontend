@@ -25,7 +25,12 @@ export interface MarketingCampaign {
   subject: string;
   bodyHtml: string;
   bodyText: string | null;
-  bodyMeta: { productIds?: string[]; aiPrompt?: string; aiTone?: string } | null;
+  bodyMeta: {
+    productIds?: string[];
+    aiPrompt?: string;
+    aiTone?: string;
+    blocks?: unknown[];
+  } | null;
   status: CampaignStatus | string;
   scheduledAt: string | null;
   sentAt: string | null;

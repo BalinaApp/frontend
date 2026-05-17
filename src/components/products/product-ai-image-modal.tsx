@@ -75,9 +75,6 @@ export function ProductAiImageModal({
     initialProductImage ?? null,
   );
   const [framing, setFraming] = useState<Framing>('auto');
-  // Kullanıcının kendi prompt eklemesi — şal/pantolon rengi, stil, vb.
-  // Step 3'te framing/kadraj seçiminin altında textarea olarak çıkar.
-  const [customPrompt, setCustomPrompt] = useState('');
   const [isUploading, setIsUploading] = useState<'model' | 'product' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -89,7 +86,6 @@ export function ProductAiImageModal({
     setModelImage(null);
     setProductImage(initialProductImage ?? null);
     setFraming('auto');
-    setCustomPrompt('');
     setIsUploading(null);
     setIsGenerating(false);
   };
@@ -139,9 +135,6 @@ export function ProductAiImageModal({
       const promptParts = [
         productName?.trim() ? `Product: ${productName.trim()}` : '',
         framingDef.prompt,
-        // Kullanıcının ek isteği (örn. "şal kırmızı, pantolon siyah") prompt'a
-        // doğrudan eklenir; Fashn buna göre rengi/stili uygular.
-        customPrompt.trim(),
         'high quality e-commerce product photo, clean background',
       ].filter(Boolean);
       const result = await generateImageRaw(companyId, {
@@ -204,12 +197,7 @@ export function ProductAiImageModal({
               )}
 
               {step === 3 && (
-                <StepFraming
-                  framing={framing}
-                  onChange={setFraming}
-                  customPrompt={customPrompt}
-                  onCustomPromptChange={setCustomPrompt}
-                />
+                <StepFraming framing={framing} onChange={setFraming} />
               )}
 
               <input
@@ -359,13 +347,9 @@ function StepUpload({
 function StepFraming({
   framing,
   onChange,
-  customPrompt,
-  onCustomPromptChange,
 }: {
   framing: Framing;
   onChange: (f: Framing) => void;
-  customPrompt: string;
-  onCustomPromptChange: (v: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -408,31 +392,6 @@ function StepFraming({
             </button>
           );
         })}
-      </div>
-
-      {/* Ek prompt — renk/stil özel istekleri buradan girilir. Boş bırakılırsa
-          prompt'a eklenmez. Örn. "şal kırmızı, pantolon siyah", "saç sarı,
-          dudak kırmızı". */}
-      <div className="flex flex-col gap-1.5 pt-1">
-        <label
-          htmlFor="ai-custom-prompt"
-          className="text-xs font-medium text-foreground"
-        >
-          Ek istek (opsiyonel)
-        </label>
-        <textarea
-          id="ai-custom-prompt"
-          value={customPrompt}
-          onChange={(e) => onCustomPromptChange(e.target.value)}
-          placeholder="örn: şal kırmızı, pantolon siyah, ayakkabı bej, arka plan beyaz"
-          rows={3}
-          maxLength={400}
-          className="resize-none rounded-lg border border-black/[0.08] bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-foreground/40 focus:outline-none"
-        />
-        <p className="text-[11px] text-muted">
-          Yazdıklarınız prompt&apos;a eklenir; model bu yönlendirmeye göre
-          renk/stil uygular.
-        </p>
       </div>
     </div>
   );

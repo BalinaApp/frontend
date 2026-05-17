@@ -1,10 +1,10 @@
 import * as React from 'react';
 
 /** BalinaOS whale silhouette — yeni logo tasarımının balina + tail + göz
- *  cutout'u, currentColor ile boyanır. Renkli tile / bg üzerinde
- *  (settings rail item'ı, breadcrumb avatar, vb.) text-white veya
- *  text-foreground ile tonlanabilir. evenodd ile göz dot'ı negatif alan
- *  bırakır → tile bg rengi göz olarak gözükür. */
+ *  cutout'u, currentColor ile boyanır. Daire arka planı `white` +
+ *  yarı saydam ile çiziliyor: tile / bg üzerinde hafif beyaz daire +
+ *  tam doygun balina görünür (settings rail item'ı gibi gri-zinc tile
+ *  üzerinde). Renkli bg üzerinde de aynı kontrast sağlanır. */
 export function BalinaOsMarkMono(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
@@ -15,6 +15,14 @@ export function BalinaOsMarkMono(props: React.SVGProps<SVGSVGElement>) {
       xmlns="http://www.w3.org/2000/svg"
       {...props}
     >
+      {/* Daire: beyaz + ~%20 alpha → tile bg'si üzerinden silik bir daire
+          olarak görünür; balina ile karışmaz. */}
+      <path
+        d="M64.596 0.212299C103.164 -2.77372 136.841 26.0902 139.792 64.6605C142.743 103.231 113.847 136.883 75.2737 139.797C36.751 142.709 3.15424 113.859 0.207306 75.3393C-2.73964 36.8191 26.0784 3.19482 64.596 0.212299Z"
+        fill="white"
+        fillOpacity={0.22}
+      />
+      {/* Balina + tail + göz cutout — currentColor ile (text-white vb). */}
       <path
         fillRule="evenodd"
         clipRule="evenodd"

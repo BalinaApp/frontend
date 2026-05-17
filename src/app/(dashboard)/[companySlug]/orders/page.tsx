@@ -93,7 +93,9 @@ const LABEL_BLOCKED_STATUSES = new Set([
 // ====================================================================
 
 // MNG response'unda gömülü ZPL string'lerini deep-walk ile topla.
-// `^XA...^XZ` ile başlayıp biten her string. Alan adından bağımsız.
+// `^XA...^XZ` ile başlayıp biten her string. Backend'in ekleyip gönderdiği
+// `productInfoLabel58mm` alt-ağacı kasıtlı dışlanır — o ZPL ayrı pipeline'da
+// (ürün etiketi sayfası olarak) render edilir, MNG kargo etiketi değildir.
 function findZplStrings(node: unknown, out: string[] = []): string[] {
   if (typeof node === 'string') {
     const t = node.trim();
@@ -105,43 +107,65 @@ function findZplStrings(node: unknown, out: string[] = []): string[] {
     return out;
   }
   if (node && typeof node === 'object') {
-    for (const v of Object.values(node as Record<string, unknown>)) {
+    for (const [key, v] of Object.entries(node as Record<string, unknown>)) {
+      if (key === 'productInfoLabel58mm') continue;
       findZplStrings(v, out);
     }
   }
   return out;
 }
 
+// Labelary in-memory cache — aynı ZPL'i bulk akışlarda defalarca POST etmeyelim
+// (free tier rate limit ~5 req/s, 429 dönüyor). Key: template+zpl, value:
+// data URL. Sayfa kapanana kadar yaşar.
+const labelaryCache = new Map<string, string>();
+
 // Labelary'ye ZPL POST edip PNG data URL döndür. ZPL ~2-4KB olabildiği
-// için GET path yerine POST.
+// için GET path yerine POST. 429 alınca exponential backoff'la 3 deneme.
 async function zplToDataUrl(
   zpl: string,
   template: '4x4' | '4x6' = '4x4',
 ): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://api.labelary.com/v1/printers/8dpmm/labels/${template}/0/`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'image/png',
+  const cacheKey = `${template}::${zpl}`;
+  const cached = labelaryCache.get(cacheKey);
+  if (cached) return cached;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const res = await fetch(
+        `https://api.labelary.com/v1/printers/8dpmm/labels/${template}/0/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'image/png',
+          },
+          body: zpl,
         },
-        body: zpl,
-      },
-    );
-    if (!res.ok) return null;
-    const blob = await res.blob();
-    return await new Promise<string | null>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () =>
-        resolve(typeof reader.result === 'string' ? reader.result : null);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch {
-    return null;
+      );
+      if (res.status === 429) {
+        // Rate limit — bekle ve tekrar dene (250ms, 750ms, 1500ms).
+        await new Promise((r) =>
+          setTimeout(r, 250 * Math.pow(3, attempt)),
+        );
+        continue;
+      }
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      const dataUrl = await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve(typeof reader.result === 'string' ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+      if (dataUrl) labelaryCache.set(cacheKey, dataUrl);
+      return dataUrl;
+    } catch {
+      return null;
+    }
   }
+  return null;
 }
 
 // MNG response'undan kargo etiket sayfa(lar)ını üret.
@@ -258,18 +282,20 @@ async function printCargoLabels(
 ): Promise<void> {
   if (items.length === 0) return;
 
-  const sections = await Promise.all(
-    items.map(async ({ apiData, orderNumber }) => {
-      const [mngPages, productInfoHtml] = await Promise.all([
-        buildMngLabelPages(apiData),
-        buildProductInfoPage(apiData),
-      ]);
-      console.log(
-        `[print] order=${orderNumber} mngPages=${mngPages.length} productInfo=${productInfoHtml ? 'yes' : 'no'}`,
-      );
-      return { mngPages, productInfoHtml };
-    }),
-  );
+  // Labelary 429 rate limit (~5 req/s) yüzünden paralel build çoğu çağrıyı
+  // yakar. Sıralı işliyoruz; aynı ZPL cache'lendiği için tekrar maliyeti yok.
+  const sections: Array<{
+    mngPages: string[];
+    productInfoHtml: string | null;
+  }> = [];
+  for (const { apiData, orderNumber } of items) {
+    const mngPages = await buildMngLabelPages(apiData);
+    const productInfoHtml = await buildProductInfoPage(apiData);
+    console.log(
+      `[print] order=${orderNumber} mngPages=${mngPages.length} productInfo=${productInfoHtml ? 'yes' : 'no'}`,
+    );
+    sections.push({ mngPages, productInfoHtml });
+  }
 
   const totalPages = sections.reduce(
     (sum, s) => sum + s.mngPages.length + (s.productInfoHtml ? 1 : 0),

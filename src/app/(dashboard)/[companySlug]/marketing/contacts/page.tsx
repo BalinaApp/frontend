@@ -567,8 +567,8 @@ export default function MarketingContactsPage() {
                 </SortHeaderButton>
               </CellWrap>
             </div>
-            <div className="flex flex-1 items-center gap-20">
-              <CellWrap>
+            <div className="flex flex-1 items-center justify-between">
+              <CellWrap className="w-20">
                 <SortHeaderButton
                   field="orderCount"
                   currentField={sortField}
@@ -578,7 +578,7 @@ export default function MarketingContactsPage() {
                   Siparişler
                 </SortHeaderButton>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-32">
                 <SortHeaderButton
                   field="totalSpent"
                   currentField={sortField}
@@ -588,7 +588,7 @@ export default function MarketingContactsPage() {
                   Toplam Harcama
                 </SortHeaderButton>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-28">
                 <SortHeaderButton
                   field="lastOrderAt"
                   currentField={sortField}
@@ -598,7 +598,7 @@ export default function MarketingContactsPage() {
                   Son Sipariş
                 </SortHeaderButton>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-24">
                 <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Durum
                 </span>
@@ -665,24 +665,24 @@ export default function MarketingContactsPage() {
                       </div>
                     </div>
 
-                    {/* RIGHT — 4 cells */}
-                    <div className="flex flex-1 items-center gap-20">
-                      <CellWrap>
+                    {/* RIGHT — 4 cells (header ile birebir width) */}
+                    <div className="flex flex-1 items-center justify-between">
+                      <CellWrap className="w-20">
                         <span className="text-sm text-foreground">
                           {c.orderCount}
                         </span>
                       </CellWrap>
-                      <CellWrap>
+                      <CellWrap className="w-32">
                         <span className="text-sm text-foreground">
                           {formatCurrency(c.totalSpent)}
                         </span>
                       </CellWrap>
-                      <CellWrap>
+                      <CellWrap className="w-28">
                         <span className="text-sm text-foreground">
                           {formatDate(c.lastOrderAt)}
                         </span>
                       </CellWrap>
-                      <CellWrap>
+                      <CellWrap className="w-24">
                         <button
                           type="button"
                           onClick={() => handleToggleUnsubscribed(c)}
@@ -811,9 +811,20 @@ function TabPill({
   );
 }
 
-function CellWrap({ children }: { children: React.ReactNode }) {
+function CellWrap({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="inline-flex min-w-fit flex-1 flex-col items-start justify-start gap-2.5">
+    <div
+      className={[
+        'inline-flex flex-col items-start justify-start gap-2.5',
+        className ?? '',
+      ].join(' ')}
+    >
       {children}
     </div>
   );

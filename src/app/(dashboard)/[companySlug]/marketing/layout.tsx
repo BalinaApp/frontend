@@ -82,7 +82,7 @@ export default function MarketingLayout({
 
       {/* Right pane container — settings ile birebir aynı */}
       <div className="flex flex-1 flex-col p-1">
-        <div className="flex flex-1 flex-col overflow-hidden rounded-lg bg-white/40 shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]">
+        <div className="scrollbar-none flex flex-1 flex-col overflow-y-auto rounded-lg bg-white/40 shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]">
           {children}
         </div>
       </div>

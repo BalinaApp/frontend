@@ -871,7 +871,7 @@ function OrderDetailDrawer({
       setCargoOpen(false);
       // Print dialog — MNG response'tan tracking + label bilgisi varsa
       // etikete ekleriz.
-      runPrintLabel(data, { desi, kg, content });
+      void runPrintLabel(data, { desi, kg, content });
     } catch (err: unknown) {
       // Backend error.response.data.message bazen string, bazen string[],
       // bazen `{code, message, details}` objesi olabiliyor. MNG passthrough
@@ -932,14 +932,68 @@ function OrderDetailDrawer({
     return null;
   };
 
-  // MNG createBarcode response'unda hazır label varsa onu kullan — varyantlar:
-  //   - labelImage / barcodeImage / LabelImage  → base64 PNG (data URL'e wrap)
-  //   - labelPdf / LabelPdf                     → base64 PDF
-  //   - labelUrl / labelLink / label_url        → uzak resim/PDF URL'i
-  //   - zpl / ZPL                               → thermal raw → Labelary ile PNG
-  // Hiçbiri yoksa null döner; çağıran taraf product-info ZPL'e düşer.
-  const extractMngLabelHtml = (apiData: unknown): string | null => {
-    if (!apiData || typeof apiData !== 'object') return null;
+  // MNG createBarcode response'unda etiket ZPL olarak `barcodes[].value`
+  // (veya benzeri) içinde geliyor — DHL/MNG resmi doc'unda 10x10cm ZPL.
+  // Response yapısı sürüm/hesap bazlı değişebildiği için derinlemesine
+  // ararız: `^XA` ile başlayıp `^XZ` ile biten her string'i topla.
+  const findZplStrings = (node: unknown, out: string[] = []): string[] => {
+    if (typeof node === 'string') {
+      const t = node.trim();
+      if (t.startsWith('^XA') && t.endsWith('^XZ')) out.push(t);
+      return out;
+    }
+    if (Array.isArray(node)) {
+      for (const item of node) findZplStrings(item, out);
+      return out;
+    }
+    if (node && typeof node === 'object') {
+      for (const v of Object.values(node as Record<string, unknown>)) {
+        findZplStrings(v, out);
+      }
+    }
+    return out;
+  };
+
+  // Labelary'ye ZPL POST edip PNG data URL döndür. POST kullanıyoruz çünkü
+  // ZPL ~2-4KB olabilir; URL path'e koymak bazı browser'larda 414 üretir.
+  // Hata durumunda null — caller fallback'e düşer.
+  const zplToDataUrl = async (
+    zpl: string,
+    template: '4x4' | '4x6' = '4x4',
+  ): Promise<string | null> => {
+    try {
+      const res = await fetch(
+        `https://api.labelary.com/v1/printers/8dpmm/labels/${template}/0/`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'image/png',
+          },
+          body: zpl,
+        },
+      );
+      if (!res.ok) return null;
+      const blob = await res.blob();
+      return await new Promise<string | null>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve(typeof reader.result === 'string' ? reader.result : null);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
+  // MNG response'unda label var mı diye bak:
+  //   1) Doğrudan labelUrl/labelImage/labelPdf alanları (varsa)
+  //   2) `barcodes[].value` veya derindeki herhangi bir ZPL string'i
+  //      → Labelary POST → data URL
+  // İade: img/embed/null
+  const buildMngLabelPages = async (apiData: unknown): Promise<string[]> => {
+    if (!apiData || typeof apiData !== 'object') return [];
     const d = apiData as Record<string, unknown>;
     const pick = (...keys: string[]): string | undefined => {
       for (const k of keys) {
@@ -949,12 +1003,20 @@ function OrderDetailDrawer({
       return undefined;
     };
 
+    const pages: string[] = [];
+
     const url = pick('labelUrl', 'LabelUrl', 'labelLink', 'label_url');
     if (url) {
       if (/\.pdf(\?|$)/i.test(url)) {
-        return `<embed src="${url}" type="application/pdf" class="mng-label-embed" />`;
+        pages.push(
+          `<embed src="${url}" type="application/pdf" class="mng-label-embed" />`,
+        );
+      } else {
+        pages.push(
+          `<img src="${url}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+        );
       }
-      return `<img src="${url}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+      return pages;
     }
 
     const pdfBase64 = pick('labelPdf', 'LabelPdf', 'labelPdfBase64');
@@ -962,7 +1024,10 @@ function OrderDetailDrawer({
       const src = pdfBase64.startsWith('data:')
         ? pdfBase64
         : `data:application/pdf;base64,${pdfBase64}`;
-      return `<embed src="${src}" type="application/pdf" class="mng-label-embed" />`;
+      pages.push(
+        `<embed src="${src}" type="application/pdf" class="mng-label-embed" />`,
+      );
+      return pages;
     }
 
     const imgBase64 = pick(
@@ -977,34 +1042,40 @@ function OrderDetailDrawer({
       const src = imgBase64.startsWith('data:')
         ? imgBase64
         : `data:image/png;base64,${imgBase64}`;
-      return `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+      pages.push(
+        `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+      );
+      return pages;
     }
 
-    // MNG ZPL döndürürse Labelary üzerinden PNG'ye çeviriyoruz.
-    const mngZpl = pick('zpl', 'ZPL');
-    if (mngZpl) {
-      const url2 = `https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/${encodeURIComponent(mngZpl)}`;
-      return `<img src="${url2}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+    // MNG ana akış: response içinde gömülü ZPL string(ler)i bul.
+    // Doc: "10*10 ebatında hazır Zpl string" → Labelary 4x4 (10.16cm).
+    const zpls = findZplStrings(apiData);
+    for (const zpl of zpls) {
+      const dataUrl = await zplToDataUrl(zpl, '4x4');
+      if (dataUrl) {
+        pages.push(
+          `<img src="${dataUrl}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+        );
+      }
     }
-
-    return null;
+    return pages;
   };
 
-  // Backend response'undaki productInfoLabel58mm.zpl'i Labelary API'sine
-  // gönderip PNG olarak embed et. ZPL içinde özel karakterler var (^XA, ^FO,
-  // ^FD vb.); encodeURIComponent ile path'e güvenli şekilde sığar.
-  const extractProductInfoHtml = (apiData: unknown): string | null => {
+  // Backend `productInfoLabel58mm.zpl`'i Labelary üzerinden PNG'ye çevir.
+  const buildProductInfoPage = async (
+    apiData: unknown,
+  ): Promise<string | null> => {
     if (!apiData || typeof apiData !== 'object') return null;
     const d = apiData as {
       productInfoLabel58mm?: { zpl?: unknown; lines?: unknown } | null;
     };
     const zpl = d.productInfoLabel58mm?.zpl;
     if (typeof zpl === 'string' && zpl.trim().startsWith('^XA')) {
-      // 812 dot ≈ 4 inch @ 203dpi (8dpmm). Uzunluk ZPL içindeki ^LL'den
-      // belirleniyor; 4x6 etiket sınırlarına uyacak şekilde Labelary 4x6
-      // template kullanıyoruz.
-      const url = `https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/${encodeURIComponent(zpl)}`;
-      return `<img src="${url}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
+      const dataUrl = await zplToDataUrl(zpl, '4x6');
+      if (dataUrl) {
+        return `<img src="${dataUrl}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
+      }
     }
     // ZPL yoksa lines fallback (text-based)
     const lines = d.productInfoLabel58mm?.lines;
@@ -1028,20 +1099,21 @@ function OrderDetailDrawer({
     return null;
   };
 
-  const runPrintLabel = (
+  const runPrintLabel = async (
     apiData: unknown,
     _pkg: { desi: number; kg: number; content: string },
   ) => {
-    // 2 sayfa basıyoruz:
-    //   1) MNG'nin createBarcode response'unda dönen kargo etiketi
-    //      (labelUrl / labelImage / labelPdf / ZPL → Labelary). Yoksa sayfa atlanır.
-    //   2) Ürün listesi etiketi — backend'in productInfoLabel58mm.zpl çıktısını
-    //      Labelary üzerinden PNG olarak basıyoruz (table layout, beden/renk dahil).
-    //      ZPL yoksa text fallback.
-    const mngLabelHtml = extractMngLabelHtml(apiData);
-    const productInfoHtml = extractProductInfoHtml(apiData);
+    // 1) MNG kargo etiket sayfa(ları) — response içindeki ZPL'i Labelary 4x4
+    //    üzerinden PNG'ye çeviriyoruz (10x10cm). Birden fazla parça varsa
+    //    birden fazla sayfa.
+    // 2) Ürün listesi etiketi — backend'in productInfoLabel58mm ZPL'inden
+    //    Labelary 4x6 PNG. ZPL yoksa text fallback.
+    const [mngPages, productInfoHtml] = await Promise.all([
+      buildMngLabelPages(apiData),
+      buildProductInfoPage(apiData),
+    ]);
 
-    if (!mngLabelHtml && !productInfoHtml) {
+    if (mngPages.length === 0 && !productInfoHtml) {
       toast.danger('Yazdırılacak etiket bulunamadı (MNG/ZPL yanıtı eksik).');
       return;
     }
@@ -1089,7 +1161,7 @@ function OrderDetailDrawer({
 </style>
 </head>
 <body>
-  ${mngLabelHtml ? `<div class="page">${mngLabelHtml}</div>` : ''}
+  ${mngPages.map((p) => `<div class="page">${p}</div>`).join('')}
   ${productInfoHtml ? `<div class="page">${productInfoHtml}</div>` : ''}
 </body>
 </html>`);

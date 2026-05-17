@@ -12,7 +12,7 @@ import {
   Magnifier,
   Plus,
 } from '@gravity-ui/icons';
-import { Button, Modal, toast } from '@heroui/react';
+import { AlertDialog, Button, Modal, toast } from '@heroui/react';
 import {
   compileBlocksToHtml,
   collectProductIds,
@@ -21,11 +21,15 @@ import { MAIL_TEMPLATES, type MailTemplate } from '@/components/marketing/mail-t
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
+import { useSavedFilterStore } from '@/stores/savedFilterStore';
+import { SavedTab } from '@/components/products/saved-tab';
 import {
   useMarketingCampaignStore,
   type CampaignStatus,
   type MarketingCampaign,
 } from '@/stores/marketingCampaignStore';
+
+const SAVED_CONTEXT = 'marketing-campaigns';
 
 const STATUS_TABS: { id: 'all' | CampaignStatus; label: string }[] = [
   { id: 'all', label: 'Tüm Kampanyalar' },
@@ -72,6 +76,70 @@ export default function MarketingCampaignsPage() {
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [creating, setCreating] = useState(false);
+
+  // Saved filter tabs — contacts page ile aynı pattern.
+  const fetchSaved = useSavedFilterStore((s) => s.fetch);
+  const allSavedFilters = useSavedFilterStore((s) => s.filters);
+  const updateSaved = useSavedFilterStore((s) => s.update);
+  const removeSaved = useSavedFilterStore((s) => s.remove);
+  const createSaved = useSavedFilterStore((s) => s.create);
+  const savedFilters = useMemo(
+    () => allSavedFilters.filter((f) => f.context === SAVED_CONTEXT),
+    [allSavedFilters],
+  );
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (currentCompany?.id) fetchSaved(currentCompany.id, SAVED_CONTEXT);
+  }, [currentCompany?.id, fetchSaved]);
+
+  // Saved tab dropdown aksiyonları (rename / duplicate / delete) — contacts ile aynı.
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const openRename = (id: string, currentName: string) => {
+    setRenameId(id);
+    setRenameValue(currentName);
+  };
+  const submitRename = async () => {
+    if (!currentCompany?.id || !renameId) return;
+    const name = renameValue.trim();
+    if (!name) return;
+    setIsRenaming(true);
+    try {
+      const ok = await updateSaved(currentCompany.id, renameId, { name });
+      if (ok) {
+        toast.success('Yeniden adlandırıldı');
+        setRenameId(null);
+      }
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+  const handleDuplicate = async (sf: {
+    name: string;
+    payload: Record<string, string | string[]>;
+  }) => {
+    if (!currentCompany?.id) return;
+    const result = await createSaved(
+      currentCompany.id,
+      SAVED_CONTEXT,
+      `${sf.name} (kopya)`,
+      sf.payload,
+    );
+    if (result) toast.success('Kopya oluşturuldu');
+    else toast.danger('Kopyalanamadı');
+  };
+  const [deleteSavedId, setDeleteSavedId] = useState<string | null>(null);
+  const handleDeleteSaved = (id: string) => setDeleteSavedId(id);
+  const handleConfirmDeleteSaved = async () => {
+    if (!currentCompany?.id || !deleteSavedId) return;
+    const ok = await removeSaved(currentCompany.id, deleteSavedId);
+    if (ok) {
+      toast.success('Silindi');
+      if (activeSavedId === deleteSavedId) setActiveSavedId(null);
+    }
+    setDeleteSavedId(null);
+  };
 
   useEffect(() => {
     if (!currentCompany?.id) return;
@@ -177,8 +245,93 @@ export default function MarketingCampaignsPage() {
         </Modal.Backdrop>
       </Modal>
 
+      {/* Saved filter sil onayı */}
+      <AlertDialog
+        isOpen={deleteSavedId !== null}
+        onOpenChange={(o) => {
+          if (!o) setDeleteSavedId(null);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                Bu filtre seti kalıcı olarak silinecek.
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button variant="tertiary" slot="close">
+                  Vazgeç
+                </Button>
+                <Button variant="danger" onPress={handleConfirmDeleteSaved}>
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+
+      {/* Saved filter rename modal */}
+      {renameId !== null && (
+        <AlertDialog
+          isOpen={true}
+          onOpenChange={(o) => {
+            if (!isRenaming && !o) setRenameId(null);
+          }}
+        >
+          <AlertDialog.Backdrop>
+            <AlertDialog.Container>
+              <AlertDialog.Dialog className="sm:max-w-[420px]">
+                <AlertDialog.Header>
+                  <AlertDialog.Heading>
+                    Filtre setini adlandır
+                  </AlertDialog.Heading>
+                </AlertDialog.Header>
+                <div className="px-6 pb-4">
+                  <input
+                    type="text"
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        submitRename();
+                      }
+                    }}
+                    placeholder="Filtre seti adı"
+                    className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
+                  />
+                </div>
+                <AlertDialog.Footer>
+                  <Button
+                    variant="tertiary"
+                    slot="close"
+                    isDisabled={isRenaming}
+                  >
+                    Vazgeç
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onPress={submitRename}
+                    isPending={isRenaming}
+                    isDisabled={isRenaming}
+                  >
+                    Kaydet
+                  </Button>
+                </AlertDialog.Footer>
+              </AlertDialog.Dialog>
+            </AlertDialog.Container>
+          </AlertDialog.Backdrop>
+        </AlertDialog>
+      )}
+
       <PageHeader
-        title="Pazarlama"
+        title="Kampanyalar"
         action={
           <Button
             variant="primary"
@@ -201,11 +354,33 @@ export default function MarketingCampaignsPage() {
               {STATUS_TABS.map((t) => (
                 <TabPill
                   key={t.id}
-                  selected={status === t.id}
-                  onPress={() => setStatus(t.id)}
+                  selected={status === t.id && activeSavedId === null}
+                  onPress={() => {
+                    setStatus(t.id);
+                    setActiveSavedId(null);
+                  }}
                 >
                   {t.label}
                 </TabPill>
+              ))}
+              {savedFilters.map((sf) => (
+                <SavedTab
+                  key={sf.id}
+                  name={sf.name}
+                  isActive={activeSavedId === sf.id}
+                  onSelect={() => {
+                    setActiveSavedId(sf.id);
+                    // Şu an yalnızca status kayıtlı — saved filter
+                    // genişletildiğinde diğer alanlar da uygulanır.
+                    const s = sf.payload?.status as string | undefined;
+                    if (s && s !== 'all') {
+                      setStatus(s as CampaignStatus);
+                    }
+                  }}
+                  onRename={() => openRename(sf.id, sf.name)}
+                  onDuplicate={() => handleDuplicate(sf)}
+                  onDelete={() => handleDeleteSaved(sf.id)}
+                />
               ))}
             </div>
             <div className="flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
@@ -223,18 +398,20 @@ export default function MarketingCampaignsPage() {
 
         <div className="flex flex-col gap-2.5 p-2.5">
           <div className="flex items-center justify-between">
-            <div className="flex flex-1 items-center gap-2">
-              <SortHeaderButton
-                field="name"
-                currentField={sortField}
-                currentOrder={sortOrder}
-                onSort={handleSort}
-              >
-                Kampanya
-              </SortHeaderButton>
+            <div className="flex flex-1 items-center gap-3">
+              <CellWrap>
+                <SortHeaderButton
+                  field="name"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Kampanya
+                </SortHeaderButton>
+              </CellWrap>
             </div>
             <div className="flex flex-1 items-center gap-20">
-              <div className="flex flex-1 items-center gap-2">
+              <CellWrap>
                 <SortHeaderButton
                   field="sentCount"
                   currentField={sortField}
@@ -243,13 +420,13 @@ export default function MarketingCampaignsPage() {
                 >
                   Gönderim
                 </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <span className="rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Açılma
                 </span>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <SortHeaderButton
                   field="updatedAt"
                   currentField={sortField}
@@ -258,12 +435,12 @@ export default function MarketingCampaignsPage() {
                 >
                   Güncellendi
                 </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
+              </CellWrap>
+              <CellWrap>
                 <span className="rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Durum
                 </span>
-              </div>
+              </CellWrap>
             </div>
           </div>
 
@@ -330,12 +507,18 @@ function CampaignRow({
         </div>
       </div>
       <div className="flex flex-1 items-center gap-20 text-xs text-foreground">
-        <span className="flex-1">
-          {c.sentCount}/{c.recipientCount || '—'}
-        </span>
-        <span className="flex-1">{openRate}</span>
-        <span className="flex-1">{formatDate(c.updatedAt)}</span>
-        <span className="flex-1">
+        <CellWrap>
+          <span className="text-foreground">
+            {c.sentCount}/{c.recipientCount || '—'}
+          </span>
+        </CellWrap>
+        <CellWrap>
+          <span className="text-foreground">{openRate}</span>
+        </CellWrap>
+        <CellWrap>
+          <span className="text-foreground">{formatDate(c.updatedAt)}</span>
+        </CellWrap>
+        <CellWrap>
           <span
             className={[
               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -345,8 +528,16 @@ function CampaignRow({
             <StatusIcon className="h-3 w-3" />
             {statusMeta.label}
           </span>
-        </span>
+        </CellWrap>
       </div>
+    </div>
+  );
+}
+
+function CellWrap({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="inline-flex min-w-fit flex-1 flex-col items-start justify-start gap-2.5">
+      {children}
     </div>
   );
 }

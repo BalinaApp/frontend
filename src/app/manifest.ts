@@ -23,16 +23,17 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: '#18181b',
     lang: 'tr',
     icons: [
-      // ?v=2 → yeni logo rasterizasyonu için cache bust (PNG'ler değişti
-      // ama eski PWA install'lar OS cache'inden eski ikonu gösteriyordu).
+      // ?v=3 → yeni gri bg + beyaz balina design rasterizasyonu için cache
+      // bust. OS bazen install icon'unu agresif cache eder; query string
+      // değişikliği yeni indirme tetikler.
       {
-        src: '/icons/icon-192.png?v=2',
+        src: '/icons/icon-192.png?v=3',
         sizes: '192x192',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/icons/icon-512.png?v=2',
+        src: '/icons/icon-512.png?v=3',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',

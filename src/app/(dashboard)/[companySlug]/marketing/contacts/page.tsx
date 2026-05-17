@@ -3,11 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
-  ArrowRotateLeft,
   Calendar,
   Check,
   CircleDashed,
   CircleXmark,
+  Database,
   Envelope,
   Person,
   Tag,
@@ -101,9 +101,7 @@ export default function MarketingContactsPage() {
   const { stores, fetchStores } = useStoreStore();
   const {
     contacts,
-    total,
     isLoading,
-    isBackfilling,
     fetchContacts,
     setUnsubscribed,
     deleteContact,
@@ -127,6 +125,12 @@ export default function MarketingContactsPage() {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [isBulkUnsubscribing, setIsBulkUnsubscribing] = useState(false);
+
+  // İlk açılışta liste boşsa arka planda backfill — sessiz, toast yok.
+  // Idempotent: backend zaten companyId+email unique olduğu için tekrar
+  // çağırmak güvenli. Yeni siparişler için per-order hook çalıştığından
+  // bu yalnızca "ilk kurulum / geçmişten ilk senkron" senaryosu için.
+  const [autoBackfilled, setAutoBackfilled] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -245,7 +249,7 @@ export default function MarketingContactsPage() {
     {
       id: 'source',
       label: 'Kaynak',
-      icon: Tag,
+      icon: Database,
       searchPlaceholder: 'Kaynak seç...',
       type: 'select',
       defaultValue: 'all',
@@ -298,6 +302,29 @@ export default function MarketingContactsPage() {
     fetchData();
   }, [fetchData]);
 
+  // İlk fetch tamamlandıktan sonra liste hala boşsa otomatik backfill —
+  // ilk açılışta kullanıcının manuel buton tıklamasına gerek kalmaz.
+  // useEffect deps: contacts.length değişirse (backfill sonrası dolarsa)
+  // koşul false olur, tekrar tetiklenmez.
+  useEffect(() => {
+    if (
+      !currentCompany?.id ||
+      autoBackfilled ||
+      isLoading ||
+      contacts.length > 0
+    ) {
+      return;
+    }
+    setAutoBackfilled(true);
+    void backfillFromOrders(currentCompany.id);
+  }, [
+    currentCompany?.id,
+    autoBackfilled,
+    isLoading,
+    contacts.length,
+    backfillFromOrders,
+  ]);
+
   // Source + date frontend-side filter + sort.
   const visibleContacts = useMemo(() => {
     let list = contacts;
@@ -346,18 +373,6 @@ export default function MarketingContactsPage() {
   }, [contacts, sourceFilter, dateFilter, sortField, sortOrder]);
 
   // ---- Handlers -----------------------------------------------------------
-
-  const handleBackfill = async () => {
-    if (!currentCompany?.id) return;
-    const result = await backfillFromOrders(currentCompany.id);
-    if (result) {
-      toast.success(
-        `${result.uniqueContacts} kontak senkronize edildi (${result.created} yeni, ${result.updated} güncellendi)`,
-      );
-    } else {
-      toast.danger('Senkronizasyon başarısız');
-    }
-  };
 
   const handleToggleUnsubscribed = async (c: MarketingContact) => {
     if (!currentCompany?.id) return;
@@ -493,22 +508,7 @@ export default function MarketingContactsPage() {
         </AlertDialog.Backdrop>
       </AlertDialog>
 
-      <PageHeader
-        title="Pazarlama"
-        action={
-          <Button
-            variant="secondary"
-            size="sm"
-            onPress={handleBackfill}
-            isPending={isBackfilling}
-            isDisabled={isBackfilling || !currentCompany?.id}
-            className="h-8 rounded-full px-3 text-xs"
-          >
-            <ArrowRotateLeft className="h-3.5 w-3.5" />
-            Geçmiş siparişlerden senkronize et
-          </Button>
-        }
-      />
+      <PageHeader title="Pazarlama" />
 
       <div className="flex flex-col">
         {/* ============== Filter row (Products page ile birebir) ============== */}
@@ -609,9 +609,7 @@ export default function MarketingContactsPage() {
               <div className="h-12" />
             ) : visibleContacts.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted">
-                {total === 0
-                  ? 'Kontak bulunamadı. "Geçmiş siparişlerden senkronize et" ile başlayın.'
-                  : 'Filtreyle eşleşen kontak yok.'}
+                Kontak bulunamadı
               </div>
             ) : (
               visibleContacts.map((c) => {

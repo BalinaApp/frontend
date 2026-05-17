@@ -29,10 +29,12 @@ import {
 } from './mail-blocks';
 
 const BLOCK_TYPES: MailBlock['type'][] = [
+  'logo',
   'heading',
   'text',
   'image',
   'product',
+  'product-grid',
   'button',
   'divider',
   'spacer',
@@ -346,6 +348,11 @@ function BlockBody({
                 </HDropdown.Menu>
               </HDropdown.Popover>
             </HDropdown>
+            <AlignToggle
+              value={block.align ?? 'left'}
+              onChange={(a) => onUpdate({ align: a })}
+              disabled={disabled}
+            />
           </div>
           <TextField
             value={block.text}
@@ -358,19 +365,26 @@ function BlockBody({
       );
     case 'text':
       return (
-        <TextField
-          value={block.text}
-          onChange={(v) => onUpdate({ text: v })}
-          isDisabled={disabled}
-        >
-          <TextArea
-            fullWidth
-            variant="secondary"
-            rows={4}
-            placeholder="Metin..."
-            className="resize-none"
+        <div className="flex flex-col gap-2">
+          <AlignToggle
+            value={block.align ?? 'left'}
+            onChange={(a) => onUpdate({ align: a })}
+            disabled={disabled}
           />
-        </TextField>
+          <TextField
+            value={block.text}
+            onChange={(v) => onUpdate({ text: v })}
+            isDisabled={disabled}
+          >
+            <TextArea
+              fullWidth
+              variant="secondary"
+              rows={4}
+              placeholder="Metin..."
+              className="resize-none"
+            />
+          </TextField>
+        </div>
       );
     case 'image':
       return (
@@ -416,6 +430,40 @@ function BlockBody({
           )}
         </div>
       );
+    case 'logo':
+      return (
+        <div className="flex flex-col gap-2">
+          <TextField
+            value={block.url}
+            onChange={(v) => onUpdate({ url: v })}
+            isDisabled={disabled}
+          >
+            <Label>Logo URL</Label>
+            <Input placeholder="https://..." />
+          </TextField>
+          <TextField
+            value={block.href ?? ''}
+            onChange={(v) => onUpdate({ href: v || null })}
+            isDisabled={disabled}
+          >
+            <Label>Tıklama linki (opsiyonel)</Label>
+            <Input placeholder="https://..." />
+          </TextField>
+          {block.url && (
+            <div className="flex items-center justify-center rounded-lg border border-foreground/[0.06] bg-white py-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={block.url}
+                alt="Logo önizleme"
+                className="max-h-12 max-w-[160px]"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+        </div>
+      );
     case 'product':
       return (
         <div className="flex flex-col gap-2">
@@ -436,6 +484,14 @@ function BlockBody({
             {block.productId ? 'Ürünü değiştir' : 'Ürün seç'}
           </Button>
         </div>
+      );
+    case 'product-grid':
+      return (
+        <ProductGridBlockBody
+          block={block}
+          disabled={disabled}
+          onUpdate={onUpdate}
+        />
       );
     case 'button':
       return (
@@ -502,6 +558,125 @@ function BlockBody({
 }
 
 // ---- Product preview + picker -----------------------------------------
+
+/** Sol/Orta/Sağ hizalama toggle'ı — heading + text blokları için. */
+function AlignToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: 'left' | 'center' | 'right';
+  onChange: (v: 'left' | 'center' | 'right') => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-md bg-foreground/[0.04] p-0.5">
+      {(['left', 'center', 'right'] as const).map((a) => (
+        <button
+          key={a}
+          type="button"
+          onClick={() => onChange(a)}
+          disabled={disabled}
+          className={[
+            'inline-flex h-6 w-6 items-center justify-center rounded text-[10px] font-medium transition-colors',
+            value === a
+              ? 'bg-foreground/[0.10] text-foreground'
+              : 'text-muted hover:bg-foreground/[0.06] hover:text-foreground',
+          ].join(' ')}
+          aria-label={`Hizala ${a}`}
+        >
+          {a === 'left' ? '⬱' : a === 'right' ? '⬲' : '☰'}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Ürün grid editör — çok ürünü liste + ekle/sil + kolon sayısı. */
+function ProductGridBlockBody({
+  block,
+  disabled,
+  onUpdate,
+}: {
+  block: Extract<MailBlock, { type: 'product-grid' }>;
+  disabled?: boolean;
+  onUpdate: (patch: Partial<MailBlock>) => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <Label>Kolon sayısı</Label>
+        {([2, 3] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onUpdate({ columns: c })}
+            disabled={disabled}
+            className={[
+              'inline-flex h-7 items-center justify-center rounded-md px-2 text-[11px] font-medium transition-colors',
+              block.columns === c
+                ? 'bg-foreground/[0.10] text-foreground'
+                : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+            ].join(' ')}
+          >
+            {c}
+          </button>
+        ))}
+      </div>
+      {block.productIds.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-foreground/[0.10] p-3 text-center text-xs text-muted">
+          Henüz ürün eklenmedi
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {block.productIds.map((pid, idx) => (
+            <div key={`${pid}-${idx}`} className="flex items-center gap-2">
+              <div className="flex-1">
+                <ProductCardPreview productId={pid} />
+              </div>
+              <Button
+                variant="tertiary"
+                size="sm"
+                isIconOnly
+                onPress={() =>
+                  onUpdate({
+                    productIds: block.productIds.filter((_, i) => i !== idx),
+                  })
+                }
+                isDisabled={disabled}
+                aria-label="Ürünü çıkar"
+                className="h-7 w-7 rounded-md text-danger"
+              >
+                <TrashBin className="h-3 w-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <Button
+        variant="tertiary"
+        size="sm"
+        onPress={() => setPickerOpen(true)}
+        isDisabled={disabled}
+        className="rounded-full"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Ürün ekle
+      </Button>
+      <ProductPickerModal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onPick={(productId) => {
+          if (!block.productIds.includes(productId)) {
+            onUpdate({ productIds: [...block.productIds, productId] });
+          }
+          setPickerOpen(false);
+        }}
+      />
+    </div>
+  );
+}
 
 /** 6-dot drag handle — gravity-ui'da direkt yok, inline SVG. */
 function DragHandleIcon() {

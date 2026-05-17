@@ -38,6 +38,7 @@ import { MailBlockEditor } from '@/components/marketing/mail-block-editor';
 import {
   collectProductIds,
   compileBlocksToHtml,
+  compileBlocksToPreviewHtml,
   makeDefaultBlock,
   type MailBlock,
 } from '@/components/marketing/mail-blocks';
@@ -677,7 +678,11 @@ export default function CampaignEditorPage() {
             </div>
           </Section>
 
-          {/* === 2) Mail tasarımı — blok bazlı görsel editör === */}
+        </div>
+
+        {/* === 2) Mail tasarımı — Canvas split: sol blok editor + sağ canlı önizleme ===
+            Daha geniş container (1180px) — canvas iframe için yer açar. */}
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-3 px-3 pb-6">
           <Section>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-medium text-foreground">
@@ -702,16 +707,43 @@ export default function CampaignEditorPage() {
                   className="h-7 rounded-full px-2 text-xs"
                 >
                   <Eye className="h-3.5 w-3.5" />
-                  Önizle
+                  Tam önizle
                 </Button>
               </div>
             </div>
-            <MailBlockEditor
-              blocks={blocks}
-              onChange={setBlocks}
-              disabled={isReadOnly}
-            />
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
+              {/* Sol: blok editör */}
+              <div className="flex flex-col">
+                <MailBlockEditor
+                  blocks={blocks}
+                  onChange={setBlocks}
+                  disabled={isReadOnly}
+                />
+              </div>
+              {/* Sağ: canlı canvas */}
+              <div className="flex flex-col">
+                <div className="mb-1 flex items-center justify-between">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                    Canlı önizleme
+                  </span>
+                  <span className="text-[10px] text-muted">
+                    Gerçek render Önizle butonunda
+                  </span>
+                </div>
+                <div className="flex-1 overflow-hidden rounded-lg border border-foreground/[0.06] bg-foreground/[0.03]">
+                  <iframe
+                    title="Canlı canvas önizleme"
+                    srcDoc={compileBlocksToPreviewHtml(blocks)}
+                    className="h-[820px] w-full border-0"
+                  />
+                </div>
+              </div>
+            </div>
           </Section>
+        </div>
+
+        {/* Diğer section'lar yeniden 616 genişliğinde merkezde. */}
+        <div className="mx-auto flex w-full max-w-[616px] flex-col gap-3 px-3 pb-6">
 
           {/* === 3) Hedef kitle === */}
           <Section>

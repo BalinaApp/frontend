@@ -139,6 +139,40 @@ export const MAIL_TEMPLATES: MailTemplate[] = [
     ]),
   },
   {
+    id: 'event-discount',
+    name: 'Sepet indirimi (etkinlik)',
+    description:
+      'Tepede logo + ortalanmış başlık + büyük görsel + tek ürün vurgusu + diğer ürünler 2x2 grid + footer.',
+    subject: 'Sepetinizdeki ürüne özel %20 indirim',
+    blocks: buildBlocks([
+      () => ({ ...makeDefaultBlock('logo') }),
+      () => ({
+        ...makeDefaultBlock('heading'),
+        text: 'Sepetinizde bir adet ürüne %20 indirim uyguladık.',
+        level: 'h2',
+        align: 'center',
+      }),
+      () => ({
+        ...makeDefaultBlock('image'),
+        alt: 'Öne çıkan etkinlik / ürün',
+      }),
+      () => ({ ...makeDefaultBlock('product') }),
+      () => ({
+        ...makeDefaultBlock('button'),
+        label: 'Satın al',
+        align: 'left',
+      }),
+      () => ({ ...makeDefaultBlock('divider') }),
+      () => ({
+        ...makeDefaultBlock('heading'),
+        text: 'Diğer etkinlikler',
+        level: 'h3',
+        align: 'center',
+      }),
+      () => ({ ...makeDefaultBlock('product-grid'), columns: 2 }),
+    ]),
+  },
+  {
     id: 'newsletter',
     name: 'Bülten',
     description:

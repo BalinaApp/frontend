@@ -125,7 +125,7 @@ export function AppSidebar() {
           width={32}
           height={32}
           className="h-8 w-8"
-          aria-label="BalinaOS"
+          aria-label="balinaOS"
         />
       </Link>
 

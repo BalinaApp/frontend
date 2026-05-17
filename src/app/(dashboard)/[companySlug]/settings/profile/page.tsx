@@ -29,7 +29,7 @@ export default function ProfileSettingsPage() {
 
   const userInitial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
   // Custom name = real name the user typed in, distinct from the auto
-  // `BalinaOS<num>` placeholder. Drives the row label + edit modal seed.
+  // `balinaOS<num>` placeholder. Drives the row label + edit modal seed.
   const realName = customUserName(user);
 
   const [isNameModalOpen, setIsNameModalOpen] = useState(false);

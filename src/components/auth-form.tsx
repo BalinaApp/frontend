@@ -55,7 +55,7 @@ export function AuthForm() {
 
   return (
     <AuthShell
-      title="BalinaOS'a hoş geldiniz"
+      title="balinaOS'a hoş geldiniz"
       subtitle="Başlamak için lütfen aşağıdaki seçeneklerden birini seçin!"
     >
       <Button

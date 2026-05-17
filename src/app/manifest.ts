@@ -11,10 +11,10 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'BalinaOS',
-    short_name: 'BalinaOS',
+    name: 'balinaOS',
+    short_name: 'balinaOS',
     description:
-      'Çok mağazalı e-ticaret operasyon yönetimi — BalinaOS',
+      'Çok mağazalı e-ticaret operasyon yönetimi — balinaOS',
     start_url: '/',
     scope: '/',
     display: 'standalone',

@@ -168,7 +168,7 @@ export function ProductAiImageModal({
             <Modal.Header>
               <div className="flex items-center gap-2">
                 <BalinaOsMark className="h-5 w-5 text-foreground" />
-                <Modal.Heading>BalinaOS AI ile Görsel Üret</Modal.Heading>
+                <Modal.Heading>balinaOS AI ile Görsel Üret</Modal.Heading>
               </div>
               <StepBar step={step} />
             </Modal.Header>

@@ -1,19 +1,19 @@
 /**
  * Default display name for users who haven't set one yet.
- * Returns `BalinaOS<num>` where `<num>` is a deterministic 3-digit
+ * Returns `balinaOS<num>` where `<num>` is a deterministic 3-digit
  * value derived from the user id, so the same user always renders
  * the same fallback name across pages.
  */
 export function defaultUserName(userId?: string | null): string {
-  if (!userId) return 'BalinaOS';
+  if (!userId) return 'balinaOS';
   let sum = 0;
   for (let i = 0; i < userId.length; i++) sum += userId.charCodeAt(i);
   const num = (sum % 900) + 100; // 100..999
-  return `BalinaOS${num}`;
+  return `balinaOS${num}`;
 }
 
 /**
- * Resolve the user's display name, falling back to the BalinaOS-style
+ * Resolve the user's display name, falling back to the balinaOS-style
  * default when no explicit name is set.
  */
 export function userDisplayName(user?: {
@@ -25,11 +25,11 @@ export function userDisplayName(user?: {
 }
 
 /**
- * Auto-generated names follow the `BalinaOS<3-digit>` shape. Real names
+ * Auto-generated names follow the `balinaOS<3-digit>` shape. Real names
  * never do, so the regex is a safe heuristic to tell whether the user
  * has customised their name yet.
  */
-const AUTO_NAME = /^BalinaOS\d{3}$/;
+const AUTO_NAME = /^balinaOS\d{3}$/;
 
 export function isAutoUserName(name?: string | null): boolean {
   if (!name) return false;

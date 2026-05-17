@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-/** BalinaOS brand mark — koyu gri daire + beyaz balina + gri göz (negatif
+/** balinaOS brand mark — koyu gri daire + beyaz balina + gri göz (negatif
  *  alandan görünür). Sabit iki renkli; marka tutarlılığı için her yerde
  *  aynı görünür. */
 export function BalinaOsMark(

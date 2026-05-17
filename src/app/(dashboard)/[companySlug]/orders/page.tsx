@@ -494,6 +494,7 @@ export default function OrdersPage() {
   const [bulkCargoKg, setBulkCargoKg] = useState('1');
   const [bulkCargoErr, setBulkCargoErr] = useState<string | null>(null);
   const [isCreatingBulkLabels, setIsCreatingBulkLabels] = useState(false);
+  const [isCancellingShipments, setIsCancellingShipments] = useState(false);
   // Sıralama — Products page ile aynı pattern. Backend safe mapping yapıyor
   // (storeName relation üzerinden, bilinmeyenler orderDate fallback).
   const [sortField, setSortField] = useState<SortField>('orderDate');
@@ -505,6 +506,62 @@ export default function OrdersPage() {
       setSortField(field);
       setSortOrder('desc');
     }
+  };
+
+  // Toplu kargo iptali: seçili siparişlerden Shipment kaydı olanlar için
+  // backend `DELETE /cargo/shipment/:referenceId` — MNG cancelshipment +
+  // lokal Shipment kaydı sil. Sonrasında order list'i refresh ediyoruz ki
+  // "Kargoda" göstergesi düşsün.
+  const handleCancelShipments = async () => {
+    if (!currentCompany?.id) return;
+    const shippedOrders = Array.from(selected)
+      .map((id) => orders.find((o) => o.id === id))
+      .filter((o): o is Order => !!o && (o.shipmentCount ?? 0) > 0);
+    if (shippedOrders.length === 0) {
+      toast.danger('Seçili siparişlerin hiçbiri kargoda değil');
+      return;
+    }
+    if (
+      !window.confirm(
+        `${shippedOrders.length} sipariş için kargo etiketi iptal edilsin mi? (MNG'de cancelshipment çağrılır ve "Kargoda" göstergesi düşer.)`,
+      )
+    ) {
+      return;
+    }
+    setIsCancellingShipments(true);
+    const companyId = currentCompany.id;
+    let ok = 0;
+    let fail = 0;
+    for (const o of shippedOrders) {
+      const referenceId = toMngReferenceId(o.orderNumber);
+      if (!referenceId) {
+        fail += 1;
+        continue;
+      }
+      try {
+        await api.delete(
+          `/company/${companyId}/cargo/shipment/${referenceId}`,
+        );
+        ok += 1;
+      } catch (e) {
+        console.error(`[cargo-cancel] order=${o.orderNumber} failed`, e);
+        fail += 1;
+      }
+    }
+    setIsCancellingShipments(false);
+    setSelected(new Set());
+    if (ok > 0) {
+      toast.success(
+        fail === 0
+          ? `${ok} sipariş için kargo etiketi iptal edildi`
+          : `${ok} iptal edildi, ${fail} hata`,
+      );
+    }
+    if (fail > 0 && ok === 0) {
+      toast.danger(`Kargo iptali başarısız (${fail} sipariş)`);
+    }
+    // Order list'i tazele ki shipmentCount güncellensin.
+    fetchOrdersList();
   };
 
   // Toplu kargo etiketi: seçili (ve uygun) siparişlerin her biri için
@@ -1096,6 +1153,13 @@ export default function OrdersPage() {
               fixed pill: "Kargo Etiketi Bas" tek aksiyon. */}
           <OrdersBulkActionsBar
             count={selected.size}
+            shippedCount={
+              Array.from(selected).filter((id) => {
+                const o = orders.find((x) => x.id === id);
+                return o && (o.shipmentCount ?? 0) > 0;
+              }).length
+            }
+            isCancelling={isCancellingShipments}
             onPrintLabels={() => {
               if (selected.size === 0) return;
               // Güvenlik: iptal/iade siparişler son anda filtrelenir
@@ -1114,6 +1178,9 @@ export default function OrdersPage() {
               setBulkCargoKg('1');
               setBulkCargoErr(null);
               setBulkCargoOpen(true);
+            }}
+            onCancelShipments={() => {
+              void handleCancelShipments();
             }}
           />
 
@@ -1985,10 +2052,16 @@ function formatOrderNo(orderNumber: string): string {
 
 function OrdersBulkActionsBar({
   count,
+  shippedCount,
   onPrintLabels,
+  onCancelShipments,
+  isCancelling,
 }: {
   count: number;
+  shippedCount: number;
   onPrintLabels: () => void;
+  onCancelShipments: () => void;
+  isCancelling?: boolean;
 }) {
   if (count <= 0) return null;
   return (
@@ -2002,6 +2075,18 @@ function OrdersBulkActionsBar({
           <Printer className="h-4 w-4" />
           Kargo Etiketi Bas ({count})
         </Button>
+        {shippedCount > 0 && (
+          <Button
+            variant="tertiary"
+            size="md"
+            onPress={onCancelShipments}
+            isPending={isCancelling}
+            isDisabled={isCancelling}
+          >
+            <CircleXmark className="h-4 w-4" />
+            Kargo İptal ({shippedCount})
+          </Button>
+        )}
       </div>
     </div>
   );

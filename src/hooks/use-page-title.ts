@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 
-const APP_NAME = 'BalinaOS';
+const APP_NAME = 'balinaOS';
 
 export function usePageTitle(title: string) {
   useEffect(() => {

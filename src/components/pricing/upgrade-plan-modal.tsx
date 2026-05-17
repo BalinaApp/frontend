@@ -60,7 +60,7 @@ interface UpgradePlanModalProps {
 export function UpgradePlanModal({
   isOpen,
   onOpenChange,
-  description = 'Daha fazla mağaza, hızlı veri yenileme ve gelişmiş özelliklerle BalinaOS deneyiminizi büyütün.',
+  description = 'Daha fazla mağaza, hızlı veri yenileme ve gelişmiş özelliklerle balinaOS deneyiminizi büyütün.',
   defaultPlan = 'PRO',
 }: UpgradePlanModalProps) {
   const { plans, fetchPlans, myPlan } = usePricingStore();

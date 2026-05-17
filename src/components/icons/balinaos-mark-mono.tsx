@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-/** BalinaOS whale silhouette — yeni logo tasarımının balina + tail + göz
+/** balinaOS whale silhouette — yeni logo tasarımının balina + tail + göz
  *  cutout'u, currentColor ile boyanır. Daire arka planı `white` +
  *  yarı saydam ile çiziliyor: tile / bg üzerinde hafif beyaz daire +
  *  tam doygun balina görünür (settings rail item'ı gibi gri-zinc tile

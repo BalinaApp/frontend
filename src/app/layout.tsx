@@ -15,17 +15,17 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: {
-    default: 'BalinaOS',
-    template: '%s · BalinaOS',
+    default: 'balinaOS',
+    template: '%s · balinaOS',
   },
   description:
-    'Çok mağazalı WooCommerce analitik dashboardu — BalinaOS',
+    'Çok mağazalı WooCommerce analitik dashboardu — balinaOS',
   // Next App Router otomatik olarak app/manifest.ts → /manifest.webmanifest.
   manifest: '/manifest.webmanifest',
-  applicationName: 'BalinaOS',
+  applicationName: 'balinaOS',
   appleWebApp: {
     capable: true,
-    title: 'BalinaOS',
+    title: 'balinaOS',
     statusBarStyle: 'default',
   },
   icons: {

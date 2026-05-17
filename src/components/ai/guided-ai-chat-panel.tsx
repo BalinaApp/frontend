@@ -139,7 +139,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   useEffect(() => {
     if (messages.length === 0 && hasIntegration) {
       const greeting = textIntegration
-        ? 'Merhaba! Ben BalinaOS AI. Soru sorabilir, ürün açıklaması üretebilir veya pazarlama metni yazmamı isteyebilirsin. Görsel/video için composer\'dan modu değiştir.'
+        ? 'Merhaba! Ben balinaOS AI. Soru sorabilir, ürün açıklaması üretebilir veya pazarlama metni yazmamı isteyebilirsin. Görsel/video için composer\'dan modu değiştir.'
         : 'Merhaba! Composer\'da modu seçin (Görsel/Video), görsel ekleyin ve istediğinizi yazın.';
       start(greeting);
     }
@@ -382,7 +382,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     appendMessage({
       id: pendingId,
       kind: 'pending',
-      label: 'BalinaOS AI düşünüyor…',
+      label: 'balinaOS AI düşünüyor…',
       mode: 'text',
     });
     try {
@@ -398,7 +398,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
         }));
       const systemMsg = {
         role: 'system' as const,
-        content: `Sen BalinaOS AI asistanısın — bir e-ticaret yönetim panelinin (BalinaOS) yerleşik asistanısın.
+        content: `Sen balinaOS AI asistanısın — bir e-ticaret yönetim panelinin (balinaOS) yerleşik asistanısın.
 
 Kullanıcı sana ŞİRKET VERİSİYLE ALAKALI sorular sorabilir: siparişler, ürünler, stok, mağaza/pazaryeri durumları, aylık/haftalık satış istatistikleri vb. Bu tür sorularda hayal etme — kullanılabilir tool'ları çağırarak gerçek veriyi getir:
 
@@ -596,7 +596,7 @@ KURALLAR:
             'linear-gradient(to bottom, #000 55%, rgba(0,0,0,0.6) 80%, transparent 100%)',
         }}
       >
-        {/* Sol: BalinaOS AI title (logo + label, statik). */}
+        {/* Sol: balinaOS AI title (logo + label, statik). */}
         <div className="flex h-7 flex-1 items-center gap-1.5">
           <BalinaOsMark
             className="h-4 w-4 shrink-0"
@@ -607,7 +607,7 @@ KURALLAR:
             className="text-[13px] font-medium leading-none"
             style={{ color: 'var(--balinaos-text-shout)' }}
           >
-            BalinaOS AI
+            balinaOS AI
           </span>
         </div>
 
@@ -900,7 +900,7 @@ KURALLAR:
               }}
               onFocus={() => setIsComposerFocused(true)}
               onBlur={() => setIsComposerFocused(false)}
-              placeholder="BalinaOS AI sor..."
+              placeholder="balinaOS AI sor..."
               rows={1}
               className="block w-full resize-none rounded-sm border-none bg-transparent px-1 text-[14px] leading-6 outline-none placeholder:text-[var(--balinaos-text-faint)] focus:placeholder:text-[var(--balinaos-text-muted)]"
               style={{
@@ -978,13 +978,13 @@ KURALLAR:
 /* ---------------- Sub-components ---------------- */
 
 function AiLogo() {
-  // BalinaOS resmi marka — siyah balina silüeti. Tüm AI-bağlı yüzeylerde
+  // balinaOS resmi marka — siyah balina silüeti. Tüm AI-bağlı yüzeylerde
   // (chat header, fab launcher) aynı vector mark kullanılır.
   return (
     <BalinaOsMark
       className="h-5 w-5 shrink-0 text-foreground"
       role="img"
-      aria-label="BalinaOS"
+      aria-label="balinaOS"
     />
   );
 }

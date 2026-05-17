@@ -2118,7 +2118,7 @@ export default function StoresPage() {
               Entegrasyonlar
             </h1>
             <p className="text-sm text-foreground/70">
-              Kullanmak istediklerinizi BalinaOS&apos;a bağlayın.
+              Kullanmak istediklerinizi balinaOS&apos;a bağlayın.
             </p>
           </div>
           <SearchField

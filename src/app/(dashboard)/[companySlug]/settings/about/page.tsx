@@ -23,7 +23,7 @@ export default function AboutSettingsPage() {
 
   const handleFeedback = () => {
     window.location.href =
-      'mailto:hello@balinaos.com?subject=BalinaOS%20geri%20bildirim';
+      'mailto:hello@balinaos.com?subject=balinaOS%20geri%20bildirim';
   };
 
   const openLegal = (path: 'terms' | 'privacy') => {
@@ -45,12 +45,12 @@ export default function AboutSettingsPage() {
         <div className="flex w-full max-w-[616px] flex-col gap-6 px-3">
           {/* App info card */}
           <div className="flex flex-col rounded-xl bg-surface">
-            {/* BalinaOS row — black silhouette logo + name + version */}
+            {/* balinaOS row — black silhouette logo + name + version */}
             <div className="flex items-center gap-3 border-b border-black/[0.04] p-3">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center">
                 <Image
                   src="/figma/balina-logo.svg"
-                  alt="BalinaOS"
+                  alt="balinaOS"
                   width={32}
                   height={32}
                   className="h-8 w-8"
@@ -58,7 +58,7 @@ export default function AboutSettingsPage() {
               </div>
               <div className="flex flex-1 flex-col gap-1">
                 <span className="text-sm font-medium text-foreground/85">
-                  BalinaOS
+                  balinaOS
                 </span>
                 <span className="text-xs text-foreground/60">
                   Web Versiyon {APP_VERSION}
@@ -94,7 +94,7 @@ export default function AboutSettingsPage() {
                   Geri bildirim gönder
                 </span>
                 <span className="text-xs text-foreground/85">
-                  BalinaOS&apos;in geleceğini şekillendirmeye yardımcı olun.
+                  balinaOS&apos;in geleceğini şekillendirmeye yardımcı olun.
                 </span>
               </div>
               <span className="flex h-8 items-center px-1 text-muted">

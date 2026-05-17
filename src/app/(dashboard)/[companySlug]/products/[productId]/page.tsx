@@ -751,7 +751,7 @@ export default function ProductEditPage() {
                     </Button>
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
-                      label="BalinaOS AI ile Üret"
+                      label="balinaOS AI ile Üret"
                     />
                   </div>
                   <span className="text-center text-xs text-zinc-500">

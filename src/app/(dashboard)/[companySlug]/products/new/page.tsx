@@ -42,7 +42,7 @@ import { VariationsTable } from '@/components/products/variations-table';
 /**
  * Yeni ürün ekleme sayfası — Figma node 12284:5530 birebir uygulaması.
  * Tek sütun stack layout, 616px max-width, her bölüm bg-white/60 + 12px radius.
- * Input'lar visible outline (border-black/10) ile; "BalinaOS AI" butonu
+ * Input'lar visible outline (border-black/10) ile; "balinaOS AI" butonu
  * description bloğunda absolute positioned.
  */
 
@@ -309,13 +309,13 @@ function ProductImageCard({
   );
 }
 
-/** BalinaOS AI buton — chroma-border animated gradient ring + BalinaOsMark.
+/** balinaOS AI buton — chroma-border animated gradient ring + BalinaOsMark.
  *  AiChatFab ile aynı stil dili: dış renkli akan kenar, iç dolgu pill. */
 function BalinaAiButton({
   onPress,
   isPending,
   isDisabled,
-  label = 'BalinaOS AI',
+  label = 'balinaOS AI',
   className = '',
 }: {
   onPress: () => void;
@@ -870,7 +870,7 @@ export default function NewProductPage() {
                     </Button>
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
-                      label="BalinaOS AI ile Üret"
+                      label="balinaOS AI ile Üret"
                     />
                   </div>
                   <span className="text-center text-xs text-zinc-500">

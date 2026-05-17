@@ -63,7 +63,7 @@ export default function UnsubscribePage() {
   return (
     <div className="flex min-h-svh items-center justify-center bg-black/[0.04] p-4">
       <div className="flex w-full max-w-[420px] flex-col items-center gap-5 rounded-2xl bg-surface p-6 shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]">
-        <BalinaOsMark width={56} height={56} aria-label="BalinaOS" />
+        <BalinaOsMark width={56} height={56} aria-label="balinaOS" />
 
         {loading ? (
           <div className="text-sm text-muted">Yükleniyor…</div>

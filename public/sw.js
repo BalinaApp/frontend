@@ -1,4 +1,4 @@
-// BalinaOS — minimal service worker.
+// balinaOS — minimal service worker.
 // Amaç: tarayıcının "ana ekrana ekle" install prompt'unu tetikleyebilmesi.
 // Chrome bu prompt için kayıtlı bir SW + en az bir fetch handler bekler.
 // Davranış: network passthrough (offline cache yok). Tam offline desteği
@@ -49,10 +49,10 @@ self.addEventListener('push', (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: 'BalinaOS', body: event.data.text() };
+    payload = { title: 'balinaOS', body: event.data.text() };
   }
 
-  const title = payload.title || 'BalinaOS';
+  const title = payload.title || 'balinaOS';
   const options = {
     body: payload.body || '',
     icon: '/icons/icon-192.png',

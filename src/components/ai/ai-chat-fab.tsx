@@ -37,7 +37,7 @@ export function AiChatFab() {
   return (
     <button
       type="button"
-      aria-label="BalinaOS AI sohbetini aç/kapat"
+      aria-label="balinaOS AI sohbetini aç/kapat"
       aria-pressed={isAiDrawerOpen}
       onClick={handleClick}
       className={[
@@ -52,7 +52,7 @@ export function AiChatFab() {
       ].join(' ')}
     >
       <BalinaOsMark className="h-5 w-5 shrink-0 text-foreground" aria-hidden="true" />
-      <span>BalinaOS AI</span>
+      <span>balinaOS AI</span>
     </button>
   );
 }

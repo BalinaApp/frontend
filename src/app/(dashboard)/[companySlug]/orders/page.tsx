@@ -1050,7 +1050,11 @@ function OrderDetailDrawer({
 
     // MNG ana akış: response içinde gömülü ZPL string(ler)i bul.
     // Doc: "10*10 ebatında hazır Zpl string" → Labelary 4x4 (10.16cm).
-    const zpls = findZplStrings(apiData);
+    // MNG aynı ZPL'i birden fazla alanda (örn. barcodes[].value +
+    // orderPieceList[].value) gönderebiliyor; deep walk hepsini topluyor.
+    // Dedupe için Set kullanıyoruz, aksi halde aynı etiket birden çok sayfaya
+    // dönüşüyor.
+    const zpls = Array.from(new Set(findZplStrings(apiData)));
     for (const zpl of zpls) {
       const dataUrl = await zplToDataUrl(zpl, '4x4');
       if (dataUrl) {

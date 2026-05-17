@@ -8,7 +8,7 @@ import { Avatar } from '@heroui/react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { userDisplayName } from '@/lib/user-display';
-import { BalinaOsMark } from '@/components/icons/balinaos-mark';
+import { BalinaOsMarkMono } from '@/components/icons/balinaos-mark-mono';
 
 interface RailItem {
   id: 'general' | 'api' | 'about';
@@ -39,7 +39,7 @@ export default function SettingsLayout({
   const allItems: RailItem[] = [
     { id: 'general', label: 'Genel', href: `/${slug}/settings`, icon: Gear, tile: 'bg-red-500' },
     { id: 'api', label: 'API', href: `/${slug}/settings/api`, icon: AbbrApi, tile: 'bg-indigo-500' },
-    { id: 'about', label: 'Hakkımızda', href: `/${slug}/settings/about`, icon: BalinaOsMark, tile: 'bg-zinc-500' },
+    { id: 'about', label: 'Hakkımızda', href: `/${slug}/settings/about`, icon: BalinaOsMarkMono, tile: 'bg-zinc-500' },
   ];
   const items = isLimitedRole
     ? allItems.filter((i) => i.id === 'general')

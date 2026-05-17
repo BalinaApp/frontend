@@ -4,7 +4,7 @@
 // Davranış: network passthrough (offline cache yok). Tam offline desteği
 // gerektiğinde serwist/workbox ile genişletilebilir.
 
-const CACHE_VERSION = 'balina-v1';
+const CACHE_VERSION = 'balina-v2';
 
 self.addEventListener('install', (event) => {
   // Yeni SW'yi hemen aktive et — eski sürüm beklemesin.

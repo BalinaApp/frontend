@@ -259,11 +259,14 @@ async function printCargoLabels(
   if (items.length === 0) return;
 
   const sections = await Promise.all(
-    items.map(async ({ apiData }) => {
+    items.map(async ({ apiData, orderNumber }) => {
       const [mngPages, productInfoHtml] = await Promise.all([
         buildMngLabelPages(apiData),
         buildProductInfoPage(apiData),
       ]);
+      console.log(
+        `[print] order=${orderNumber} mngPages=${mngPages.length} productInfo=${productInfoHtml ? 'yes' : 'no'}`,
+      );
       return { mngPages, productInfoHtml };
     }),
   );
@@ -272,6 +275,7 @@ async function printCargoLabels(
     (sum, s) => sum + s.mngPages.length + (s.productInfoHtml ? 1 : 0),
     0,
   );
+  console.log(`[print] total pages to render: ${totalPages}`);
   if (totalPages === 0) {
     toast.danger('Yazdırılacak etiket bulunamadı (MNG/ZPL yanıtı eksik).');
     return;
@@ -321,8 +325,22 @@ async function printCargoLabels(
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; color: #000; background: #fff; }
-  .page { width: 10cm; height: 15cm; overflow: hidden; display: flex; align-items: center; justify-content: center; page-break-after: always; }
-  .page:last-child { page-break-after: auto; }
+  .page {
+    width: 10cm;
+    height: 15cm;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    page-break-after: always;
+    page-break-inside: avoid;
+    break-after: page;
+    break-inside: avoid;
+  }
+  .page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
   .mng-label-img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .mng-label-embed { width: 100%; height: 100%; border: 0; }
   .products-fallback { padding: 6mm; width: 100%; height: 100%; overflow: hidden; }
@@ -495,16 +513,24 @@ export default function OrdersPage() {
     setBulkCargoErr(null);
 
     const companyId = currentCompany.id;
-    const results = await Promise.allSettled(
-      eligibleOrders.map(async (o) => {
-        const referenceId = toMngReferenceId(o.orderNumber);
-        if (!referenceId) {
-          throw new Error('referenceId üretilemedi');
-        }
-        const content = `${o.customerName || 'Misafir'} - ${o.itemsCount} ürün`.slice(
-          0,
-          200,
-        );
+    // MNG paralel istek senaryosunda token / varış şube tespiti çakışabiliyor
+    // (MNG doc: "2 servis ardarda çağırıldığında varışsız nedeniyle hata"),
+    // bu yüzden bulk'ta sırayla çağırıyoruz. Her cevap kendi referenceId'siyle
+    // logla — failure'da hangi sipariş patladı görünsün.
+    const succeeded: Array<{ order: Order; data: unknown }> = [];
+    const failed: Array<{ order: Order; reason: unknown }> = [];
+
+    for (const o of eligibleOrders) {
+      const referenceId = toMngReferenceId(o.orderNumber);
+      if (!referenceId) {
+        failed.push({ order: o, reason: new Error('referenceId üretilemedi') });
+        continue;
+      }
+      const content = `${o.customerName || 'Misafir'} - ${o.itemsCount} ürün`.slice(
+        0,
+        200,
+      );
+      try {
         const { data } = await api.post(
           `/company/${companyId}/cargo/barcode`,
           {
@@ -527,28 +553,24 @@ export default function OrdersPage() {
             ],
           },
         );
-        return { order: o, data };
-      }),
-    );
-
-    const succeeded = results
-      .map((r, idx) =>
-        r.status === 'fulfilled' ? { ...r.value, idx } : null,
-      )
-      .filter(
-        (
-          x,
-        ): x is { order: Order; data: unknown; idx: number } => x !== null,
-      );
-    const failed = results
-      .map((r, idx) =>
-        r.status === 'rejected'
-          ? { order: eligibleOrders[idx], reason: r.reason }
-          : null,
-      )
-      .filter(
-        (x): x is { order: Order; reason: unknown } => x !== null,
-      );
+        // Eğer alreadyExists döndüyse MNG'de eski kayıt var demek; cargo
+        // label ZPL'i bu cevapta olmayabilir, kullanıcıya görünür şekilde
+        // bildirim verelim ama yine de yazdırmaya götürelim.
+        if (
+          data &&
+          typeof data === 'object' &&
+          (data as { alreadyExists?: unknown }).alreadyExists === true
+        ) {
+          console.warn(
+            `[bulk-cargo] order=${o.orderNumber} alreadyExists; label ZPL response'unda olmayabilir`,
+          );
+        }
+        succeeded.push({ order: o, data });
+      } catch (e) {
+        console.error(`[bulk-cargo] order=${o.orderNumber} failed`, e);
+        failed.push({ order: o, reason: e });
+      }
+    }
 
     setIsCreatingBulkLabels(false);
     setBulkCargoOpen(false);
@@ -559,6 +581,10 @@ export default function OrdersPage() {
         failed.length === 0
           ? `${succeeded.length} kargo etiketi oluşturuldu`
           : `${succeeded.length} etiket oluşturuldu, ${failed.length} hata`,
+      );
+      console.log(
+        `[bulk-cargo] printing ${succeeded.length} orders`,
+        succeeded.map((s) => s.order.orderNumber),
       );
       await printCargoLabels(
         succeeded.map((s) => ({

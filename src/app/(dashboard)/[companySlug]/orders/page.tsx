@@ -26,7 +26,6 @@ import {
   TextField,
   toast,
 } from '@heroui/react';
-import JsBarcode from 'jsbarcode';
 import { api } from '@/services/api';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -937,8 +936,8 @@ function OrderDetailDrawer({
   //   - labelImage / barcodeImage / LabelImage  → base64 PNG (data URL'e wrap)
   //   - labelPdf / LabelPdf                     → base64 PDF
   //   - labelUrl / labelLink / label_url        → uzak resim/PDF URL'i
-  //   - zpl / ZPL                               → thermal raw (browser print için kullanılamaz)
-  // Hiçbiri yoksa JsBarcode fallback'i devreye girer.
+  //   - zpl / ZPL                               → thermal raw → Labelary ile PNG
+  // Hiçbiri yoksa null döner; çağıran taraf product-info ZPL'e düşer.
   const extractMngLabelHtml = (apiData: unknown): string | null => {
     if (!apiData || typeof apiData !== 'object') return null;
     const d = apiData as Record<string, unknown>;
@@ -981,70 +980,72 @@ function OrderDetailDrawer({
       return `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`;
     }
 
+    // MNG ZPL döndürürse Labelary üzerinden PNG'ye çeviriyoruz.
+    const mngZpl = pick('zpl', 'ZPL');
+    if (mngZpl) {
+      const url2 = `https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/${encodeURIComponent(mngZpl)}`;
+      return `<img src="${url2}" alt="MNG kargo etiketi" class="mng-label-img" />`;
+    }
+
     return null;
   };
 
-  // FALLBACK: MNG hazır label döndürmediyse JsBarcode ile tracking'i Code128
-  // SVG'ye render et. Backend log'larında gerçek MNG alanı tespit edilince
-  // bu fallback ve jsbarcode dep'i kaldırılacak.
-  const renderBarcodeSvg = (value: string): string => {
-    try {
-      const svg = document.createElementNS(
-        'http://www.w3.org/2000/svg',
-        'svg',
-      ) as SVGSVGElement;
-      JsBarcode(svg, value, {
-        format: 'CODE128',
-        width: 2,
-        height: 80,
-        displayValue: true,
-        fontSize: 14,
-        textMargin: 4,
-        margin: 0,
-        background: '#FFFFFF',
-        lineColor: '#000000',
-      });
-      return svg.outerHTML;
-    } catch {
-      return '';
+  // Backend response'undaki productInfoLabel58mm.zpl'i Labelary API'sine
+  // gönderip PNG olarak embed et. ZPL içinde özel karakterler var (^XA, ^FO,
+  // ^FD vb.); encodeURIComponent ile path'e güvenli şekilde sığar.
+  const extractProductInfoHtml = (apiData: unknown): string | null => {
+    if (!apiData || typeof apiData !== 'object') return null;
+    const d = apiData as {
+      productInfoLabel58mm?: { zpl?: unknown; lines?: unknown } | null;
+    };
+    const zpl = d.productInfoLabel58mm?.zpl;
+    if (typeof zpl === 'string' && zpl.trim().startsWith('^XA')) {
+      // 812 dot ≈ 4 inch @ 203dpi (8dpmm). Uzunluk ZPL içindeki ^LL'den
+      // belirleniyor; 4x6 etiket sınırlarına uyacak şekilde Labelary 4x6
+      // template kullanıyoruz.
+      const url = `https://api.labelary.com/v1/printers/8dpmm/labels/4x6/0/${encodeURIComponent(zpl)}`;
+      return `<img src="${url}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
     }
-  };
-
-  // Backend response'undan ürün satırlarını çıkar. productInfoLabel58mm
-  // hazırsa onu kullan; yoksa order detail items'tan oluştur.
-  const extractProductLines = (apiData: unknown): string[] => {
-    if (apiData && typeof apiData === 'object') {
-      const d = apiData as {
-        productInfoLabel58mm?: { lines?: unknown } | null;
-      };
-      const lines = d.productInfoLabel58mm?.lines;
-      if (Array.isArray(lines) && lines.length > 0) {
-        return lines.filter((l): l is string => typeof l === 'string');
-      }
+    // ZPL yoksa lines fallback (text-based)
+    const lines = d.productInfoLabel58mm?.lines;
+    if (Array.isArray(lines) && lines.length > 0) {
+      const safeLines = lines.filter((l): l is string => typeof l === 'string');
+      if (safeLines.length === 0) return null;
+      const header = safeLines[0];
+      const rows = safeLines.slice(1);
+      const esc = (s: string) =>
+        s.replace(/[&<>"]/g, (c) =>
+          c === '&'
+            ? '&amp;'
+            : c === '<'
+              ? '&lt;'
+              : c === '>'
+                ? '&gt;'
+                : '&quot;',
+        );
+      return `<div class="products-fallback"><div class="products-order">${esc(header)}</div>${rows.map((l) => `<div class="product-line">${esc(l)}</div>`).join('')}</div>`;
     }
-    // Fallback: order detail
-    if (detail?.items?.length) {
-      return [
-        `Siparis No: ${order.orderNumber}`,
-        ...detail.items.map((it: OrderDetailItem) => {
-          const qty = it.quantity > 1 ? ` x${it.quantity}` : '';
-          return `${it.name}${qty} | ${it.sku ?? '-'}`;
-        }),
-      ];
-    }
-    return [];
+    return null;
   };
 
   const runPrintLabel = (
     apiData: unknown,
-    pkg: { desi: number; kg: number; content: string },
+    _pkg: { desi: number; kg: number; content: string },
   ) => {
-    const tracking = extractTracking(apiData);
-    // 1) Hazır MNG label varsa onu kullan (tercih), 2) yoksa JsBarcode fallback,
-    // 3) o da yoksa düz monospace tracking string.
+    // 2 sayfa basıyoruz:
+    //   1) MNG'nin createBarcode response'unda dönen kargo etiketi
+    //      (labelUrl / labelImage / labelPdf / ZPL → Labelary). Yoksa sayfa atlanır.
+    //   2) Ürün listesi etiketi — backend'in productInfoLabel58mm.zpl çıktısını
+    //      Labelary üzerinden PNG olarak basıyoruz (table layout, beden/renk dahil).
+    //      ZPL yoksa text fallback.
     const mngLabelHtml = extractMngLabelHtml(apiData);
-    const barcodeSvg = !mngLabelHtml && tracking ? renderBarcodeSvg(tracking) : '';
-    const productLines = extractProductLines(apiData);
+    const productInfoHtml = extractProductInfoHtml(apiData);
+
+    if (!mngLabelHtml && !productInfoHtml) {
+      toast.danger('Yazdırılacak etiket bulunamadı (MNG/ZPL yanıtı eksik).');
+      return;
+    }
+
     const iframe = document.createElement('iframe');
     iframe.setAttribute('aria-hidden', 'true');
     Object.assign(iframe.style, {
@@ -1066,118 +1067,30 @@ function OrderDetailDrawer({
       return;
     }
 
-    const esc = (s: string) =>
-      s.replace(/[&<>"]/g, (c) =>
-        c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;',
-      );
-    const shippingHtml = order.shippingAddress
-      ? esc(order.shippingAddress).replace(/\n/g, '<br/>')
-      : '';
-
-    // 2. sayfa — ürün listesi. İlk satır ("Siparis No: ...") başlık olarak
-    // ayrı render edilir; kalan satırlar tablo satırlarına dönüşür.
-    const productHeader = productLines[0] || '';
-    const productRows = productLines.slice(1);
-    const productsPageHtml = productRows.length
-      ? `
-  <div class="page page-products">
-    <div class="products-header">
-      <div class="products-label">Ürün listesi</div>
-      <div class="products-order">${esc(productHeader || formatOrderNo(order.orderNumber))}</div>
-    </div>
-    <div class="products-list">
-      ${productRows
-        .map(
-          (line) =>
-            `<div class="product-line">${esc(line)}</div>`,
-        )
-        .join('')}
-    </div>
-    <div class="products-footer">
-      <span>${esc(order.customerName || 'Misafir')}</span>
-      <span>${esc(formatDate(order.orderDate))}</span>
-    </div>
-  </div>`
-      : '';
-
     doc.open();
     doc.write(`<!doctype html>
 <html lang="tr">
 <head>
 <meta charset="utf-8">
-<title>Kargo Etiketi ${esc(formatOrderNo(order.orderNumber))}</title>
+<title>Kargo Etiketi ${formatOrderNo(order.orderNumber)}</title>
 <style>
-  @page { size: 10cm 15cm; margin: 4mm; }
+  @page { size: 10cm 15cm; margin: 0; }
   * { box-sizing: border-box; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; margin: 0; color: #18181B; }
-  .page { padding: 6mm; min-height: calc(15cm - 8mm); display: flex; flex-direction: column; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; color: #000; background: #fff; }
+  .page { width: 10cm; height: 15cm; overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .page + .page { page-break-before: always; }
-  h1 { font-size: 14pt; margin: 0 0 3mm; font-weight: 600; }
-  .order-no { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11pt; color: #71717A; margin: 0 0 4mm; }
-  .section { margin-bottom: 4mm; }
-  .label { font-size: 8pt; color: #71717A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 1mm; }
-  .value { font-size: 10pt; }
-  .row { display: flex; justify-content: space-between; gap: 4mm; padding: 1mm 0; font-size: 9pt; border-bottom: 0.5pt solid #E8E8E8; }
-  .row:last-of-type { border-bottom: none; }
-  .row .k { color: #71717A; }
-  .row .v { color: #18181B; font-weight: 500; }
-  .total { border-top: 1pt solid #18181B; margin-top: 2mm; padding-top: 2mm; }
-  .total .v { font-weight: 700; font-size: 11pt; }
-  .barcode-block { margin-top: auto; padding-top: 4mm; border-top: 0.5pt solid #E8E8E8; text-align: center; }
-  .barcode-block svg { max-width: 100%; height: auto; }
-  .barcode-fallback { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; letter-spacing: 0.1em; padding: 4mm 0; }
-  .mng-label-img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
-  .mng-label-embed { width: 100%; height: 9cm; border: 0; }
-  .mng-label-page { padding: 0; }
-  .mng-label-page .mng-label-img, .mng-label-page .mng-label-embed { width: 10cm; height: 15cm; max-width: none; }
-  .page-products { padding-top: 8mm; }
-  .products-header { margin-bottom: 4mm; }
-  .products-label { font-size: 8pt; color: #71717A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 1mm; }
-  .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; }
-  .products-list { flex: 1; }
-  .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #E8E8E8; word-break: break-word; }
+  .mng-label-img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .mng-label-embed { width: 100%; height: 100%; border: 0; }
+  .products-fallback { padding: 6mm; width: 100%; height: 100%; overflow: hidden; }
+  .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; margin-bottom: 4mm; }
+  .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #C7C7C7; word-break: break-word; }
   .product-line:last-child { border-bottom: none; }
-  .products-footer { margin-top: 4mm; padding-top: 3mm; border-top: 0.5pt solid #E8E8E8; display: flex; justify-content: space-between; font-size: 8pt; color: #71717A; }
 </style>
 </head>
 <body>
-  ${
-    mngLabelHtml
-      ? `<div class="page mng-label-page">${mngLabelHtml}</div>`
-      : ''
-  }
-  <div class="page">
-    <h1>${esc(order.customerName || 'Misafir')}</h1>
-    <p class="order-no">${esc(formatOrderNo(order.orderNumber))}</p>
-    ${
-      shippingHtml
-        ? `<div class="section"><div class="label">Teslimat adresi</div><div class="value">${shippingHtml}</div></div>`
-        : ''
-    }
-    ${
-      order.customerPhone
-        ? `<div class="section"><div class="label">Telefon</div><div class="value">${esc(order.customerPhone)}</div></div>`
-        : ''
-    }
-    <div class="row"><span class="k">Tarih</span><span class="v">${esc(formatDate(order.orderDate))}</span></div>
-    <div class="row"><span class="k">Mağaza</span><span class="v">${esc(store?.name ?? order.store?.name ?? '—')}</span></div>
-    <div class="row"><span class="k">Ürün</span><span class="v">${order.itemsCount}</span></div>
-    <div class="row"><span class="k">Ödeme</span><span class="v">${esc(order.paymentMethod || '—')}</span></div>
-    <div class="row"><span class="k">Paket</span><span class="v">${pkg.desi} desi · ${pkg.kg} kg</span></div>
-    <div class="row total"><span class="k">Toplam</span><span class="v">${esc(formatCurrency(order.total))}</span></div>
-    ${
-      // MNG label zaten yukarıdaki sayfada gözüküyorsa burada tekrar barkod
-      // çizmeye gerek yok; sadece MNG yoksa tracking fallback'i bas.
-      !mngLabelHtml && tracking
-        ? `<div class="barcode-block">${
-            barcodeSvg
-              ? barcodeSvg
-              : `<div class="barcode-fallback">${esc(tracking)}</div>`
-          }</div>`
-        : ''
-    }
-  </div>
-  ${productsPageHtml}
+  ${mngLabelHtml ? `<div class="page">${mngLabelHtml}</div>` : ''}
+  ${productInfoHtml ? `<div class="page">${productInfoHtml}</div>` : ''}
 </body>
 </html>`);
     doc.close();

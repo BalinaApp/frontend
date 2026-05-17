@@ -109,6 +109,11 @@ interface MarketingCampaignState {
     companyId: string,
     campaignId: string,
   ) => Promise<{ html: string } | null>;
+  testSend: (
+    companyId: string,
+    campaignId: string,
+    email: string,
+  ) => Promise<{ ok: boolean; messageId: string | null } | null>;
 }
 
 function extractError(err: unknown): string {
@@ -306,6 +311,19 @@ export const useMarketingCampaignStore = create<MarketingCampaignState>(
       try {
         const res = await api.get<{ html: string }>(
           `/company/${companyId}/marketing/campaigns/${campaignId}/preview`,
+        );
+        return res.data;
+      } catch (err) {
+        set({ error: extractError(err) });
+        return null;
+      }
+    },
+
+    testSend: async (companyId, campaignId, email) => {
+      try {
+        const res = await api.post<{ ok: boolean; messageId: string | null }>(
+          `/company/${companyId}/marketing/campaigns/${campaignId}/test-send`,
+          { email },
         );
         return res.data;
       } catch (err) {

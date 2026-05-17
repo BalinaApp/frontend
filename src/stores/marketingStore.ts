@@ -86,6 +86,16 @@ interface MarketingState {
     isUnsubscribed: boolean,
   ) => Promise<boolean>;
   backfillFromOrders: (companyId: string) => Promise<BackfillResult | null>;
+  importCsv: (
+    companyId: string,
+    file: File,
+  ) => Promise<{
+    totalRows: number;
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: string[];
+  } | null>;
 }
 
 export const useMarketingStore = create<MarketingState>((set, get) => ({
@@ -192,6 +202,39 @@ export const useMarketingStore = create<MarketingState>((set, get) => ({
       const e = err as { response?: { data?: { message?: string } } };
       set({ error: e.response?.data?.message ?? 'Abonelik güncellenemedi' });
       return false;
+    }
+  },
+
+  importCsv: async (companyId, file) => {
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await api.post<{
+        totalRows: number;
+        created: number;
+        updated: number;
+        skipped: number;
+        errors: string[];
+      }>(`/company/${companyId}/marketing/contacts/import`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      // İçeri aktarım sonrası listeyi yenile.
+      const params = new URLSearchParams();
+      params.append('limit', '1000');
+      const list = await api.get<MarketingContactListResponse>(
+        `/company/${companyId}/marketing/contacts?${params.toString()}`,
+      );
+      set({
+        contacts: list.data.contacts,
+        total: list.data.total,
+        page: list.data.page,
+        totalPages: list.data.totalPages,
+      });
+      return res.data;
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } } };
+      set({ error: e.response?.data?.message ?? 'CSV içe aktarılamadı' });
+      return null;
     }
   },
 

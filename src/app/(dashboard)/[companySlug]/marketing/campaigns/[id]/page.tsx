@@ -54,6 +54,7 @@ export default function CampaignEditorPage() {
     cancel,
     fetchAudience,
     fetchPreview,
+    testSend,
   } = useMarketingCampaignStore();
 
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
@@ -79,6 +80,9 @@ export default function CampaignEditorPage() {
   const [scheduleAt, setScheduleAt] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [testSendOpen, setTestSendOpen] = useState(false);
+  const [testEmail, setTestEmail] = useState('');
+  const [isTestSending, setIsTestSending] = useState(false);
 
   const isReadOnly =
     !!campaign &&
@@ -203,6 +207,25 @@ export default function CampaignEditorPage() {
     if (result) setPreviewHtml(result.html);
   };
 
+  const handleTestSend = async () => {
+    if (!currentCompany?.id || !campaign) return;
+    const email = testEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.danger('Geçerli bir e-posta girin');
+      return;
+    }
+    await handleSave();
+    setIsTestSending(true);
+    const result = await testSend(currentCompany.id, campaign.id, email);
+    setIsTestSending(false);
+    if (result?.ok) {
+      toast.success('Test maili gönderildi');
+      setTestSendOpen(false);
+    } else {
+      toast.danger('Test gönderilemedi');
+    }
+  };
+
   const handleSendNow = async () => {
     if (!currentCompany?.id || !campaign) return;
     await handleSave();
@@ -287,6 +310,65 @@ export default function CampaignEditorPage() {
           )
         }
       />
+
+      {/* Test gönder modal'ı — Resend ile gerçek mail yollar (marketing key). */}
+      <Modal
+        isOpen={testSendOpen}
+        onOpenChange={(open) => {
+          if (!isTestSending && !open) setTestSendOpen(false);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[420px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>Test gönder</Modal.Heading>
+              </Modal.Header>
+              <Modal.Body className="px-4">
+                <TextField
+                  value={testEmail}
+                  onChange={setTestEmail}
+                  isRequired
+                  autoFocus
+                >
+                  <Label>Test e-posta adresi</Label>
+                  <Input
+                    placeholder="ornek@adres.com"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleTestSend();
+                      }
+                    }}
+                  />
+                </TextField>
+                <p className="mt-2 text-xs text-muted">
+                  Sadece bu adrese gönderilir, audience etkilenmez. Konu
+                  başına <code>[TEST]</code> eklenir.
+                </p>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={isTestSending}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="primary"
+                  onPress={handleTestSend}
+                  isPending={isTestSending}
+                  isDisabled={isTestSending || !testEmail.trim()}
+                >
+                  Gönder
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
       <PageHeader
         title="Pazarlama"
         action={
@@ -410,16 +492,28 @@ export default function CampaignEditorPage() {
           <div className="rounded-2xl border border-foreground/[0.06] bg-surface p-4">
             <div className="mb-2 flex items-center justify-between">
               <Label>Mail gövdesi (HTML)</Label>
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={handlePreview}
-                isDisabled={isReadOnly}
-                className="h-7 rounded-full px-2 text-xs"
-              >
-                <Eye className="h-3.5 w-3.5" />
-                Önizle
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  onPress={() => setTestSendOpen(true)}
+                  isDisabled={isReadOnly || !subject.trim() || !bodyHtml.trim()}
+                  className="h-7 rounded-full px-2 text-xs"
+                >
+                  <PaperPlane className="h-3.5 w-3.5" />
+                  Test gönder
+                </Button>
+                <Button
+                  variant="tertiary"
+                  size="sm"
+                  onPress={handlePreview}
+                  isDisabled={isReadOnly}
+                  className="h-7 rounded-full px-2 text-xs"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  Önizle
+                </Button>
+              </div>
             </div>
             <textarea
               value={bodyHtml}

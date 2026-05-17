@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   Calendar,
@@ -105,6 +105,7 @@ export default function MarketingContactsPage() {
     setUnsubscribed,
     deleteContact,
     backfillFromOrders,
+    importCsv,
   } = useMarketingStore();
 
   // Manuel kontak ekleme modal'ı
@@ -115,6 +116,29 @@ export default function MarketingContactsPage() {
   const [addPhone, setAddPhone] = useState('');
   const [addError, setAddError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
+
+  // CSV import — gizli file input + spinner state.
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+
+  const handleImportClick = () => fileInputRef.current?.click();
+  const handleImportChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!currentCompany?.id) return;
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    const result = await importCsv(currentCompany.id, file);
+    setIsImporting(false);
+    e.target.value = ''; // aynı dosyayı tekrar seçebilmek için
+    if (!result) {
+      toast.danger('CSV içe aktarılamadı');
+      return;
+    }
+    const { totalRows, created, updated, skipped } = result;
+    toast.success(
+      `${totalRows} satırdan ${created} yeni, ${updated} güncel, ${skipped} atlandı`,
+    );
+  };
 
   // Filter state — products page ile birebir aynı pattern (useState'ler
   // + filterDefs[] + applyFilterPayload kullanımı).
@@ -531,16 +555,35 @@ export default function MarketingContactsPage() {
       <PageHeader
         title="Pazarlama"
         action={
-          <Button
-            variant="primary"
-            size="sm"
-            onPress={() => setAddOpen(true)}
-            isDisabled={!currentCompany?.id}
-            className="h-8 rounded-full px-3 text-xs"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Kontak ekle
-          </Button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={handleImportChange}
+            />
+            <Button
+              variant="tertiary"
+              size="sm"
+              onPress={handleImportClick}
+              isPending={isImporting}
+              isDisabled={isImporting || !currentCompany?.id}
+              className="h-8 rounded-full px-3 text-xs"
+            >
+              CSV içe aktar
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={() => setAddOpen(true)}
+              isDisabled={!currentCompany?.id}
+              className="h-8 rounded-full px-3 text-xs"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Kontak ekle
+            </Button>
+          </div>
         }
       />
 

@@ -495,6 +495,7 @@ export default function OrdersPage() {
   const [bulkCargoErr, setBulkCargoErr] = useState<string | null>(null);
   const [isCreatingBulkLabels, setIsCreatingBulkLabels] = useState(false);
   const [isCancellingShipments, setIsCancellingShipments] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   // Sıralama — Products page ile aynı pattern. Backend safe mapping yapıyor
   // (storeName relation üzerinden, bilinmeyenler orderDate fallback).
   const [sortField, setSortField] = useState<SortField>('orderDate');
@@ -508,12 +509,11 @@ export default function OrdersPage() {
     }
   };
 
-  // Toplu kargo iptali: seçili siparişlerden Shipment kaydı olanlar için
-  // backend `DELETE /cargo/shipment/:referenceId` — MNG cancelshipment +
-  // lokal Shipment kaydı sil. Sonrasında order list'i refresh ediyoruz ki
-  // "Kargoda" göstergesi düşsün.
-  const handleCancelShipments = async () => {
-    if (!currentCompany?.id) return;
+  // Bulk bar'daki "Kargo İptal" tıklandığında: önce seçilenleri filtrele,
+  // hiç uygun yoksa toast, varsa AlertDialog'u aç. Gerçek iptal işi
+  // `confirmCancelShipments` içinde — kullanıcı dialog'da "Onayla" deyince
+  // tetiklenir.
+  const handleCancelShipments = () => {
     const shippedOrders = Array.from(selected)
       .map((id) => orders.find((o) => o.id === id))
       .filter((o): o is Order => !!o && (o.shipmentCount ?? 0) > 0);
@@ -521,11 +521,16 @@ export default function OrdersPage() {
       toast.danger('Seçili siparişlerin hiçbiri kargoda değil');
       return;
     }
-    if (
-      !window.confirm(
-        `${shippedOrders.length} sipariş için kargo etiketi iptal edilsin mi? (MNG'de cancelshipment çağrılır ve "Kargoda" göstergesi düşer.)`,
-      )
-    ) {
+    setCancelConfirmOpen(true);
+  };
+
+  const confirmCancelShipments = async () => {
+    if (!currentCompany?.id) return;
+    const shippedOrders = Array.from(selected)
+      .map((id) => orders.find((o) => o.id === id))
+      .filter((o): o is Order => !!o && (o.shipmentCount ?? 0) > 0);
+    if (shippedOrders.length === 0) {
+      setCancelConfirmOpen(false);
       return;
     }
     setIsCancellingShipments(true);
@@ -549,6 +554,7 @@ export default function OrdersPage() {
       }
     }
     setIsCancellingShipments(false);
+    setCancelConfirmOpen(false);
     setSelected(new Set());
     if (ok > 0) {
       toast.success(
@@ -1179,9 +1185,7 @@ export default function OrdersPage() {
               setBulkCargoErr(null);
               setBulkCargoOpen(true);
             }}
-            onCancelShipments={() => {
-              void handleCancelShipments();
-            }}
+            onCancelShipments={handleCancelShipments}
           />
 
           {/* ============== Pagination ============== */}
@@ -1340,6 +1344,44 @@ export default function OrdersPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+
+      {/* Kargo iptali onay dialog'u */}
+      <AlertDialog
+        isOpen={cancelConfirmOpen}
+        onOpenChange={(open) => {
+          if (!open && !isCancellingShipments) setCancelConfirmOpen(false);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[380px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="warning" />
+                <AlertDialog.Heading>
+                  Kargo etiketi iptal edilsin mi?
+                </AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Footer className="px-3 pb-3">
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={isCancellingShipments}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={() => void confirmCancelShipments()}
+                  isPending={isCancellingShipments}
+                  isDisabled={isCancellingShipments}
+                >
+                  İptal et
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
 
       {/* Saved filter delete confirm */}
       <AlertDialog

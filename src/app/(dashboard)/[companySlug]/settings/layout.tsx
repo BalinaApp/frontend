@@ -8,7 +8,7 @@ import { Avatar } from '@heroui/react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { userDisplayName } from '@/lib/user-display';
-import { BalinaOsMarkMono } from '@/components/icons/balinaos-mark-mono';
+import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 interface RailItem {
   id: 'general' | 'api' | 'about';
@@ -39,7 +39,7 @@ export default function SettingsLayout({
   const allItems: RailItem[] = [
     { id: 'general', label: 'Genel', href: `/${slug}/settings`, icon: Gear, tile: 'bg-red-500' },
     { id: 'api', label: 'API', href: `/${slug}/settings/api`, icon: AbbrApi, tile: 'bg-indigo-500' },
-    { id: 'about', label: 'Hakkımızda', href: `/${slug}/settings/about`, icon: BalinaOsMarkMono, tile: 'bg-zinc-500' },
+    { id: 'about', label: 'Hakkımızda', href: `/${slug}/settings/about`, icon: BalinaOsMark, tile: 'bg-zinc-500' },
   ];
   const items = isLimitedRole
     ? allItems.filter((i) => i.id === 'general')
@@ -100,12 +100,21 @@ export default function SettingsLayout({
                   isActive ? 'bg-black/[0.08]' : 'hover:bg-black/[0.04]'
                 }`}
               >
-                <span
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white ${item.tile}`}
-                  aria-hidden="true"
-                >
-                  <item.icon className="h-3.5 w-3.5" />
-                </span>
+                {item.id === 'about' ? (
+                  // BalinaOsMark zaten gri daire + beyaz balina; tile wrapper
+                  // göstermiyoruz, brand mark kendi badge'i olarak duruyor.
+                  <item.icon
+                    className="h-6 w-6 shrink-0"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-white ${item.tile}`}
+                    aria-hidden="true"
+                  >
+                    <item.icon className="h-3.5 w-3.5" />
+                  </span>
+                )}
                 <span className="flex-1 px-1 text-xs font-medium text-foreground">
                   {item.label}
                 </span>

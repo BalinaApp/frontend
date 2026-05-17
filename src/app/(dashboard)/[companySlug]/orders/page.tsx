@@ -661,16 +661,9 @@ export default function OrdersPage() {
       }
     }
 
-    setIsCreatingBulkLabels(false);
-    setBulkCargoOpen(false);
-    setSelected(new Set());
-
+    // API çağrıları bitti ama Labelary render'ı + print iframe oluşturma
+    // hâlâ sürecek; bu yüzden loading'i print tetiklenene kadar tutuyoruz.
     if (succeeded.length > 0) {
-      toast.success(
-        failed.length === 0
-          ? `${succeeded.length} kargo etiketi oluşturuldu`
-          : `${succeeded.length} etiket oluşturuldu, ${failed.length} hata`,
-      );
       console.log(
         `[bulk-cargo] printing ${succeeded.length} orders`,
         succeeded.map((s) => s.order.orderNumber),
@@ -680,6 +673,11 @@ export default function OrdersPage() {
           apiData: s.data,
           orderNumber: s.order.orderNumber,
         })),
+      );
+      toast.success(
+        failed.length === 0
+          ? `${succeeded.length} kargo etiketi oluşturuldu`
+          : `${succeeded.length} etiket oluşturuldu, ${failed.length} hata`,
       );
     }
     if (failed.length > 0 && succeeded.length === 0) {
@@ -695,6 +693,10 @@ export default function OrdersPage() {
         `${failed.length} sipariş için etiket başarısız: ${reason}`,
       );
     }
+
+    setIsCreatingBulkLabels(false);
+    setBulkCargoOpen(false);
+    setSelected(new Set());
   };
 
   useEffect(() => {
@@ -1551,15 +1553,16 @@ function OrderDetailDrawer({
       // tekrar gitmeden mevcut bilgi döner. Kullanıcıya farklı toast göster.
       const alreadyExists =
         data && typeof data === 'object' && (data as { alreadyExists?: unknown }).alreadyExists === true;
+      // API çağrısı bitti ama Labelary render'ı + print iframe oluşturma
+      // hâlâ sürecek; modal'ı şimdi kapatırsak kullanıcı 5-10sn ne olduğunu
+      // anlamadan bekliyor. Print tamamlanana kadar loading'i tut.
+      await runPrintLabel(data);
       if (alreadyExists) {
         toast.info('Bu sipariş için barkod zaten oluşturulmuş, mevcut etiket yazdırılıyor');
       } else {
         toast.success('Kargo etiketi oluşturuldu');
       }
       setCargoOpen(false);
-      // Print dialog — MNG response'tan tracking + label bilgisi varsa
-      // etikete ekleriz.
-      void runPrintLabel(data);
     } catch (err: unknown) {
       // Backend error.response.data.message bazen string, bazen string[],
       // bazen `{code, message, details}` objesi olabiliyor. MNG passthrough

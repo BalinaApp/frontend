@@ -1095,23 +1095,70 @@ function OrderDetailDrawer({
 </html>`);
     doc.close();
 
-    // İçerik DOM'a girdikten sonra print dialog'unu aç; print kapanınca iframe'i kaldır.
-    const triggerPrint = () => {
+    // Labelary'den gelen img/embed yüklenmeden print'i tetiklersek boş sayfa
+    // basılıyor. Önce tüm <img>/<embed> kaynaklarının load olmasını bekle
+    // (max 10sn timeout), sonra win.print() çağır.
+    const waitForResources = async () => {
+      const imgs = Array.from(doc.images) as HTMLImageElement[];
+      const embeds = Array.from(
+        doc.querySelectorAll('embed'),
+      ) as HTMLEmbedElement[];
+
+      const imgPromises = imgs.map((img) =>
+        img.complete && img.naturalWidth > 0
+          ? Promise.resolve()
+          : new Promise<void>((res) => {
+              const done = () => res();
+              img.addEventListener('load', done, { once: true });
+              img.addEventListener('error', done, { once: true });
+            }),
+      );
+      const embedPromises = embeds.map(
+        (el) =>
+          new Promise<void>((res) => {
+            const done = () => res();
+            el.addEventListener('load', done, { once: true });
+            el.addEventListener('error', done, { once: true });
+            // PDF embed load event'i bazı tarayıcılarda gelmez; 4sn'lik kendi
+            // timeout'umuzu koyuyoruz.
+            setTimeout(done, 4000);
+          }),
+      );
+
+      await Promise.race([
+        Promise.allSettled([...imgPromises, ...embedPromises]),
+        new Promise((res) => setTimeout(res, 10000)),
+      ]);
+    };
+
+    const triggerPrint = async () => {
       try {
+        await waitForResources();
+        // Image error olduysa kullanıcıya bildir (boş sayfa basılmasını
+        // önlemek için yine de yazdırmaya devam).
+        const broken = Array.from(doc.images).some(
+          (img) => img.complete && img.naturalWidth === 0,
+        );
+        if (broken) {
+          toast.danger(
+            'Etiket görseli yüklenemedi (Labelary erişilemiyor olabilir).',
+          );
+        }
         win.focus();
         win.print();
       } catch {
         toast.danger('Yazdırma başlatılamadı');
       } finally {
-        // Print dialog kapansa da kapanmasa da iframe ileride temizlenir.
         setTimeout(() => iframe.remove(), 1000);
       }
     };
 
     if (doc.readyState === 'complete') {
-      triggerPrint();
+      void triggerPrint();
     } else {
-      iframe.addEventListener('load', triggerPrint, { once: true });
+      iframe.addEventListener('load', () => void triggerPrint(), {
+        once: true,
+      });
     }
   };
 

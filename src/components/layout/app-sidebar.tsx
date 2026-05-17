@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
+import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -112,13 +112,12 @@ export function AppSidebar() {
         }
         className="flex h-8 w-8 items-center justify-center"
       >
-        <Image
-          src="/figma/balina-logo.svg"
-          alt="BalinaOS"
+        <BalinaOsMark
+          tone="muted"
           width={32}
           height={32}
-          priority
-          className="h-8 w-8 mix-blend-multiply"
+          className="h-8 w-8"
+          aria-label="BalinaOS"
         />
       </Link>
 

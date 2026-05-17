@@ -53,7 +53,7 @@ export default function AboutSettingsPage() {
                   alt="BalinaOS"
                   width={32}
                   height={32}
-                  className="h-8 w-8 brightness-0"
+                  className="h-8 w-8"
                 />
               </div>
               <div className="flex flex-1 flex-col gap-1">

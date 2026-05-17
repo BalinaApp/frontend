@@ -82,6 +82,8 @@ export interface Order {
     id: string;
     name: string;
   };
+  /** Bu siparişe ait yerel Shipment kaydı sayısı (>=1 ise "Kargoya Verildi"). */
+  shipmentCount?: number;
 }
 
 export interface OrdersResponse {

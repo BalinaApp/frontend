@@ -86,6 +86,329 @@ const LABEL_BLOCKED_STATUSES = new Set([
   'failed',
 ]);
 
+// ====================================================================
+// Kargo etiketi yazdırma yardımcıları — modül seviyesinde, hem tekli
+// (OrderDetailDrawer) hem toplu (OrdersPage bulk modal) tarafından
+// paylaşılır.
+// ====================================================================
+
+// MNG response'unda gömülü ZPL string'lerini deep-walk ile topla.
+// `^XA...^XZ` ile başlayıp biten her string. Alan adından bağımsız.
+function findZplStrings(node: unknown, out: string[] = []): string[] {
+  if (typeof node === 'string') {
+    const t = node.trim();
+    if (t.startsWith('^XA') && t.endsWith('^XZ')) out.push(t);
+    return out;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) findZplStrings(item, out);
+    return out;
+  }
+  if (node && typeof node === 'object') {
+    for (const v of Object.values(node as Record<string, unknown>)) {
+      findZplStrings(v, out);
+    }
+  }
+  return out;
+}
+
+// Labelary'ye ZPL POST edip PNG data URL döndür. ZPL ~2-4KB olabildiği
+// için GET path yerine POST.
+async function zplToDataUrl(
+  zpl: string,
+  template: '4x4' | '4x6' = '4x4',
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.labelary.com/v1/printers/8dpmm/labels/${template}/0/`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'image/png',
+        },
+        body: zpl,
+      },
+    );
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string | null>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () =>
+        resolve(typeof reader.result === 'string' ? reader.result : null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+// MNG response'undan kargo etiket sayfa(lar)ını üret.
+// Sıra: labelUrl → labelPdf → labelImage → ZPL (deep-walked).
+async function buildMngLabelPages(apiData: unknown): Promise<string[]> {
+  if (!apiData || typeof apiData !== 'object') return [];
+  const d = apiData as Record<string, unknown>;
+  const pick = (...keys: string[]): string | undefined => {
+    for (const k of keys) {
+      const v = d[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return undefined;
+  };
+
+  const pages: string[] = [];
+
+  const url = pick('labelUrl', 'LabelUrl', 'labelLink', 'label_url');
+  if (url) {
+    if (/\.pdf(\?|$)/i.test(url)) {
+      pages.push(
+        `<embed src="${url}" type="application/pdf" class="mng-label-embed" />`,
+      );
+    } else {
+      pages.push(
+        `<img src="${url}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+      );
+    }
+    return pages;
+  }
+
+  const pdfBase64 = pick('labelPdf', 'LabelPdf', 'labelPdfBase64');
+  if (pdfBase64) {
+    const src = pdfBase64.startsWith('data:')
+      ? pdfBase64
+      : `data:application/pdf;base64,${pdfBase64}`;
+    pages.push(
+      `<embed src="${src}" type="application/pdf" class="mng-label-embed" />`,
+    );
+    return pages;
+  }
+
+  const imgBase64 = pick(
+    'labelImage',
+    'LabelImage',
+    'barcodeImage',
+    'BarcodeImage',
+    'labelData',
+    'LabelData',
+  );
+  if (imgBase64) {
+    const src = imgBase64.startsWith('data:')
+      ? imgBase64
+      : `data:image/png;base64,${imgBase64}`;
+    pages.push(
+      `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+    );
+    return pages;
+  }
+
+  // Aynı ZPL birden fazla alanda dönebiliyor; Set ile dedupe.
+  const zpls = Array.from(new Set(findZplStrings(apiData)));
+  for (const zpl of zpls) {
+    const dataUrl = await zplToDataUrl(zpl, '4x4');
+    if (dataUrl) {
+      pages.push(
+        `<img src="${dataUrl}" alt="MNG kargo etiketi" class="mng-label-img" />`,
+      );
+    }
+  }
+  return pages;
+}
+
+// Backend `productInfoLabel58mm.zpl`'i Labelary 4x6 PNG'ye çevir.
+async function buildProductInfoPage(
+  apiData: unknown,
+): Promise<string | null> {
+  if (!apiData || typeof apiData !== 'object') return null;
+  const d = apiData as {
+    productInfoLabel58mm?: { zpl?: unknown; lines?: unknown } | null;
+  };
+  const zpl = d.productInfoLabel58mm?.zpl;
+  if (typeof zpl === 'string' && zpl.trim().startsWith('^XA')) {
+    const dataUrl = await zplToDataUrl(zpl, '4x6');
+    if (dataUrl) {
+      return `<img src="${dataUrl}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
+    }
+  }
+  const lines = d.productInfoLabel58mm?.lines;
+  if (Array.isArray(lines) && lines.length > 0) {
+    const safeLines = lines.filter((l): l is string => typeof l === 'string');
+    if (safeLines.length === 0) return null;
+    const header = safeLines[0];
+    const rows = safeLines.slice(1);
+    const esc = (s: string) =>
+      s.replace(/[&<>"]/g, (c) =>
+        c === '&'
+          ? '&amp;'
+          : c === '<'
+            ? '&lt;'
+            : c === '>'
+              ? '&gt;'
+              : '&quot;',
+      );
+    return `<div class="products-fallback"><div class="products-order">${esc(header)}</div>${rows.map((l) => `<div class="product-line">${esc(l)}</div>`).join('')}</div>`;
+  }
+  return null;
+}
+
+// Tek veya birden çok sipariş için tüm etiketleri tek print iframe'inde bas.
+// Her sipariş için MNG kargo sayfa(ları) + ürün listesi sayfası eklenir.
+async function printCargoLabels(
+  items: Array<{ apiData: unknown; orderNumber: string }>,
+): Promise<void> {
+  if (items.length === 0) return;
+
+  const sections = await Promise.all(
+    items.map(async ({ apiData }) => {
+      const [mngPages, productInfoHtml] = await Promise.all([
+        buildMngLabelPages(apiData),
+        buildProductInfoPage(apiData),
+      ]);
+      return { mngPages, productInfoHtml };
+    }),
+  );
+
+  const totalPages = sections.reduce(
+    (sum, s) => sum + s.mngPages.length + (s.productInfoHtml ? 1 : 0),
+    0,
+  );
+  if (totalPages === 0) {
+    toast.danger('Yazdırılacak etiket bulunamadı (MNG/ZPL yanıtı eksik).');
+    return;
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.setAttribute('aria-hidden', 'true');
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    right: '0',
+    bottom: '0',
+    width: '0',
+    height: '0',
+    border: '0',
+    visibility: 'hidden',
+  } as CSSStyleDeclaration);
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentDocument;
+  const win = iframe.contentWindow;
+  if (!doc || !win) {
+    iframe.remove();
+    toast.danger('Yazdırma penceresi açılamadı');
+    return;
+  }
+
+  const title =
+    items.length === 1
+      ? `Kargo Etiketi ${items[0].orderNumber}`
+      : `Kargo Etiketleri (${items.length})`;
+
+  const bodyHtml = sections
+    .map(
+      ({ mngPages, productInfoHtml }) =>
+        `${mngPages.map((p) => `<div class="page">${p}</div>`).join('')}${productInfoHtml ? `<div class="page">${productInfoHtml}</div>` : ''}`,
+    )
+    .join('');
+
+  doc.open();
+  doc.write(`<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>${title}</title>
+<style>
+  @page { size: 10cm 15cm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; color: #000; background: #fff; }
+  .page { width: 10cm; height: 15cm; overflow: hidden; display: flex; align-items: center; justify-content: center; page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .mng-label-img { display: block; width: 100%; height: 100%; object-fit: contain; }
+  .mng-label-embed { width: 100%; height: 100%; border: 0; }
+  .products-fallback { padding: 6mm; width: 100%; height: 100%; overflow: hidden; }
+  .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; margin-bottom: 4mm; }
+  .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #C7C7C7; word-break: break-word; }
+  .product-line:last-child { border-bottom: none; }
+</style>
+</head>
+<body>${bodyHtml}</body>
+</html>`);
+  doc.close();
+
+  const waitForResources = async () => {
+    const imgs = Array.from(doc.images) as HTMLImageElement[];
+    const embeds = Array.from(
+      doc.querySelectorAll('embed'),
+    ) as HTMLEmbedElement[];
+
+    const imgPromises = imgs.map((img) =>
+      img.complete && img.naturalWidth > 0
+        ? Promise.resolve()
+        : new Promise<void>((res) => {
+            const done = () => res();
+            img.addEventListener('load', done, { once: true });
+            img.addEventListener('error', done, { once: true });
+          }),
+    );
+    const embedPromises = embeds.map(
+      (el) =>
+        new Promise<void>((res) => {
+          const done = () => res();
+          el.addEventListener('load', done, { once: true });
+          el.addEventListener('error', done, { once: true });
+          setTimeout(done, 4000);
+        }),
+    );
+
+    await Promise.race([
+      Promise.allSettled([...imgPromises, ...embedPromises]),
+      new Promise((res) => setTimeout(res, 15000)),
+    ]);
+  };
+
+  const triggerPrint = async () => {
+    try {
+      await waitForResources();
+      const broken = Array.from(doc.images).some(
+        (img) => img.complete && img.naturalWidth === 0,
+      );
+      if (broken) {
+        toast.danger(
+          'Bazı etiket görselleri yüklenemedi (Labelary erişilemiyor olabilir).',
+        );
+      }
+      win.focus();
+      win.print();
+    } catch {
+      toast.danger('Yazdırma başlatılamadı');
+    } finally {
+      setTimeout(() => iframe.remove(), 1000);
+    }
+  };
+
+  if (doc.readyState === 'complete') {
+    await triggerPrint();
+  } else {
+    await new Promise<void>((resolve) => {
+      iframe.addEventListener(
+        'load',
+        () => {
+          void triggerPrint().finally(resolve);
+        },
+        { once: true },
+      );
+    });
+  }
+}
+
+// MNG referenceId formatı: alphanumeric uppercase max 30.
+function toMngReferenceId(orderNumber: string): string {
+  return (orderNumber || '')
+    .replace(/[^A-Z0-9]/gi, '')
+    .toUpperCase()
+    .slice(0, 30);
+}
+
 function isLabelBlockedStatus(status: string): boolean {
   return LABEL_BLOCKED_STATUSES.has(status);
 }
@@ -119,6 +442,14 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   // Bulk select — checkbox işaretlemeyle toplu kargo etiketi.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Toplu kargo etiketi modal state'i — seçili siparişlerin desi/kg ortak
+  // değerleri burada toplanır, submit'te paralel /cargo/barcode istekleri
+  // atılır ve dönen tüm etiketler tek print iframe'inde basılır.
+  const [bulkCargoOpen, setBulkCargoOpen] = useState(false);
+  const [bulkCargoDesi, setBulkCargoDesi] = useState('1');
+  const [bulkCargoKg, setBulkCargoKg] = useState('1');
+  const [bulkCargoErr, setBulkCargoErr] = useState<string | null>(null);
+  const [isCreatingBulkLabels, setIsCreatingBulkLabels] = useState(false);
   // Sıralama — Products page ile aynı pattern. Backend safe mapping yapıyor
   // (storeName relation üzerinden, bilinmeyenler orderDate fallback).
   const [sortField, setSortField] = useState<SortField>('orderDate');
@@ -129,6 +460,125 @@ export default function OrdersPage() {
     else {
       setSortField(field);
       setSortOrder('desc');
+    }
+  };
+
+  // Toplu kargo etiketi: seçili (ve uygun) siparişlerin her biri için
+  // paralel /cargo/barcode çağrısı; backend her birinde otomatik CreateOrder
+  // + CreateBarcode yapıyor. Tüm response'lar bir araya toplanıp tek print
+  // iframe'inde basılıyor.
+  const handleSubmitBulkCargo = async () => {
+    if (!currentCompany?.id) {
+      setBulkCargoErr('Aktif şirket seçili değil');
+      return;
+    }
+    const desi = Number(bulkCargoDesi);
+    const kg = Number(bulkCargoKg);
+    if (!Number.isInteger(desi) || desi < 0 || desi > 99) {
+      setBulkCargoErr('Desi 0-99 arası tam sayı olmalı');
+      return;
+    }
+    if (!Number.isInteger(kg) || kg < 0 || kg > 99) {
+      setBulkCargoErr('Kg 0-99 arası tam sayı olmalı');
+      return;
+    }
+
+    const eligibleOrders = Array.from(selected)
+      .map((id) => orders.find((o) => o.id === id))
+      .filter((o): o is Order => !!o && !isLabelBlockedStatus(o.status));
+    if (eligibleOrders.length === 0) {
+      setBulkCargoErr('Uygun sipariş bulunamadı');
+      return;
+    }
+
+    setIsCreatingBulkLabels(true);
+    setBulkCargoErr(null);
+
+    const companyId = currentCompany.id;
+    const results = await Promise.allSettled(
+      eligibleOrders.map(async (o) => {
+        const referenceId = toMngReferenceId(o.orderNumber);
+        if (!referenceId) {
+          throw new Error('referenceId üretilemedi');
+        }
+        const content = `${o.customerName || 'Misafir'} - ${o.itemsCount} ürün`.slice(
+          0,
+          200,
+        );
+        const { data } = await api.post(
+          `/company/${companyId}/cargo/barcode`,
+          {
+            referenceId,
+            isCOD: 0,
+            codAmount: 0,
+            printReferenceBarcodeOnError: 1,
+            additionalContent1: '',
+            additionalContent2: '',
+            additionalContent3: '',
+            packagingType: 1,
+            marketPlaceShortCode: '',
+            orderPieceList: [
+              {
+                barcode: referenceId,
+                desi,
+                kg,
+                content,
+              },
+            ],
+          },
+        );
+        return { order: o, data };
+      }),
+    );
+
+    const succeeded = results
+      .map((r, idx) =>
+        r.status === 'fulfilled' ? { ...r.value, idx } : null,
+      )
+      .filter(
+        (
+          x,
+        ): x is { order: Order; data: unknown; idx: number } => x !== null,
+      );
+    const failed = results
+      .map((r, idx) =>
+        r.status === 'rejected'
+          ? { order: eligibleOrders[idx], reason: r.reason }
+          : null,
+      )
+      .filter(
+        (x): x is { order: Order; reason: unknown } => x !== null,
+      );
+
+    setIsCreatingBulkLabels(false);
+    setBulkCargoOpen(false);
+    setSelected(new Set());
+
+    if (succeeded.length > 0) {
+      toast.success(
+        failed.length === 0
+          ? `${succeeded.length} kargo etiketi oluşturuldu`
+          : `${succeeded.length} etiket oluşturuldu, ${failed.length} hata`,
+      );
+      await printCargoLabels(
+        succeeded.map((s) => ({
+          apiData: s.data,
+          orderNumber: s.order.orderNumber,
+        })),
+      );
+    }
+    if (failed.length > 0 && succeeded.length === 0) {
+      toast.danger(`Tüm etiketler başarısız oldu (${failed.length} sipariş)`);
+    } else if (failed.length > 0) {
+      // Detayda kaybolmaması için ilk başarısız sebebini de göster.
+      const first = failed[0];
+      const reason =
+        first.reason instanceof Error
+          ? first.reason.message
+          : 'Bilinmeyen hata';
+      toast.danger(
+        `${failed.length} sipariş için etiket başarısız: ${reason}`,
+      );
     }
   };
 
@@ -562,7 +1012,10 @@ export default function OrdersPage() {
                     {/* RIGHT half — 4 cells */}
                     <div className="flex flex-1 items-center justify-between">
                       <CellWrap className="w-20">
-                        <OrderStatusChip status={order.status} />
+                        <OrderStatusChip
+                          status={order.status}
+                          shipped={(order.shipmentCount ?? 0) > 0}
+                        />
                       </CellWrap>
                       <CellWrap className="w-28">
                         <StoreSourceChip
@@ -605,11 +1058,10 @@ export default function OrdersPage() {
                 );
                 return;
               }
-              // Kargo entegrasyonu backend bağlantısı henüz yok — placeholder.
-              toast.success(
-                `${eligibleIds.length} sipariş için kargo etiketi kuyruğa alındı`,
-              );
-              setSelected(new Set());
+              setBulkCargoDesi('1');
+              setBulkCargoKg('1');
+              setBulkCargoErr(null);
+              setBulkCargoOpen(true);
             }}
           />
 
@@ -647,6 +1099,81 @@ export default function OrdersPage() {
             useSidePanel useEffect'i selectedOrder değişiminde push ediyor.
             Content card içinde inline drawer yok. */}
       </div>
+
+      {/* Toplu kargo etiketi modal — desi/kg sor, submit'te seçili tüm
+          siparişler için paralel /cargo/barcode isteği at, dönen MNG +
+          ürün etiketlerini tek print iframe'inde bas. */}
+      <Modal
+        isOpen={bulkCargoOpen}
+        onOpenChange={(open) => {
+          if (!open && !isCreatingBulkLabels) setBulkCargoOpen(false);
+        }}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-[420px]">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading>
+                  Toplu kargo etiketi ({selected.size} sipariş)
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <div className="space-y-3">
+                  <p className="text-xs text-muted">
+                    Tüm seçili siparişlere aynı desi/kg uygulanır. İçerik her
+                    sipariş için müşteri adı + ürün sayısından otomatik üretilir.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TextField
+                      value={bulkCargoDesi}
+                      onChange={(v) => {
+                        setBulkCargoDesi(v);
+                        if (bulkCargoErr) setBulkCargoErr(null);
+                      }}
+                      isInvalid={!!bulkCargoErr}
+                    >
+                      <Label>Desi</Label>
+                      <Input placeholder="1" inputMode="numeric" />
+                    </TextField>
+                    <TextField
+                      value={bulkCargoKg}
+                      onChange={(v) => {
+                        setBulkCargoKg(v);
+                        if (bulkCargoErr) setBulkCargoErr(null);
+                      }}
+                      isInvalid={!!bulkCargoErr}
+                    >
+                      <Label>Kg</Label>
+                      <Input placeholder="1" inputMode="numeric" />
+                    </TextField>
+                  </div>
+                  {bulkCargoErr && (
+                    <p className="text-xs text-danger">{bulkCargoErr}</p>
+                  )}
+                </div>
+              </Modal.Body>
+              <Modal.Footer>
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={isCreatingBulkLabels}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="primary"
+                  onPress={() => void handleSubmitBulkCargo()}
+                  isPending={isCreatingBulkLabels}
+                  isDisabled={isCreatingBulkLabels}
+                >
+                  Oluştur ve yazdır
+                </Button>
+              </Modal.Footer>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
 
       {/* Saved filter rename modal */}
       <Modal
@@ -871,7 +1398,7 @@ function OrderDetailDrawer({
       setCargoOpen(false);
       // Print dialog — MNG response'tan tracking + label bilgisi varsa
       // etikete ekleriz.
-      void runPrintLabel(data, { desi, kg, content });
+      void runPrintLabel(data);
     } catch (err: unknown) {
       // Backend error.response.data.message bazen string, bazen string[],
       // bazen `{code, message, details}` objesi olabiliyor. MNG passthrough
@@ -918,325 +1445,10 @@ function OrderDetailDrawer({
     }
   };
 
-  // Extract tracking number from MNG response — known field candidates.
-  const extractTracking = (data: unknown): string | null => {
-    if (!data || typeof data !== 'object') return null;
-    const d = data as Record<string, unknown>;
-    if (typeof d.trackingNumber === 'string') return d.trackingNumber;
-    if (typeof d.barcode === 'string') return d.barcode;
-    // MNG bazı response'larda barcodeArray döner — ilk öğenin barcode field'ı.
-    const arr = (d.barcodeArray as Array<{ barcode?: string }>) || undefined;
-    if (Array.isArray(arr) && arr.length > 0 && typeof arr[0]?.barcode === 'string') {
-      return arr[0].barcode;
-    }
-    return null;
-  };
-
-  // MNG createBarcode response'unda etiket ZPL olarak `barcodes[].value`
-  // (veya benzeri) içinde geliyor — DHL/MNG resmi doc'unda 10x10cm ZPL.
-  // Response yapısı sürüm/hesap bazlı değişebildiği için derinlemesine
-  // ararız: `^XA` ile başlayıp `^XZ` ile biten her string'i topla.
-  const findZplStrings = (node: unknown, out: string[] = []): string[] => {
-    if (typeof node === 'string') {
-      const t = node.trim();
-      if (t.startsWith('^XA') && t.endsWith('^XZ')) out.push(t);
-      return out;
-    }
-    if (Array.isArray(node)) {
-      for (const item of node) findZplStrings(item, out);
-      return out;
-    }
-    if (node && typeof node === 'object') {
-      for (const v of Object.values(node as Record<string, unknown>)) {
-        findZplStrings(v, out);
-      }
-    }
-    return out;
-  };
-
-  // Labelary'ye ZPL POST edip PNG data URL döndür. POST kullanıyoruz çünkü
-  // ZPL ~2-4KB olabilir; URL path'e koymak bazı browser'larda 414 üretir.
-  // Hata durumunda null — caller fallback'e düşer.
-  const zplToDataUrl = async (
-    zpl: string,
-    template: '4x4' | '4x6' = '4x4',
-  ): Promise<string | null> => {
-    try {
-      const res = await fetch(
-        `https://api.labelary.com/v1/printers/8dpmm/labels/${template}/0/`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'image/png',
-          },
-          body: zpl,
-        },
-      );
-      if (!res.ok) return null;
-      const blob = await res.blob();
-      return await new Promise<string | null>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () =>
-          resolve(typeof reader.result === 'string' ? reader.result : null);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
-    } catch {
-      return null;
-    }
-  };
-
-  // MNG response'unda label var mı diye bak:
-  //   1) Doğrudan labelUrl/labelImage/labelPdf alanları (varsa)
-  //   2) `barcodes[].value` veya derindeki herhangi bir ZPL string'i
-  //      → Labelary POST → data URL
-  // İade: img/embed/null
-  const buildMngLabelPages = async (apiData: unknown): Promise<string[]> => {
-    if (!apiData || typeof apiData !== 'object') return [];
-    const d = apiData as Record<string, unknown>;
-    const pick = (...keys: string[]): string | undefined => {
-      for (const k of keys) {
-        const v = d[k];
-        if (typeof v === 'string' && v.trim()) return v.trim();
-      }
-      return undefined;
-    };
-
-    const pages: string[] = [];
-
-    const url = pick('labelUrl', 'LabelUrl', 'labelLink', 'label_url');
-    if (url) {
-      if (/\.pdf(\?|$)/i.test(url)) {
-        pages.push(
-          `<embed src="${url}" type="application/pdf" class="mng-label-embed" />`,
-        );
-      } else {
-        pages.push(
-          `<img src="${url}" alt="MNG kargo etiketi" class="mng-label-img" />`,
-        );
-      }
-      return pages;
-    }
-
-    const pdfBase64 = pick('labelPdf', 'LabelPdf', 'labelPdfBase64');
-    if (pdfBase64) {
-      const src = pdfBase64.startsWith('data:')
-        ? pdfBase64
-        : `data:application/pdf;base64,${pdfBase64}`;
-      pages.push(
-        `<embed src="${src}" type="application/pdf" class="mng-label-embed" />`,
-      );
-      return pages;
-    }
-
-    const imgBase64 = pick(
-      'labelImage',
-      'LabelImage',
-      'barcodeImage',
-      'BarcodeImage',
-      'labelData',
-      'LabelData',
-    );
-    if (imgBase64) {
-      const src = imgBase64.startsWith('data:')
-        ? imgBase64
-        : `data:image/png;base64,${imgBase64}`;
-      pages.push(
-        `<img src="${src}" alt="MNG kargo etiketi" class="mng-label-img" />`,
-      );
-      return pages;
-    }
-
-    // MNG ana akış: response içinde gömülü ZPL string(ler)i bul.
-    // Doc: "10*10 ebatında hazır Zpl string" → Labelary 4x4 (10.16cm).
-    // MNG aynı ZPL'i birden fazla alanda (örn. barcodes[].value +
-    // orderPieceList[].value) gönderebiliyor; deep walk hepsini topluyor.
-    // Dedupe için Set kullanıyoruz, aksi halde aynı etiket birden çok sayfaya
-    // dönüşüyor.
-    const zpls = Array.from(new Set(findZplStrings(apiData)));
-    for (const zpl of zpls) {
-      const dataUrl = await zplToDataUrl(zpl, '4x4');
-      if (dataUrl) {
-        pages.push(
-          `<img src="${dataUrl}" alt="MNG kargo etiketi" class="mng-label-img" />`,
-        );
-      }
-    }
-    return pages;
-  };
-
-  // Backend `productInfoLabel58mm.zpl`'i Labelary üzerinden PNG'ye çevir.
-  const buildProductInfoPage = async (
-    apiData: unknown,
-  ): Promise<string | null> => {
-    if (!apiData || typeof apiData !== 'object') return null;
-    const d = apiData as {
-      productInfoLabel58mm?: { zpl?: unknown; lines?: unknown } | null;
-    };
-    const zpl = d.productInfoLabel58mm?.zpl;
-    if (typeof zpl === 'string' && zpl.trim().startsWith('^XA')) {
-      const dataUrl = await zplToDataUrl(zpl, '4x6');
-      if (dataUrl) {
-        return `<img src="${dataUrl}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
-      }
-    }
-    // ZPL yoksa lines fallback (text-based)
-    const lines = d.productInfoLabel58mm?.lines;
-    if (Array.isArray(lines) && lines.length > 0) {
-      const safeLines = lines.filter((l): l is string => typeof l === 'string');
-      if (safeLines.length === 0) return null;
-      const header = safeLines[0];
-      const rows = safeLines.slice(1);
-      const esc = (s: string) =>
-        s.replace(/[&<>"]/g, (c) =>
-          c === '&'
-            ? '&amp;'
-            : c === '<'
-              ? '&lt;'
-              : c === '>'
-                ? '&gt;'
-                : '&quot;',
-        );
-      return `<div class="products-fallback"><div class="products-order">${esc(header)}</div>${rows.map((l) => `<div class="product-line">${esc(l)}</div>`).join('')}</div>`;
-    }
-    return null;
-  };
-
-  const runPrintLabel = async (
-    apiData: unknown,
-    _pkg: { desi: number; kg: number; content: string },
-  ) => {
-    // 1) MNG kargo etiket sayfa(ları) — response içindeki ZPL'i Labelary 4x4
-    //    üzerinden PNG'ye çeviriyoruz (10x10cm). Birden fazla parça varsa
-    //    birden fazla sayfa.
-    // 2) Ürün listesi etiketi — backend'in productInfoLabel58mm ZPL'inden
-    //    Labelary 4x6 PNG. ZPL yoksa text fallback.
-    const [mngPages, productInfoHtml] = await Promise.all([
-      buildMngLabelPages(apiData),
-      buildProductInfoPage(apiData),
-    ]);
-
-    if (mngPages.length === 0 && !productInfoHtml) {
-      toast.danger('Yazdırılacak etiket bulunamadı (MNG/ZPL yanıtı eksik).');
-      return;
-    }
-
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('aria-hidden', 'true');
-    Object.assign(iframe.style, {
-      position: 'fixed',
-      right: '0',
-      bottom: '0',
-      width: '0',
-      height: '0',
-      border: '0',
-      visibility: 'hidden',
-    } as CSSStyleDeclaration);
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentDocument;
-    const win = iframe.contentWindow;
-    if (!doc || !win) {
-      iframe.remove();
-      toast.danger('Yazdırma penceresi açılamadı');
-      return;
-    }
-
-    doc.open();
-    doc.write(`<!doctype html>
-<html lang="tr">
-<head>
-<meta charset="utf-8">
-<title>Kargo Etiketi ${formatOrderNo(order.orderNumber)}</title>
-<style>
-  @page { size: 10cm 15cm; margin: 0; }
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body { font-family: ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; color: #000; background: #fff; }
-  .page { width: 10cm; height: 15cm; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-  .page + .page { page-break-before: always; }
-  .mng-label-img { display: block; width: 100%; height: 100%; object-fit: contain; }
-  .mng-label-embed { width: 100%; height: 100%; border: 0; }
-  .products-fallback { padding: 6mm; width: 100%; height: 100%; overflow: hidden; }
-  .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; margin-bottom: 4mm; }
-  .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #C7C7C7; word-break: break-word; }
-  .product-line:last-child { border-bottom: none; }
-</style>
-</head>
-<body>
-  ${mngPages.map((p) => `<div class="page">${p}</div>`).join('')}
-  ${productInfoHtml ? `<div class="page">${productInfoHtml}</div>` : ''}
-</body>
-</html>`);
-    doc.close();
-
-    // Labelary'den gelen img/embed yüklenmeden print'i tetiklersek boş sayfa
-    // basılıyor. Önce tüm <img>/<embed> kaynaklarının load olmasını bekle
-    // (max 10sn timeout), sonra win.print() çağır.
-    const waitForResources = async () => {
-      const imgs = Array.from(doc.images) as HTMLImageElement[];
-      const embeds = Array.from(
-        doc.querySelectorAll('embed'),
-      ) as HTMLEmbedElement[];
-
-      const imgPromises = imgs.map((img) =>
-        img.complete && img.naturalWidth > 0
-          ? Promise.resolve()
-          : new Promise<void>((res) => {
-              const done = () => res();
-              img.addEventListener('load', done, { once: true });
-              img.addEventListener('error', done, { once: true });
-            }),
-      );
-      const embedPromises = embeds.map(
-        (el) =>
-          new Promise<void>((res) => {
-            const done = () => res();
-            el.addEventListener('load', done, { once: true });
-            el.addEventListener('error', done, { once: true });
-            // PDF embed load event'i bazı tarayıcılarda gelmez; 4sn'lik kendi
-            // timeout'umuzu koyuyoruz.
-            setTimeout(done, 4000);
-          }),
-      );
-
-      await Promise.race([
-        Promise.allSettled([...imgPromises, ...embedPromises]),
-        new Promise((res) => setTimeout(res, 10000)),
-      ]);
-    };
-
-    const triggerPrint = async () => {
-      try {
-        await waitForResources();
-        // Image error olduysa kullanıcıya bildir (boş sayfa basılmasını
-        // önlemek için yine de yazdırmaya devam).
-        const broken = Array.from(doc.images).some(
-          (img) => img.complete && img.naturalWidth === 0,
-        );
-        if (broken) {
-          toast.danger(
-            'Etiket görseli yüklenemedi (Labelary erişilemiyor olabilir).',
-          );
-        }
-        win.focus();
-        win.print();
-      } catch {
-        toast.danger('Yazdırma başlatılamadı');
-      } finally {
-        setTimeout(() => iframe.remove(), 1000);
-      }
-    };
-
-    if (doc.readyState === 'complete') {
-      void triggerPrint();
-    } else {
-      iframe.addEventListener('load', () => void triggerPrint(), {
-        once: true,
-      });
-    }
-  };
+  // Print akışı modül seviyesinde `printCargoLabels` ile yapılıyor; burada
+  // sadece tekli sipariş için adaptör.
+  const runPrintLabel = (apiData: unknown) =>
+    printCargoLabels([{ apiData, orderNumber: order.orderNumber }]);
 
   const customerInitials = (order.customerName || 'M')
     .split(' ')
@@ -1802,7 +2014,23 @@ function CellWrap({
 
 // ---- Order status chip ---------------------------------------------------
 
-function OrderStatusChip({ status }: { status: string }) {
+function OrderStatusChip({
+  status,
+  shipped,
+}: {
+  status: string;
+  shipped?: boolean;
+}) {
+  // Kargoya verilmişse status'un yerine "Kargoya Verildi" göster — depo
+  // operasyonunda en kritik bilgi bu, processing/completed ikinci planda.
+  if (shipped) {
+    return (
+      <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground">
+        <Printer className={['h-3 w-3', toneClass.success].join(' ')} />
+        Kargoda
+      </span>
+    );
+  }
   const meta = statusMeta[status] ?? {
     label: status,
     tone: 'muted' as StatusTone,

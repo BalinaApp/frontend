@@ -1,33 +1,73 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown,
   ArrowRotateLeft,
+  Calendar,
   Check,
+  CircleDashed,
   CircleXmark,
-  Magnifier,
+  Envelope,
   Person,
+  Tag,
+  TrashBin,
 } from '@gravity-ui/icons';
-import { Button, toast } from '@heroui/react';
+import {
+  AlertDialog,
+  Button,
+  Checkbox,
+  toast,
+} from '@heroui/react';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
+import { useStoreStore } from '@/stores/storeStore';
+import { useSavedFilterStore } from '@/stores/savedFilterStore';
+import { FilterPopover } from '@/components/products/filter-popover';
+import { ActiveFilterChips } from '@/components/products/active-filter-chips';
+import { SavedTab } from '@/components/products/saved-tab';
+import {
+  applyFilterPayload,
+  clearFilters as clearAllFilters,
+} from '@/components/products/filter-types';
+import type { FilterDef } from '@/components/products/filter-types';
 import {
   useMarketingStore,
   type MarketingContact,
 } from '@/stores/marketingStore';
 
+const CONTEXT = 'marketing-contacts';
+
 type StatusFilter = 'all' | 'active' | 'unsubscribed' | 'bounced';
 type SortField = 'lastOrderAt' | 'orderCount' | 'totalSpent' | 'email';
 type SortOrder = 'asc' | 'desc';
 
-const STATUS_TABS: { id: StatusFilter; label: string }[] = [
-  { id: 'all', label: 'Tüm Kontaklar' },
-  { id: 'active', label: 'Aktif' },
-  { id: 'unsubscribed', label: 'Aboneliği iptal' },
-  { id: 'bounced', label: 'Bounce / Şikayet' },
+const statusOptions = [
+  { value: 'all', label: 'Tümü' },
+  { value: 'active', label: 'Aktif', icon: Check },
+  { value: 'unsubscribed', label: 'Aboneliği iptal', icon: CircleXmark },
+  { value: 'bounced', label: 'Bounce / Şikayet', icon: CircleXmark },
 ];
+
+const sourceOptions = [
+  { value: 'all', label: 'Tümü' },
+  { value: 'order', label: 'Sipariş' },
+  { value: 'manual', label: 'Manuel' },
+  { value: 'import', label: 'İçe aktarım' },
+];
+
+function storeFaviconUrl(url?: string | null): string | null {
+  if (!url) return null;
+  let host: string;
+  try {
+    host = url.startsWith('http') ? new URL(url).hostname : url;
+  } catch {
+    host = url;
+  }
+  if (!host || host === 'example.com') return null;
+  return `https://www.google.com/s2/favicons?sz=64&domain=${encodeURIComponent(host)}`;
+}
 
 function formatDate(value: string | null): string {
   if (!value) return '—';
@@ -56,8 +96,9 @@ function fullName(c: MarketingContact): string {
 }
 
 export default function MarketingContactsPage() {
-  usePageTitle('Marketing Kontakları');
+  usePageTitle('Pazarlama');
   const { currentCompany } = useCompanyStore();
+  const { stores, fetchStores } = useStoreStore();
   const {
     contacts,
     total,
@@ -65,13 +106,27 @@ export default function MarketingContactsPage() {
     isBackfilling,
     fetchContacts,
     setUnsubscribed,
+    deleteContact,
     backfillFromOrders,
   } = useMarketingStore();
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('all');
+  // Filter state — products page ile birebir aynı pattern (useState'ler
+  // + filterDefs[] + applyFilterPayload kullanımı).
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [emailQuery, setEmailQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
+
+  // Sıralama + bulk select
   const [sortField, setSortField] = useState<SortField>('lastOrderAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // Confirm dialogs
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isBulkUnsubscribing, setIsBulkUnsubscribing] = useState(false);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -81,21 +136,195 @@ export default function MarketingContactsPage() {
     }
   };
 
+  // Mağaza listesi — filter dropdown'ında kullanılır.
   useEffect(() => {
+    if (currentCompany?.id) fetchStores(currentCompany.id);
+  }, [currentCompany?.id, fetchStores]);
+
+  // Saved filter setleri — products pattern.
+  const fetchSaved = useSavedFilterStore((s) => s.fetch);
+  const allSavedFilters = useSavedFilterStore((s) => s.filters);
+  const updateSaved = useSavedFilterStore((s) => s.update);
+  const removeSaved = useSavedFilterStore((s) => s.remove);
+  const createSaved = useSavedFilterStore((s) => s.create);
+  const savedFilters = useMemo(
+    () => allSavedFilters.filter((f) => f.context === CONTEXT),
+    [allSavedFilters],
+  );
+  const [activeSavedId, setActiveSavedId] = useState<string | null>(null);
+  useEffect(() => {
+    if (currentCompany?.id) fetchSaved(currentCompany.id, CONTEXT);
+  }, [currentCompany?.id, fetchSaved]);
+
+  // Saved tab rename modal
+  const [renameId, setRenameId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+  const openRename = (id: string, currentName: string) => {
+    setRenameId(id);
+    setRenameValue(currentName);
+  };
+  const submitRename = async () => {
+    if (!currentCompany?.id || !renameId) return;
+    const name = renameValue.trim();
+    if (!name) return;
+    setIsRenaming(true);
+    try {
+      const ok = await updateSaved(currentCompany.id, renameId, { name });
+      if (ok) {
+        toast.success('Yeniden adlandırıldı');
+        setRenameId(null);
+      }
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+  const handleDuplicate = async (sf: {
+    name: string;
+    payload: Record<string, string | string[]>;
+  }) => {
+    if (!currentCompany?.id) return;
+    const result = await createSaved(
+      currentCompany.id,
+      CONTEXT,
+      `${sf.name} (kopya)`,
+      sf.payload,
+    );
+    if (result) toast.success('Kopya oluşturuldu');
+    else toast.danger('Kopyalanamadı');
+  };
+  const [deleteSavedId, setDeleteSavedId] = useState<string | null>(null);
+  const handleDeleteSaved = (id: string) => setDeleteSavedId(id);
+  const handleConfirmDeleteSaved = async () => {
+    if (!currentCompany?.id || !deleteSavedId) return;
+    const ok = await removeSaved(currentCompany.id, deleteSavedId);
+    if (ok) {
+      toast.success('Silindi');
+      if (activeSavedId === deleteSavedId) setActiveSavedId(null);
+    }
+    setDeleteSavedId(null);
+  };
+
+  // Mağaza filter seçenekleri
+  const storeOptions = useMemo(
+    () => [
+      { value: 'all', label: 'Tüm mağazalar' },
+      ...stores.map((s) => ({ value: s.id, label: s.name })),
+    ],
+    [stores],
+  );
+
+  const filterDefs: FilterDef[] = [
+    {
+      id: 'status',
+      label: 'Durum',
+      icon: CircleDashed,
+      searchPlaceholder: 'Durumu değiştir...',
+      type: 'select',
+      defaultValue: 'all',
+      value: statusFilter,
+      onChange: (v) => setStatusFilter(v as StatusFilter),
+      options: statusOptions,
+    },
+    {
+      id: 'store',
+      label: 'Mağaza',
+      icon: Tag,
+      searchPlaceholder: 'Mağaza seç...',
+      type: 'select',
+      defaultValue: 'all',
+      value: storeFilter,
+      onChange: setStoreFilter,
+      options: storeOptions,
+      optionIconUrl: (value) => {
+        if (value === 'all') return null;
+        const store = stores.find((s) => s.id === value);
+        return storeFaviconUrl(store?.url);
+      },
+    },
+    {
+      id: 'source',
+      label: 'Kaynak',
+      icon: Tag,
+      searchPlaceholder: 'Kaynak seç...',
+      type: 'select',
+      defaultValue: 'all',
+      value: sourceFilter,
+      onChange: setSourceFilter,
+      options: sourceOptions,
+    },
+    {
+      id: 'email',
+      label: 'E-posta',
+      icon: Envelope,
+      preposition: 'ile',
+      type: 'text',
+      placeholder: 'E-posta veya isim',
+      value: emailQuery,
+      onChange: setEmailQuery,
+    },
+    {
+      id: 'date',
+      label: 'Son sipariş',
+      icon: Calendar,
+      preposition: 'arası',
+      type: 'text',
+      widget: 'date-range',
+      value: dateFilter,
+      onChange: setDateFilter,
+    },
+  ];
+
+  // Backend'e gönderilen liste sorgusu (status + storeId + search yalnızca
+  // serverside; source/date frontend-side filtreleme — backend bunları
+  // henüz desteklemiyor).
+  const fetchData = useCallback(() => {
     if (!currentCompany?.id) return;
     fetchContacts(currentCompany.id, {
-      search: search.trim() || undefined,
-      status: status === 'all' ? undefined : status,
+      status: statusFilter === 'all' ? undefined : statusFilter,
+      storeId: storeFilter !== 'all' ? storeFilter : undefined,
+      search: emailQuery.trim() || undefined,
       limit: 1000,
     });
-  }, [currentCompany?.id, search, status, fetchContacts]);
+  }, [
+    currentCompany?.id,
+    statusFilter,
+    storeFilter,
+    emailQuery,
+    fetchContacts,
+  ]);
 
-  // Client-side sort — backend default lastOrderAt desc; kolon başlığı
-  // tıklandığında lokal olarak yeniden sıralanır.
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Source + date frontend-side filter + sort.
   const visibleContacts = useMemo(() => {
-    const list = [...contacts];
+    let list = contacts;
+
+    if (sourceFilter !== 'all') {
+      list = list.filter((c) => c.source === sourceFilter);
+    }
+
+    if (dateFilter.trim()) {
+      const [fromStr, toStr] = dateFilter.split('..').map((s) => s.trim());
+      const fromTs = fromStr ? new Date(fromStr).getTime() : null;
+      const toTs = toStr
+        ? new Date(toStr).setHours(23, 59, 59, 999)
+        : fromStr
+          ? new Date(fromStr).setHours(23, 59, 59, 999)
+          : null;
+      list = list.filter((c) => {
+        if (!c.lastOrderAt) return false;
+        const t = new Date(c.lastOrderAt).getTime();
+        if (fromTs != null && t < fromTs) return false;
+        if (toTs != null && t > toTs) return false;
+        return true;
+      });
+    }
+
     const sign = sortOrder === 'asc' ? 1 : -1;
-    list.sort((a, b) => {
+    return [...list].sort((a, b) => {
       switch (sortField) {
         case 'email':
           return sign * a.email.localeCompare(b.email, 'tr');
@@ -114,8 +343,9 @@ export default function MarketingContactsPage() {
         }
       }
     });
-    return list;
-  }, [contacts, sortField, sortOrder]);
+  }, [contacts, sourceFilter, dateFilter, sortField, sortOrder]);
+
+  // ---- Handlers -----------------------------------------------------------
 
   const handleBackfill = async () => {
     if (!currentCompany?.id) return;
@@ -142,8 +372,127 @@ export default function MarketingContactsPage() {
     }
   };
 
+  // ---- Bulk operations ----------------------------------------------------
+
+  const allSelectedUnsubscribed =
+    selected.size > 0 &&
+    Array.from(selected)
+      .map((id) => contacts.find((c) => c.id === id))
+      .filter(Boolean)
+      .every((c) => c && c.isUnsubscribed);
+
+  const handleBulkUnsubscribe = async () => {
+    if (!currentCompany?.id || selected.size === 0) return;
+    setIsBulkUnsubscribing(true);
+    const next = !allSelectedUnsubscribed;
+    let updated = 0;
+    for (const id of selected) {
+      const ok = await setUnsubscribed(currentCompany.id, id, next);
+      if (ok) updated++;
+    }
+    setIsBulkUnsubscribing(false);
+    setSelected(new Set());
+    if (updated > 0) {
+      toast.success(
+        next
+          ? `${updated} kontak abonelikten çıkarıldı`
+          : `${updated} kontak yeniden dahil edildi`,
+      );
+    } else {
+      toast.danger('Hiçbir kontak güncellenemedi');
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!currentCompany?.id || selected.size === 0) return;
+    setIsBulkDeleting(true);
+    let deleted = 0;
+    for (const id of selected) {
+      const ok = await deleteContact(currentCompany.id, id);
+      if (ok) deleted++;
+    }
+    setIsBulkDeleting(false);
+    setBulkDeleteOpen(false);
+    setSelected(new Set());
+    if (deleted > 0) toast.success(`${deleted} kontak silindi`);
+    else toast.danger('Hiçbir kontak silinemedi');
+  };
+
+  // ---- Render -------------------------------------------------------------
+
   return (
     <>
+      {/* Bulk delete confirm dialog */}
+      <AlertDialog
+        isOpen={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          if (!isBulkDeleting && !open) setBulkDeleteOpen(false);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Kontakları sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                {selected.size} kontak kalıcı olarak silinecek. Geri alınamaz —
+                tekrar senkronize etmek istersen geçmiş siparişlerden yeniden
+                gelecektir.
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={isBulkDeleting}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleBulkDelete}
+                  isPending={isBulkDeleting}
+                  isDisabled={isBulkDeleting}
+                >
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+
+      {/* Saved filter sil onayı */}
+      <AlertDialog
+        isOpen={deleteSavedId !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteSavedId(null);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                Bu filtre seti kalıcı olarak silinecek.
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button variant="tertiary" slot="close">
+                  Vazgeç
+                </Button>
+                <Button variant="danger" onPress={handleConfirmDeleteSaved}>
+                  Sil
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
+
       <PageHeader
         title="Pazarlama"
         action={
@@ -162,40 +511,49 @@ export default function MarketingContactsPage() {
       />
 
       <div className="flex flex-col">
-        {/* ============== Filter row (Products page ile aynı yapı) ============== */}
+        {/* ============== Filter row (Products page ile birebir) ============== */}
         <div className="flex flex-col gap-2 p-4">
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              {STATUS_TABS.map((t) => (
-                <TabPill
-                  key={t.id}
-                  selected={status === t.id}
-                  onPress={() => setStatus(t.id)}
-                >
-                  {t.label}
-                </TabPill>
+              <TabPill
+                selected={activeSavedId === null}
+                onPress={() => {
+                  setActiveSavedId(null);
+                  clearAllFilters(filterDefs);
+                }}
+              >
+                Tüm Kontaklar
+              </TabPill>
+              {savedFilters.map((sf) => (
+                <SavedTab
+                  key={sf.id}
+                  name={sf.name}
+                  isActive={activeSavedId === sf.id}
+                  onSelect={() => {
+                    setActiveSavedId(sf.id);
+                    applyFilterPayload(filterDefs, sf.payload);
+                  }}
+                  onRename={() => openRename(sf.id, sf.name)}
+                  onDuplicate={() => handleDuplicate(sf)}
+                  onDelete={() => handleDeleteSaved(sf.id)}
+                />
               ))}
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
-              <Magnifier className="h-3.5 w-3.5 text-muted" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="E-posta veya isim ara"
-                className="w-56 border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted focus:outline-none focus:ring-0"
-              />
-            </div>
+            <FilterPopover filters={filterDefs} />
           </div>
-          <p className="text-xs text-muted">
-            Bağlı tüm mağazalardaki siparişlerden toplanan{' '}
-            <span className="font-medium text-foreground">{total}</span> kontak.
-          </p>
+          <ActiveFilterChips
+            filters={filterDefs}
+            companyId={currentCompany?.id}
+            context={CONTEXT}
+            activeSavedFilter={
+              savedFilters.find((sf) => sf.id === activeSavedId) ?? null
+            }
+            onSaved={(sf) => setActiveSavedId(sf.id)}
+          />
         </div>
 
-        {/* ============== Header + rows (p-2.5 gap-2.5) ============== */}
+        {/* ============== Header + rows ============== */}
         <div className="flex flex-col gap-2.5 p-2.5">
-          {/* Column header */}
           <div className="flex items-center justify-between">
             <div className="flex flex-1 items-center gap-2">
               <SortHeaderButton
@@ -246,105 +604,189 @@ export default function MarketingContactsPage() {
             </div>
           </div>
 
-          {/* Rows */}
           <div className="flex flex-col">
             {isLoading && contacts.length === 0 ? (
               <div className="h-12" />
             ) : visibleContacts.length === 0 ? (
               <div className="py-12 text-center text-sm text-muted">
-                Kontak bulunamadı. Geçmiş siparişlerden senkronize ederek
-                başlayın.
+                {total === 0
+                  ? 'Kontak bulunamadı. "Geçmiş siparişlerden senkronize et" ile başlayın.'
+                  : 'Filtreyle eşleşen kontak yok.'}
               </div>
             ) : (
-              visibleContacts.map((c) => (
-                <div
-                  key={c.id}
-                  className="flex h-[60px] items-center justify-between rounded-2xl p-3 transition-colors hover:bg-foreground/[0.04]"
-                >
-                  {/* LEFT half — avatar + email + ad soyad */}
-                  <div className="flex flex-1 items-center gap-3">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default text-muted">
-                      <Person className="h-4 w-4" />
-                    </div>
-                    <div className="flex min-w-0 flex-col">
-                      <span
-                        className="truncate text-sm font-medium leading-5 text-foreground"
-                        title={c.email}
+              visibleContacts.map((c) => {
+                const isChecked = selected.has(c.id);
+                return (
+                  <div
+                    key={c.id}
+                    className={[
+                      'flex h-[60px] items-center justify-between rounded-2xl p-3 transition-colors',
+                      isChecked
+                        ? 'bg-foreground/[0.06] hover:bg-foreground/[0.08]'
+                        : 'hover:bg-foreground/[0.04]',
+                    ].join(' ')}
+                  >
+                    {/* LEFT — checkbox + avatar + email + name */}
+                    <div className="flex flex-1 items-center gap-3">
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
                       >
-                        {c.email}
-                      </span>
-                      <span className="truncate text-xs text-muted">
-                        {fullName(c)}
-                      </span>
+                        <Checkbox
+                          isSelected={isChecked}
+                          onChange={(next) => {
+                            setSelected((prev) => {
+                              const updated = new Set(prev);
+                              if (next) updated.add(c.id);
+                              else updated.delete(c.id);
+                              return updated;
+                            });
+                          }}
+                          aria-label={`${c.email} seç`}
+                        >
+                          <Checkbox.Control>
+                            <Checkbox.Indicator />
+                          </Checkbox.Control>
+                        </Checkbox>
+                      </div>
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default text-muted">
+                        <Person className="h-4 w-4" />
+                      </div>
+                      <div className="flex min-w-0 flex-col">
+                        <span
+                          className="truncate text-sm font-medium leading-5 text-foreground"
+                          title={c.email}
+                        >
+                          {c.email}
+                        </span>
+                        <span className="truncate text-xs text-muted">
+                          {fullName(c)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* RIGHT half — 4 cells, flex-1, gap-20 (products pattern) */}
-                  <div className="flex flex-1 items-center gap-20">
-                    <CellWrap>
-                      <span className="text-sm text-foreground">
-                        {c.orderCount}
-                      </span>
-                    </CellWrap>
-                    <CellWrap>
-                      <span className="text-sm text-foreground">
-                        {formatCurrency(c.totalSpent)}
-                      </span>
-                    </CellWrap>
-                    <CellWrap>
-                      <span className="text-sm text-foreground">
-                        {formatDate(c.lastOrderAt)}
-                      </span>
-                    </CellWrap>
-                    <CellWrap>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleUnsubscribed(c)}
-                        className={[
-                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
-                          c.isUnsubscribed
-                            ? 'bg-danger/10 text-danger hover:bg-danger/15'
-                            : c.status === 'bounced' ||
-                                c.status === 'complained'
-                              ? 'bg-warning/10 text-warning-foreground'
-                              : 'bg-success/10 text-success hover:bg-success/15',
-                        ].join(' ')}
-                      >
-                        {c.isUnsubscribed ? (
-                          <>
-                            <CircleXmark className="h-3 w-3" />
-                            Aboneliği iptal
-                          </>
-                        ) : c.status === 'bounced' ? (
-                          <>
-                            <CircleXmark className="h-3 w-3" />
-                            Bounce
-                          </>
-                        ) : c.status === 'complained' ? (
-                          <>
-                            <CircleXmark className="h-3 w-3" />
-                            Şikayet
-                          </>
-                        ) : (
-                          <>
-                            <Check className="h-3 w-3" />
-                            Aktif
-                          </>
-                        )}
-                      </button>
-                    </CellWrap>
+                    {/* RIGHT — 4 cells */}
+                    <div className="flex flex-1 items-center gap-20">
+                      <CellWrap>
+                        <span className="text-sm text-foreground">
+                          {c.orderCount}
+                        </span>
+                      </CellWrap>
+                      <CellWrap>
+                        <span className="text-sm text-foreground">
+                          {formatCurrency(c.totalSpent)}
+                        </span>
+                      </CellWrap>
+                      <CellWrap>
+                        <span className="text-sm text-foreground">
+                          {formatDate(c.lastOrderAt)}
+                        </span>
+                      </CellWrap>
+                      <CellWrap>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleUnsubscribed(c)}
+                          className={[
+                            'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium transition-colors',
+                            c.isUnsubscribed
+                              ? 'bg-danger/10 text-danger hover:bg-danger/15'
+                              : c.status === 'bounced' ||
+                                  c.status === 'complained'
+                                ? 'bg-warning/10 text-warning-foreground'
+                                : 'bg-success/10 text-success hover:bg-success/15',
+                          ].join(' ')}
+                        >
+                          {c.isUnsubscribed ? (
+                            <>
+                              <CircleXmark className="h-3 w-3" />
+                              Aboneliği iptal
+                            </>
+                          ) : c.status === 'bounced' ? (
+                            <>
+                              <CircleXmark className="h-3 w-3" />
+                              Bounce
+                            </>
+                          ) : c.status === 'complained' ? (
+                            <>
+                              <CircleXmark className="h-3 w-3" />
+                              Şikayet
+                            </>
+                          ) : (
+                            <>
+                              <Check className="h-3 w-3" />
+                              Aktif
+                            </>
+                          )}
+                        </button>
+                      </CellWrap>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
+
+          {/* Bulk actions bar — Products bar'ı ile aynı pill stili */}
+          {selected.size > 0 && (
+            <div className="pointer-events-none fixed bottom-6 left-20 right-1 z-30 flex justify-center">
+              <div
+                className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 p-2 backdrop-blur-xl"
+                role="toolbar"
+                aria-label={`${selected.size} kontak için işlemler`}
+              >
+                <span className="px-3 text-xs text-muted">
+                  {selected.size} kontak seçildi
+                </span>
+                <Button
+                  variant="tertiary"
+                  size="md"
+                  onPress={handleBulkUnsubscribe}
+                  isPending={isBulkUnsubscribing}
+                  isDisabled={isBulkUnsubscribing}
+                >
+                  {allSelectedUnsubscribed ? (
+                    <>
+                      <Check className="h-4 w-4" />
+                      Tekrar dahil et
+                    </>
+                  ) : (
+                    <>
+                      <CircleXmark className="h-4 w-4" />
+                      Aboneliği iptal
+                    </>
+                  )}
+                </Button>
+                <Button
+                  variant="danger"
+                  size="md"
+                  isIconOnly
+                  onPress={() => setBulkDeleteOpen(true)}
+                  aria-label="Seçili kontakları sil"
+                >
+                  <TrashBin className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Saved filter rename modal — products page'iyle aynı küçük modal,
+          inline state ile */}
+      {renameId !== null && (
+        <RenameModal
+          value={renameValue}
+          onChange={setRenameValue}
+          onCancel={() => setRenameId(null)}
+          onSubmit={submitRename}
+          isPending={isRenaming}
+        />
+      )}
     </>
   );
 }
 
-// ---- Reused helpers (Products page pattern, local inline) -----------------
+// ---- Reused helpers (Products page pattern inline) ------------------------
 
 function TabPill({
   selected,
@@ -405,5 +847,67 @@ function SortHeaderButton({
         ].join(' ')}
       />
     </button>
+  );
+}
+
+function RenameModal({
+  value,
+  onChange,
+  onCancel,
+  onSubmit,
+  isPending,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+  isPending: boolean;
+}) {
+  return (
+    <AlertDialog
+      isOpen={true}
+      onOpenChange={(open) => {
+        if (!isPending && !open) onCancel();
+      }}
+    >
+      <AlertDialog.Backdrop>
+        <AlertDialog.Container>
+          <AlertDialog.Dialog>
+            <AlertDialog.Header>
+              <AlertDialog.Heading>Filtre setini adlandır</AlertDialog.Heading>
+            </AlertDialog.Header>
+            <div className="px-6 pb-4">
+              <input
+                type="text"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    onSubmit();
+                  }
+                }}
+                placeholder="Filtre seti adı"
+                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
+              />
+            </div>
+            <AlertDialog.Footer>
+              <Button variant="tertiary" slot="close" isDisabled={isPending}>
+                Vazgeç
+              </Button>
+              <Button
+                variant="primary"
+                onPress={onSubmit}
+                isPending={isPending}
+                isDisabled={isPending}
+              >
+                Kaydet
+              </Button>
+            </AlertDialog.Footer>
+          </AlertDialog.Dialog>
+        </AlertDialog.Container>
+      </AlertDialog.Backdrop>
+    </AlertDialog>
   );
 }

@@ -6,7 +6,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 
 // Paths that don't require authentication
-const publicPaths = ['/login', '/verify-email', '/auth/google-callback'];
+const publicPaths = [
+  '/login',
+  '/verify-email',
+  '/auth/google-callback',
+  '/unsubscribe',
+];
 // Paths that authenticated users without a company can access
 const companySetupPaths = ['/setup-company'];
 // Paths that handle their own auth flow — AuthGuard doesn't redirect to or

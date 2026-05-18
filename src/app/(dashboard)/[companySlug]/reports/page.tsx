@@ -24,7 +24,9 @@ import {
   AreaChart,
   Bar,
   BarChart,
+  CartesianGrid,
   Cell,
+  Label,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -87,6 +89,14 @@ function formatNumber(num: number): string {
   return num.toLocaleString('tr-TR');
 }
 
+// Y-axis için kısa sayı (1.2K / 3.4M); detayda tooltip tam değeri gösterir.
+function compactNumber(num: number): string {
+  const abs = Math.abs(num);
+  if (abs >= 1_000_000) return `${(num / 1_000_000).toFixed(num >= 10_000_000 ? 0 : 1)}M`;
+  if (abs >= 1_000) return `${(num / 1_000).toFixed(num >= 10_000 ? 0 : 1)}K`;
+  return num.toLocaleString('tr-TR');
+}
+
 function formatDateLabel(dateStr: string): string {
   const date = new Date(dateStr);
   const day = date.getDate();
@@ -115,22 +125,31 @@ function ChartTooltip({
   if (!active || !payload || payload.length === 0) return null;
   const labelValue = payload[0]?.payload?.[labelKey];
   return (
-    <div className="rounded-lg border border-border bg-surface px-3 py-2 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+    <div className="min-w-[120px] rounded-xl border border-border bg-surface px-3 py-2 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.16),0_2px_6px_-2px_rgba(0,0,0,0.08)] backdrop-blur-md">
       {labelValue !== undefined && labelValue !== '' && (
-        <p className="mb-1 text-[11px] font-medium text-muted">{labelValue}</p>
+        <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
+          {labelValue}
+        </p>
       )}
-      {payload.map((entry, i) => (
-        <div key={i} className="flex items-center gap-2 text-xs">
-          <span
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: entry.color }}
-            aria-hidden="true"
-          />
-          <span className="font-medium text-foreground tabular-nums">
-            {formatter ? formatter(entry.value) : entry.value.toLocaleString('tr-TR')}
-          </span>
-        </div>
-      ))}
+      <div className="flex flex-col gap-1">
+        {payload.map((entry, i) => (
+          <div key={i} className="flex items-center justify-between gap-3 text-xs">
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                style={{ backgroundColor: entry.color }}
+                aria-hidden="true"
+              />
+              {entry.name && entry.name !== entry.value.toString() && (
+                <span className="text-[11px] text-muted">{entry.name}</span>
+              )}
+            </span>
+            <span className="font-semibold text-foreground tabular-nums">
+              {formatter ? formatter(entry.value) : entry.value.toLocaleString('tr-TR')}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -188,7 +207,7 @@ function KpiCard({
     // Mobilde sparkline alanı (sağ yarı) gizlenir; sol içerik tüm kart
     // genişliğini alır ki "Toplam Sipariş" gibi başlıklar tek satıra otursun.
     // Sparkline lg+ viewport'larda görünmeye devam eder.
-    <div className="flex h-28 items-stretch overflow-hidden rounded-2xl bg-surface lg:h-32">
+    <div className="flex h-28 items-stretch overflow-hidden rounded-2xl bg-surface ring-1 ring-foreground/[0.04] lg:h-32">
       <div className="flex flex-1 flex-col justify-between gap-3 py-4">
         <div className="flex items-center gap-2 px-4">
           <Icon className="h-4 w-4 shrink-0 text-muted" />
@@ -196,11 +215,13 @@ function KpiCard({
         </div>
         <div className="px-4">
           {loading ? null : (
-            <span className="text-xl font-semibold leading-tight text-foreground">{value}</span>
+            <span className="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
+              {value}
+            </span>
           )}
         </div>
         <div className="flex items-center gap-2 px-4">
-          <span className="truncate text-xs text-muted">{compareLabel}</span>
+          <span className="truncate text-[11px] text-muted">{compareLabel}</span>
           {!loading && <TrendChip change={change} />}
         </div>
       </div>
@@ -263,19 +284,21 @@ function CardHeader({
 }) {
   return (
     <>
-      <div className="flex items-center gap-2 p-4">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-1">
         <Icon className="h-4 w-4 text-muted" />
-        <span className="text-xs font-medium text-muted">{title}</span>
+        <span className="text-[13px] font-medium text-foreground">{title}</span>
       </div>
       {!loading && (value || change) && (
-        <div className="flex flex-wrap items-center gap-4 p-4 pt-0">
+        <div className="flex flex-wrap items-baseline gap-3 px-4 pb-3">
           {value && (
-            <span className="text-2xl font-bold leading-tight text-foreground">{value}</span>
+            <span className="text-2xl font-semibold leading-tight tracking-tight text-foreground">
+              {value}
+            </span>
           )}
           {change && compareLabel && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">{compareLabel}</span>
+            <div className="flex items-center gap-1.5">
               <TrendChip change={change} />
+              <span className="text-[11px] text-muted">{compareLabel}</span>
             </div>
           )}
         </div>
@@ -319,25 +342,54 @@ function TrendAreaCard({
   compareLabel?: string;
 }) {
   const empty = data.length === 0 || data.every((d) => Number(d[dataKey] ?? 0) === 0);
+  // Çok yoğun bir aralık varsa (örn. 60+ gün) tüm tarih etiketleri sığmaz —
+  // dataset uzunluğuna göre interval ayarlıyoruz ki XAxis okunaklı kalsın.
+  const tickInterval = data.length > 45 ? Math.ceil(data.length / 6) - 1 : data.length > 14 ? Math.ceil(data.length / 8) - 1 : 0;
   return (
-    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface">
+    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-foreground/[0.04]">
       <CardHeader Icon={Icon} title={title} value={value} change={change} loading={loading} compareLabel={compareLabel} />
-      <div className="flex-1">
+      <div className="flex-1 pl-1 pr-2 pb-2">
         {loading ? null : empty ? (
           <FlatLine />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id={gradient.id} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={gradient.stroke} stopOpacity={0.45} />
+                  <stop offset="0%" stopColor={gradient.stroke} stopOpacity={0.4} />
                   <stop offset="100%" stopColor={gradient.stroke} stopOpacity={0} />
                 </linearGradient>
               </defs>
+              <CartesianGrid
+                stroke="currentColor"
+                strokeOpacity={0.07}
+                strokeDasharray="3 3"
+                horizontal
+                vertical={false}
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.55 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={16}
+                interval={tickInterval}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.55 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={4}
+                width={48}
+                tickFormatter={(v: number) =>
+                  valueFormatter ? compactNumber(v) : v.toLocaleString('tr-TR')
+                }
+              />
               <Tooltip
                 cursor={{
                   stroke: 'currentColor',
-                  strokeOpacity: 0.15,
+                  strokeOpacity: 0.18,
                   strokeWidth: 1,
                   strokeDasharray: '3 3',
                 }}
@@ -390,18 +442,45 @@ function TrendBarCard({
   compareLabel?: string;
 }) {
   const empty = data.length === 0 || data.every((d) => Number(d[dataKey] ?? 0) === 0);
+  const tickInterval = data.length > 45 ? Math.ceil(data.length / 6) - 1 : data.length > 14 ? Math.ceil(data.length / 8) - 1 : 0;
   return (
-    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface">
+    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-foreground/[0.04]">
       <CardHeader Icon={Icon} title={title} value={value} change={change} loading={loading} compareLabel={compareLabel} />
-      <div className="flex-1 px-2 pb-2">
+      <div className="flex-1 pl-1 pr-2 pb-2">
         {loading ? null : empty ? (
           <FlatLine />
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
-              <Tooltip cursor={{ fill: 'currentColor', fillOpacity: 0.04 }} content={<ChartTooltip formatter={valueFormatter} />} />
-              <XAxis dataKey="date" hide />
-              <YAxis hide domain={[0, 'dataMax']} />
+            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+              <CartesianGrid
+                stroke="currentColor"
+                strokeOpacity={0.07}
+                strokeDasharray="3 3"
+                horizontal
+                vertical={false}
+              />
+              <XAxis
+                dataKey="date"
+                tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.55 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={8}
+                minTickGap={16}
+                interval={tickInterval}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'currentColor', fillOpacity: 0.55 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={4}
+                width={40}
+                domain={[0, 'dataMax']}
+                tickFormatter={(v: number) => compactNumber(v)}
+              />
+              <Tooltip
+                cursor={{ fill: 'currentColor', fillOpacity: 0.04 }}
+                content={<ChartTooltip formatter={valueFormatter} />}
+              />
               <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
@@ -426,8 +505,10 @@ function DonutCard({
 }) {
   const total = useMemo(() => data.reduce((s, d) => s + d.value, 0), [data]);
   const empty = data.length === 0 || total === 0;
+  // Donut merkezindeki toplam etiketi (Mailchimp / Stripe stilinde).
+  const centerLabel = valueFormatter ? valueFormatter(total) : compactNumber(total);
   return (
-    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface">
+    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-foreground/[0.04]">
       <CardHeader Icon={Icon} title={title} loading={loading} />
       <div className="flex flex-1 items-center gap-4 px-4 pb-4">
         {loading ? null : empty ? (
@@ -436,23 +517,54 @@ function DonutCard({
           </div>
         ) : (
           <>
-            <div className="h-full w-[55%] min-w-0">
+            <div className="relative h-full w-[52%] min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
                     data={data}
                     cx="50%"
                     cy="50%"
-                    innerRadius="55%"
-                    outerRadius="85%"
+                    innerRadius="62%"
+                    outerRadius="88%"
                     paddingAngle={2}
                     dataKey="value"
                     nameKey="name"
+                    stroke="var(--surface)"
+                    strokeWidth={2}
                     isAnimationActive={false}
                   >
                     {data.map((entry, i) => (
                       <Cell key={i} fill={entry.color ?? PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
+                    <Label
+                      position="center"
+                      content={({ viewBox }) => {
+                        const vb = viewBox as { cx?: number; cy?: number } | undefined;
+                        if (!vb || vb.cx == null || vb.cy == null) return null;
+                        return (
+                          <g>
+                            <text
+                              x={vb.cx}
+                              y={vb.cy - 6}
+                              textAnchor="middle"
+                              className="fill-foreground"
+                              style={{ fontSize: 14, fontWeight: 600 }}
+                            >
+                              {centerLabel}
+                            </text>
+                            <text
+                              x={vb.cx}
+                              y={vb.cy + 10}
+                              textAnchor="middle"
+                              className="fill-muted"
+                              style={{ fontSize: 10, opacity: 0.75 }}
+                            >
+                              toplam
+                            </text>
+                          </g>
+                        );
+                      }}
+                    />
                   </Pie>
                   <Tooltip
                     cursor={false}
@@ -466,20 +578,25 @@ function DonutCard({
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <ul className="flex max-h-full w-[45%] flex-col gap-2 overflow-auto text-xs">
+            <ul className="flex max-h-full w-[48%] flex-col gap-1.5 overflow-auto text-xs">
               {data.map((entry, i) => {
                 const pct = total > 0 ? Math.round((entry.value / total) * 1000) / 10 : 0;
                 return (
-                  <li key={i} className="flex items-center gap-2">
+                  <li
+                    key={i}
+                    className="flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors hover:bg-foreground/[0.04]"
+                  >
                     <span
-                      className="h-2 w-2 shrink-0 rounded-full"
+                      className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
                       style={{ backgroundColor: entry.color ?? PIE_COLORS[i % PIE_COLORS.length] }}
                     />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-foreground">{entry.name}</p>
+                      <p className="truncate text-[11px] font-medium text-foreground">{entry.name}</p>
                       {entry.sub && <p className="text-[10px] text-muted">{entry.sub}</p>}
                     </div>
-                    <span className="font-medium tabular-nums text-foreground">%{pct}</span>
+                    <span className="shrink-0 text-[10px] font-medium tabular-nums text-muted">
+                      %{pct}
+                    </span>
                   </li>
                 );
               })}
@@ -513,7 +630,7 @@ function HorizontalBarCard({
   const empty =
     data.length === 0 || data.every((d) => Number(d[valueKey] ?? 0) === 0);
   return (
-    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface">
+    <div className="flex h-[372px] flex-col overflow-hidden rounded-2xl bg-surface ring-1 ring-foreground/[0.04]">
       <CardHeader Icon={Icon} title={title} loading={loading} />
       <div className="flex-1 px-4 pb-4">
         {loading ? null : empty ? (
@@ -523,23 +640,38 @@ function HorizontalBarCard({
             <BarChart
               data={data}
               layout="vertical"
-              margin={{ top: 4, right: 16, left: 8, bottom: 4 }}
+              margin={{ top: 4, right: 40, left: 8, bottom: 4 }}
+              barCategoryGap={6}
             >
-              <XAxis type="number" hide />
+              <CartesianGrid
+                stroke="currentColor"
+                strokeOpacity={0.06}
+                strokeDasharray="3 3"
+                horizontal={false}
+                vertical
+              />
+              <XAxis
+                type="number"
+                tick={{ fontSize: 9, fill: 'currentColor', fillOpacity: 0.5 }}
+                tickLine={false}
+                axisLine={false}
+                tickMargin={4}
+                tickFormatter={(v: number) => compactNumber(v)}
+              />
               <YAxis
                 type="category"
                 dataKey={labelKey}
-                tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.7 }}
+                tick={{ fontSize: 11, fill: 'currentColor', fillOpacity: 0.75 }}
                 tickLine={false}
                 axisLine={false}
-                width={110}
+                width={120}
                 tickFormatter={(v: string) => (v && v.length > 16 ? v.slice(0, 16) + '…' : v)}
               />
               <Tooltip
                 cursor={{ fill: 'currentColor', fillOpacity: 0.04 }}
                 content={<ChartTooltip formatter={valueFormatter} labelKey={labelKey} />}
               />
-              <Bar dataKey={valueKey} radius={[0, 4, 4, 0]} maxBarSize={18}>
+              <Bar dataKey={valueKey} radius={[0, 6, 6, 0]} maxBarSize={20}>
                 {data.map((entry, i) => (
                   <Cell key={i} fill={colorOf ? colorOf(entry) : PIE_COLORS[i % PIE_COLORS.length]} />
                 ))}
@@ -1149,7 +1281,7 @@ export default function ReportsPage() {
         }
       />
 
-      <div className="flex flex-col gap-2 p-4">
+      <div className="flex flex-col gap-4 p-4">
 
         {/* KPI Grid — 2 satır × 4 kolon */}
         <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">

@@ -61,27 +61,6 @@ function Section({
   );
 }
 
-/** Sol 112px label + sağ input — products/new FieldRow. */
-function FieldRow({
-  icon,
-  label,
-  children,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex w-full items-center gap-6">
-      <div className="flex h-9 w-28 shrink-0 items-center gap-2 py-2">
-        {icon}
-        <span className="text-sm font-medium text-foreground">{label}</span>
-      </div>
-      <div className="flex-1">{children}</div>
-    </div>
-  );
-}
-
 /** balinaOS AI chroma-border pill — products/new BalinaAiButton. */
 function BalinaAiButton({
   onPress,
@@ -598,323 +577,333 @@ export default function CampaignEditorPage() {
         }
       />
 
-      <div className="flex flex-1 flex-col overflow-auto">
-        <div className="mx-auto flex w-full max-w-[616px] flex-col gap-3 px-3 py-6">
-          {/* === 1) Başlık + Konu + AI butonu (textarea içinde absolute) === */}
-          <Section>
-            <div className="flex flex-col gap-2">
-              <TextField
-                value={name}
-                onChange={setName}
-                aria-label="Kampanya başlığı"
-                isDisabled={isReadOnly}
+      {/* 3-kolon layout — SOL: blok editor (mail bloklar listesi = sol menü
+          yapısı), ORTA: canlı canvas iframe (içerik alanı), SAĞ: meta
+          detaylar (başlık/konu/AI brief/hedef kitle/gönderim/performans).
+          min-h-0 + her kolonda overflow-y-auto ile bağımsız scroll. */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* SOL — Bloklar */}
+        <aside className="hidden w-[320px] shrink-0 flex-col border-r border-foreground/[0.06] md:flex">
+          <div className="flex items-center justify-between border-b border-foreground/[0.06] px-4 py-2.5">
+            <h3 className="text-sm font-medium text-foreground">Mail blokları</h3>
+            <span className="text-[10px] uppercase tracking-wide text-muted">
+              {blocks.length} blok
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-3">
+            <MailBlockEditor
+              blocks={blocks}
+              onChange={setBlocks}
+              disabled={isReadOnly}
+            />
+          </div>
+        </aside>
+
+        {/* ORTA — Canvas */}
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center justify-between border-b border-foreground/[0.06] px-4 py-2.5">
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
+              Canlı önizleme
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="tertiary"
+                size="sm"
+                onPress={() => setTestSendOpen(true)}
+                isDisabled={isReadOnly || !subject.trim() || blocks.length === 0}
+                className="h-7 rounded-full px-2 text-xs"
               >
-                <Input
-                  fullWidth
-                  variant="secondary"
-                  placeholder="Kampanya Başlığı (iç kullanım)"
-                  className="bg-transparent text-lg font-medium leading-7 placeholder:text-zinc-500"
-                />
-              </TextField>
+                <PaperPlane className="h-3.5 w-3.5" />
+                Test gönder
+              </Button>
+              <Button
+                variant="tertiary"
+                size="sm"
+                onPress={handlePreview}
+                isDisabled={isReadOnly || blocks.length === 0}
+                className="h-7 rounded-full px-2 text-xs"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Tam önizle
+              </Button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto bg-foreground/[0.03] p-4">
+            <iframe
+              title="Canlı canvas önizleme"
+              srcDoc={compileBlocksToPreviewHtml(blocks)}
+              className="mx-auto block h-full min-h-[640px] w-full max-w-[640px] rounded-lg border border-foreground/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+            />
+          </div>
+        </div>
 
-              <div className="relative">
-                <TextField
-                  value={subject}
-                  onChange={setSubject}
-                  aria-label="Mail konusu"
-                  isDisabled={isReadOnly}
-                >
-                  <Input
-                    fullWidth
-                    variant="secondary"
-                    placeholder="Mail konusu — alıcının inbox'unda görünecek"
-                    className={FIELD_CLASS}
-                  />
-                </TextField>
-              </div>
+        {/* SAĞ — Detaylar */}
+        <aside className="hidden w-[360px] shrink-0 flex-col border-l border-foreground/[0.06] lg:flex">
+          <div className="flex-1 overflow-y-auto p-3">
+            <div className="flex flex-col gap-3">
+              {/* === Başlık + Konu + AI brief + Ton === */}
+              <Section>
+                <h3 className="mb-2 text-sm font-medium text-foreground">
+                  Detaylar
+                </h3>
+                <div className="flex flex-col gap-2">
+                  <TextField
+                    value={name}
+                    onChange={setName}
+                    aria-label="Kampanya başlığı"
+                    isDisabled={isReadOnly}
+                  >
+                    <Input
+                      fullWidth
+                      variant="secondary"
+                      placeholder="Kampanya başlığı (iç)"
+                      className="bg-transparent text-sm font-medium placeholder:text-zinc-500"
+                    />
+                  </TextField>
+                  <TextField
+                    value={subject}
+                    onChange={setSubject}
+                    aria-label="Mail konusu"
+                    isDisabled={isReadOnly}
+                  >
+                    <Input
+                      fullWidth
+                      variant="secondary"
+                      placeholder="Mail konusu"
+                      className={FIELD_CLASS}
+                    />
+                  </TextField>
+                  <div className="relative">
+                    <TextField
+                      value={aiPrompt}
+                      onChange={setAiPrompt}
+                      aria-label="AI içerik brief'i"
+                      isDisabled={isReadOnly}
+                    >
+                      <TextArea
+                        fullWidth
+                        variant="secondary"
+                        placeholder='AI brief — "Bahar indirimi, %20 elbiseler, 3 gün, samimi"'
+                        rows={3}
+                        className="min-h-[80px] resize-none bg-transparent placeholder:text-zinc-500"
+                      />
+                    </TextField>
+                    <div className="pointer-events-none absolute bottom-2 right-2 z-10">
+                      <div className="pointer-events-auto">
+                        <BalinaAiButton
+                          onPress={handleGenerate}
+                          isPending={isGenerating}
+                          isDisabled={
+                            isGenerating || isReadOnly || !aiPrompt.trim()
+                          }
+                          label="Üret"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+                      <Pencil className="h-3.5 w-3.5" />
+                      Ton
+                    </div>
+                    <TextField
+                      value={aiTone}
+                      onChange={setAiTone}
+                      isDisabled={isReadOnly}
+                      aria-label="Ton"
+                    >
+                      <Input
+                        fullWidth
+                        variant="secondary"
+                        placeholder="samimi, espirili, resmi"
+                        className={FIELD_CLASS}
+                      />
+                    </TextField>
+                  </div>
+                </div>
+              </Section>
 
-              {/* AI brief textarea + AI butonu — products/new ile aynı pattern */}
-              <div className="relative">
-                <TextField
-                  value={aiPrompt}
-                  onChange={setAiPrompt}
-                  aria-label="AI içerik brief'i"
-                  isDisabled={isReadOnly}
-                >
-                  <TextArea
-                    fullWidth
-                    variant="secondary"
-                    placeholder='AI ile içerik üret — brief: "Bahar indirimi, %20 tüm elbiseler, 3 gün sürer, samimi ton"'
-                    rows={3}
-                    className="min-h-[88px] resize-none bg-transparent placeholder:text-zinc-500"
-                  />
-                </TextField>
-                <div className="pointer-events-none absolute bottom-2 right-2 z-10">
-                  <div className="pointer-events-auto">
-                    <BalinaAiButton
-                      onPress={handleGenerate}
-                      isPending={isGenerating}
-                      isDisabled={isGenerating || isReadOnly || !aiPrompt.trim()}
-                      label="İçerik Üret"
+              {/* === Hedef kitle === */}
+              <Section>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-foreground">
+                    Hedef kitle
+                  </h3>
+                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
+                    {audience?.count ?? '—'} kişi
+                  </span>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex flex-col gap-1">
+                    <span className="flex items-center gap-1.5 text-xs text-muted">
+                      <Tag className="h-3.5 w-3.5" />
+                      Mağazalar
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {stores.length === 0 ? (
+                        <span className="text-xs text-muted">Mağaza yok</span>
+                      ) : (
+                        stores.map((s) => {
+                          const selected = audienceStoreIds.includes(s.id);
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              disabled={isReadOnly}
+                              onClick={() =>
+                                setAudienceStoreIds((prev) =>
+                                  prev.includes(s.id)
+                                    ? prev.filter((x) => x !== s.id)
+                                    : [...prev, s.id],
+                                )
+                              }
+                              className={[
+                                'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors',
+                                selected
+                                  ? 'bg-foreground/[0.10] text-foreground'
+                                  : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+                              ].join(' ')}
+                            >
+                              {s.name}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="flex items-center gap-1.5 text-xs text-muted">
+                      <Tag className="h-3.5 w-3.5" />
+                      Tag&apos;ler
+                    </span>
+                    <TextField
+                      value={audienceTagsRaw}
+                      onChange={setAudienceTagsRaw}
+                      isDisabled={isReadOnly}
+                      aria-label="Tag'ler"
+                    >
+                      <Input
+                        fullWidth
+                        variant="secondary"
+                        placeholder="vip, mart-2026 (virgülle)"
+                        className={FIELD_CLASS}
+                      />
+                    </TextField>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="flex items-center gap-1.5 text-xs text-muted">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Son sipariş
+                    </span>
+                    <input
+                      type="date"
+                      value={audienceLastOrderAfter}
+                      onChange={(e) =>
+                        setAudienceLastOrderAfter(e.target.value)
+                      }
+                      disabled={isReadOnly}
+                      className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
                     />
                   </div>
                 </div>
-              </div>
-              <FieldRow icon={<Pencil className="h-4 w-4 text-muted" />} label="Ton">
-                <TextField
-                  value={aiTone}
-                  onChange={setAiTone}
-                  isDisabled={isReadOnly}
-                  aria-label="Ton"
-                >
-                  <Input
-                    fullWidth
-                    variant="secondary"
-                    placeholder="Örn. samimi, espirili, resmi"
-                    className={FIELD_CLASS}
-                  />
-                </TextField>
-              </FieldRow>
-            </div>
-          </Section>
+              </Section>
 
-        </div>
-
-        {/* === 2) Mail tasarımı — Canvas split: sol blok editor + sağ canlı önizleme ===
-            Daha geniş container (1180px) — canvas iframe için yer açar. */}
-        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-3 px-3 pb-6">
-          <Section>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-foreground">
-                Mail tasarımı
-              </h3>
-              <div className="flex items-center gap-1">
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onPress={() => setTestSendOpen(true)}
-                  isDisabled={isReadOnly || !subject.trim() || blocks.length === 0}
-                  className="h-7 rounded-full px-2 text-xs"
-                >
-                  <PaperPlane className="h-3.5 w-3.5" />
-                  Test gönder
-                </Button>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  onPress={handlePreview}
-                  isDisabled={isReadOnly || blocks.length === 0}
-                  className="h-7 rounded-full px-2 text-xs"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  Tam önizle
-                </Button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)]">
-              {/* Sol: blok editör */}
-              <div className="flex flex-col">
-                <MailBlockEditor
-                  blocks={blocks}
-                  onChange={setBlocks}
-                  disabled={isReadOnly}
-                />
-              </div>
-              {/* Sağ: canlı canvas */}
-              <div className="flex flex-col">
-                <div className="mb-1 flex items-center justify-between">
-                  <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-                    Canlı önizleme
-                  </span>
-                  <span className="text-[10px] text-muted">
-                    Gerçek render Önizle butonunda
-                  </span>
-                </div>
-                <div className="flex-1 overflow-hidden rounded-lg border border-foreground/[0.06] bg-foreground/[0.03]">
-                  <iframe
-                    title="Canlı canvas önizleme"
-                    srcDoc={compileBlocksToPreviewHtml(blocks)}
-                    className="h-[820px] w-full border-0"
-                  />
-                </div>
-              </div>
-            </div>
-          </Section>
-        </div>
-
-        {/* Diğer section'lar yeniden 616 genişliğinde merkezde. */}
-        <div className="mx-auto flex w-full max-w-[616px] flex-col gap-3 px-3 pb-6">
-
-          {/* === 3) Hedef kitle === */}
-          <Section>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-foreground">
-                Hedef kitle
-              </h3>
-              <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
-                {audience?.count ?? '—'} kişi
-              </span>
-            </div>
-            <div className="flex flex-col gap-3">
-              <FieldRow
-                icon={<Tag className="h-4 w-4 text-muted" />}
-                label="Mağazalar"
-              >
-                <div className="flex flex-wrap gap-1">
-                  {stores.length === 0 ? (
-                    <span className="text-xs text-muted">Mağaza yok</span>
-                  ) : (
-                    stores.map((s) => {
-                      const selected = audienceStoreIds.includes(s.id);
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          disabled={isReadOnly}
-                          onClick={() =>
-                            setAudienceStoreIds((prev) =>
-                              prev.includes(s.id)
-                                ? prev.filter((x) => x !== s.id)
-                                : [...prev, s.id],
-                            )
-                          }
-                          className={[
-                            'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors',
-                            selected
-                              ? 'bg-foreground/[0.10] text-foreground'
-                              : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
-                          ].join(' ')}
-                        >
-                          {s.name}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </FieldRow>
-              <FieldRow
-                icon={<Tag className="h-4 w-4 text-muted" />}
-                label="Tag'ler"
-              >
-                <TextField
-                  value={audienceTagsRaw}
-                  onChange={setAudienceTagsRaw}
-                  isDisabled={isReadOnly}
-                  aria-label="Tag'ler"
-                >
-                  <Input
-                    fullWidth
-                    variant="secondary"
-                    placeholder="vip, mart-2026, ... (virgülle ayır)"
-                    className={FIELD_CLASS}
-                  />
-                </TextField>
-              </FieldRow>
-              <FieldRow
-                icon={<Calendar className="h-4 w-4 text-muted" />}
-                label="Son sipariş"
-              >
-                <input
-                  type="date"
-                  value={audienceLastOrderAfter}
-                  onChange={(e) => setAudienceLastOrderAfter(e.target.value)}
-                  disabled={isReadOnly}
-                  className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
-                />
-              </FieldRow>
-            </div>
-          </Section>
-
-          {/* === 4) Gönderim === */}
-          {!isReadOnly && (
-            <Section>
-              <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-medium text-foreground">Gönderim</h3>
-                {campaign.status !== 'draft' && (
-                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
-                    {campaign.status}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-col gap-3">
-                <FieldRow
-                  icon={<Clock className="h-4 w-4 text-muted" />}
-                  label="Planla"
-                >
-                  <DateRow
-                    value={scheduleAt}
-                    onChange={setScheduleAt}
-                    disabled={isScheduling || isSending}
-                  />
-                </FieldRow>
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onPress={handleSendNow}
-                      isPending={isSending}
-                      isDisabled={
-                        isSending ||
-                        !subject.trim() ||
-                        blocks.length === 0 ||
-                        (audience?.count ?? 0) === 0
-                      }
-                      className="rounded-full"
-                    >
-                      <PaperPlane className="h-3.5 w-3.5" />
-                      Hemen gönder
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onPress={handleSchedule}
-                      isPending={isScheduling}
-                      isDisabled={
-                        isScheduling || !scheduleAt || !subject.trim() || blocks.length === 0
-                      }
-                      className="rounded-full"
-                    >
-                      <Clock className="h-3.5 w-3.5" />
-                      Planla
-                    </Button>
+              {/* === Gönderim === */}
+              {!isReadOnly && (
+                <Section>
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-foreground">
+                      Gönderim
+                    </h3>
+                    {campaign.status !== 'draft' && (
+                      <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
+                        {campaign.status}
+                      </span>
+                    )}
                   </div>
-                  {(campaign.status === 'scheduled' ||
-                    campaign.status === 'sending') && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onPress={handleCancel}
-                      className="rounded-full"
-                    >
-                      İptal et
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </Section>
-          )}
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex flex-col gap-1">
+                      <span className="flex items-center gap-1.5 text-xs text-muted">
+                        <Clock className="h-3.5 w-3.5" />
+                        Planla
+                      </span>
+                      <DateRow
+                        value={scheduleAt}
+                        onChange={setScheduleAt}
+                        disabled={isScheduling || isSending}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onPress={handleSendNow}
+                        isPending={isSending}
+                        isDisabled={
+                          isSending ||
+                          !subject.trim() ||
+                          blocks.length === 0 ||
+                          (audience?.count ?? 0) === 0
+                        }
+                        className="w-full rounded-full"
+                      >
+                        <PaperPlane className="h-3.5 w-3.5" />
+                        Hemen gönder
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onPress={handleSchedule}
+                        isPending={isScheduling}
+                        isDisabled={
+                          isScheduling ||
+                          !scheduleAt ||
+                          !subject.trim() ||
+                          blocks.length === 0
+                        }
+                        className="w-full rounded-full"
+                      >
+                        <Clock className="h-3.5 w-3.5" />
+                        Planla
+                      </Button>
+                      {(campaign.status === 'scheduled' ||
+                        campaign.status === 'sending') && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          onPress={handleCancel}
+                          className="w-full rounded-full"
+                        >
+                          İptal et
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </Section>
+              )}
 
-          {/* === 5) Stat'lar (gönderilen kampanya için) === */}
-          {campaign.status === 'sent' && (
-            <Section>
-              <h3 className="mb-3 text-sm font-medium text-foreground">
-                Performans
-              </h3>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <Stat label="Gönderildi" value={campaign.sentCount} />
-                <Stat label="Açıldı" value={campaign.openedCount} />
-                <Stat label="Tıklandı" value={campaign.clickedCount} />
-                <Stat label="Başarısız" value={campaign.failedCount} />
-                <Stat label="Bounce/şikayet" value={0} />
-                <Stat
-                  label="Aboneliği iptal"
-                  value={campaign.unsubscribedCount}
-                />
-              </div>
-            </Section>
-          )}
-        </div>
+              {/* === Performans (sent only) === */}
+              {campaign.status === 'sent' && (
+                <Section>
+                  <h3 className="mb-2 text-sm font-medium text-foreground">
+                    Performans
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <Stat label="Gönderildi" value={campaign.sentCount} />
+                    <Stat label="Açıldı" value={campaign.openedCount} />
+                    <Stat label="Tıklandı" value={campaign.clickedCount} />
+                    <Stat label="Başarısız" value={campaign.failedCount} />
+                    <Stat label="Bounce/şikayet" value={0} />
+                    <Stat
+                      label="Aboneliği iptal"
+                      value={campaign.unsubscribedCount}
+                    />
+                  </div>
+                </Section>
+              )}
+            </div>
+          </div>
+        </aside>
       </div>
     </>
   );

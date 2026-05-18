@@ -133,17 +133,12 @@ function ChartTooltip({
       )}
       <div className="flex flex-col gap-1">
         {payload.map((entry, i) => (
-          <div key={i} className="flex items-center justify-between gap-3 text-xs">
-            <span className="flex items-center gap-1.5">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
-                style={{ backgroundColor: entry.color }}
-                aria-hidden="true"
-              />
-              {entry.name && entry.name !== entry.value.toString() && (
-                <span className="text-[11px] text-muted">{entry.name}</span>
-              )}
-            </span>
+          <div key={i} className="flex items-center gap-2 text-xs">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+              style={{ backgroundColor: entry.color }}
+              aria-hidden="true"
+            />
             <span className="font-semibold text-foreground tabular-nums">
               {formatter ? formatter(entry.value) : entry.value.toLocaleString('tr-TR')}
             </span>

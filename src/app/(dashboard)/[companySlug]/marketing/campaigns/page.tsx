@@ -4,12 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   ArrowDown,
+  Calendar,
   Check,
   Clock,
   CircleDashed,
   CircleXmark,
   Envelope,
-  Magnifier,
   Plus,
 } from '@gravity-ui/icons';
 import { AlertDialog, Button, Modal, toast } from '@heroui/react';
@@ -23,6 +23,13 @@ import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSavedFilterStore } from '@/stores/savedFilterStore';
 import { SavedTab } from '@/components/products/saved-tab';
+import { FilterPopover } from '@/components/products/filter-popover';
+import { ActiveFilterChips } from '@/components/products/active-filter-chips';
+import {
+  applyFilterPayload,
+  clearFilters as clearAllFilters,
+} from '@/components/products/filter-types';
+import type { FilterDef } from '@/components/products/filter-types';
 import {
   useMarketingCampaignStore,
   type CampaignStatus,
@@ -31,12 +38,14 @@ import {
 
 const SAVED_CONTEXT = 'marketing-campaigns';
 
-const STATUS_TABS: { id: 'all' | CampaignStatus; label: string }[] = [
-  { id: 'all', label: 'Tüm Kampanyalar' },
-  { id: 'draft', label: 'Taslak' },
-  { id: 'scheduled', label: 'Planlandı' },
-  { id: 'sending', label: 'Gönderiliyor' },
-  { id: 'sent', label: 'Gönderildi' },
+const STATUS_OPTIONS = [
+  { value: 'all', label: 'Tümü' },
+  { value: 'draft', label: 'Taslak', icon: CircleDashed },
+  { value: 'scheduled', label: 'Planlandı', icon: Clock },
+  { value: 'sending', label: 'Gönderiliyor', icon: Clock },
+  { value: 'sent', label: 'Gönderildi', icon: Check },
+  { value: 'cancelled', label: 'İptal', icon: CircleXmark },
+  { value: 'failed', label: 'Başarısız', icon: CircleXmark },
 ];
 
 const STATUS_LABELS: Record<string, { label: string; tone: string; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }> = {
@@ -73,9 +82,47 @@ export default function MarketingCampaignsPage() {
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'all' | CampaignStatus>('all');
+  // Tarih aralığı filtresi (updatedAt). FilterDef date-range widget'ı
+  // "YYYY-MM-DD..YYYY-MM-DD" formatında string bekliyor.
+  const [dateFilter, setDateFilter] = useState('');
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [creating, setCreating] = useState(false);
+
+  // Contacts ile aynı: tek "İsim/konu", "Durum", "Güncellendi tarih aralığı".
+  const filterDefs: FilterDef[] = [
+    {
+      id: 'status',
+      label: 'Durum',
+      icon: CircleDashed,
+      searchPlaceholder: 'Durum seç...',
+      type: 'select',
+      defaultValue: 'all',
+      value: status,
+      onChange: (v) => setStatus(v as 'all' | CampaignStatus),
+      options: STATUS_OPTIONS,
+    },
+    {
+      id: 'search',
+      label: 'İsim / konu',
+      icon: Envelope,
+      preposition: 'içerir',
+      type: 'text',
+      placeholder: 'Kampanya adı veya konu ara',
+      value: search,
+      onChange: setSearch,
+    },
+    {
+      id: 'date',
+      label: 'Güncelleme',
+      icon: Calendar,
+      preposition: 'arası',
+      type: 'text',
+      widget: 'date-range',
+      value: dateFilter,
+      onChange: setDateFilter,
+    },
+  ];
 
   // Saved filter tabs — contacts page ile aynı pattern.
   const fetchSaved = useSavedFilterStore((s) => s.fetch);
@@ -159,21 +206,35 @@ export default function MarketingCampaignsPage() {
 
   const visible = useMemo(() => {
     const sign = sortOrder === 'asc' ? 1 : -1;
-    return [...campaigns].sort((a, b) => {
-      switch (sortField) {
-        case 'name':
-          return sign * a.name.localeCompare(b.name, 'tr');
-        case 'sentCount':
-          return sign * (a.sentCount - b.sentCount);
-        case 'updatedAt':
-        default: {
-          const at = new Date(a.updatedAt).getTime();
-          const bt = new Date(b.updatedAt).getTime();
-          return sign * (at - bt);
+    // date-range serialization: "YYYY-MM-DD..YYYY-MM-DD" — iki tarafı da
+    // opsiyonel olabilir, sadece bir uç verilirse o yönde sınırla.
+    const [fromStr, toStr] = (dateFilter || '').split('..');
+    const fromTs = fromStr ? new Date(fromStr).getTime() : null;
+    const toTs = toStr ? new Date(toStr).getTime() : null;
+    return [...campaigns]
+      .filter((c) => {
+        if (fromTs == null && toTs == null) return true;
+        const t = new Date(c.updatedAt).getTime();
+        if (Number.isNaN(t)) return false;
+        if (fromTs != null && t < fromTs) return false;
+        if (toTs != null && t > toTs) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        switch (sortField) {
+          case 'name':
+            return sign * a.name.localeCompare(b.name, 'tr');
+          case 'sentCount':
+            return sign * (a.sentCount - b.sentCount);
+          case 'updatedAt':
+          default: {
+            const at = new Date(a.updatedAt).getTime();
+            const bt = new Date(b.updatedAt).getTime();
+            return sign * (at - bt);
+          }
         }
-      }
-    });
-  }, [campaigns, sortField, sortOrder]);
+      });
+  }, [campaigns, sortField, sortOrder, dateFilter]);
 
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
 
@@ -351,18 +412,15 @@ export default function MarketingCampaignsPage() {
         <div className="flex flex-col gap-2 p-4">
           <div className="flex flex-row items-center justify-between">
             <div className="flex flex-wrap items-center gap-2">
-              {STATUS_TABS.map((t) => (
-                <TabPill
-                  key={t.id}
-                  selected={status === t.id && activeSavedId === null}
-                  onPress={() => {
-                    setStatus(t.id);
-                    setActiveSavedId(null);
-                  }}
-                >
-                  {t.label}
-                </TabPill>
-              ))}
+              <TabPill
+                selected={activeSavedId === null}
+                onPress={() => {
+                  setActiveSavedId(null);
+                  clearAllFilters(filterDefs);
+                }}
+              >
+                Tüm Kampanyalar
+              </TabPill>
               {savedFilters.map((sf) => (
                 <SavedTab
                   key={sf.id}
@@ -370,12 +428,7 @@ export default function MarketingCampaignsPage() {
                   isActive={activeSavedId === sf.id}
                   onSelect={() => {
                     setActiveSavedId(sf.id);
-                    // Şu an yalnızca status kayıtlı — saved filter
-                    // genişletildiğinde diğer alanlar da uygulanır.
-                    const s = sf.payload?.status as string | undefined;
-                    if (s && s !== 'all') {
-                      setStatus(s as CampaignStatus);
-                    }
+                    applyFilterPayload(filterDefs, sf.payload);
                   }}
                   onRename={() => openRename(sf.id, sf.name)}
                   onDuplicate={() => handleDuplicate(sf)}
@@ -383,17 +436,17 @@ export default function MarketingCampaignsPage() {
                 />
               ))}
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
-              <Magnifier className="h-3.5 w-3.5 text-muted" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Kampanya adı veya konu ara"
-                className="w-56 border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted focus:outline-none focus:ring-0"
-              />
-            </div>
+            <FilterPopover filters={filterDefs} />
           </div>
+          <ActiveFilterChips
+            filters={filterDefs}
+            companyId={currentCompany?.id}
+            context={SAVED_CONTEXT}
+            activeSavedFilter={
+              savedFilters.find((sf) => sf.id === activeSavedId) ?? null
+            }
+            onSaved={(sf) => setActiveSavedId(sf.id)}
+          />
         </div>
 
         <div className="flex flex-col gap-2.5 p-2.5">
@@ -410,8 +463,8 @@ export default function MarketingCampaignsPage() {
                 </SortHeaderButton>
               </CellWrap>
             </div>
-            <div className="flex flex-1 items-center gap-20">
-              <CellWrap>
+            <div className="flex flex-1 items-center justify-between">
+              <CellWrap className="w-24">
                 <SortHeaderButton
                   field="sentCount"
                   currentField={sortField}
@@ -421,12 +474,12 @@ export default function MarketingCampaignsPage() {
                   Gönderim
                 </SortHeaderButton>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-20">
                 <span className="rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Açılma
                 </span>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-28">
                 <SortHeaderButton
                   field="updatedAt"
                   currentField={sortField}
@@ -436,7 +489,7 @@ export default function MarketingCampaignsPage() {
                   Güncellendi
                 </SortHeaderButton>
               </CellWrap>
-              <CellWrap>
+              <CellWrap className="w-24">
                 <span className="rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted">
                   Durum
                 </span>
@@ -506,19 +559,19 @@ function CampaignRow({
           </span>
         </div>
       </div>
-      <div className="flex flex-1 items-center gap-20 text-xs text-foreground">
-        <CellWrap>
+      <div className="flex flex-1 items-center justify-between text-xs text-foreground">
+        <CellWrap className="w-24">
           <span className="text-foreground">
             {c.sentCount}/{c.recipientCount || '—'}
           </span>
         </CellWrap>
-        <CellWrap>
+        <CellWrap className="w-20">
           <span className="text-foreground">{openRate}</span>
         </CellWrap>
-        <CellWrap>
+        <CellWrap className="w-28">
           <span className="text-foreground">{formatDate(c.updatedAt)}</span>
         </CellWrap>
-        <CellWrap>
+        <CellWrap className="w-24">
           <span
             className={[
               'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium',
@@ -534,9 +587,20 @@ function CampaignRow({
   );
 }
 
-function CellWrap({ children }: { children: React.ReactNode }) {
+function CellWrap({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="inline-flex min-w-fit flex-1 flex-col items-start justify-start gap-2.5">
+    <div
+      className={[
+        'inline-flex flex-col items-start justify-start gap-2.5',
+        className ?? '',
+      ].join(' ')}
+    >
       {children}
     </div>
   );

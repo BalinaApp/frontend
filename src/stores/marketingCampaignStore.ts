@@ -98,6 +98,17 @@ interface MarketingCampaignState {
     campaignId: string,
     input: { prompt: string; tone?: string; productIds?: string[] },
   ) => Promise<{ subject: string; bodyHtml: string; productIds: string[] } | null>;
+  generateBlockText: (
+    companyId: string,
+    campaignId: string,
+    input: {
+      blockType: 'heading' | 'text' | 'button';
+      currentText?: string;
+      tone?: string;
+      blocksContext?: string;
+      prompt?: string;
+    },
+  ) => Promise<{ text: string } | null>;
   sendNow: (
     companyId: string,
     campaignId: string,
@@ -245,6 +256,19 @@ export const useMarketingCampaignStore = create<MarketingCampaignState>(
         return res.data;
       } catch (err) {
         set({ error: extractError(err), isMutating: false });
+        return null;
+      }
+    },
+
+    generateBlockText: async (companyId, campaignId, input) => {
+      try {
+        const res = await api.post<{ text: string }>(
+          `/company/${companyId}/marketing/campaigns/${campaignId}/generate-block-text`,
+          input,
+        );
+        return res.data;
+      } catch (err) {
+        set({ error: extractError(err) });
         return null;
       }
     },

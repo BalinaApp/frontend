@@ -10,6 +10,7 @@ import {
   Box,
   ShoppingBag,
   ChartColumn,
+  Comments,
   Envelope,
   Gear,
 } from '@gravity-ui/icons';
@@ -78,6 +79,13 @@ export function AppSidebar() {
       icon: Envelope,
       roles: ['OWNER', 'ADMIN'],
       matchPaths: [`/${companySlug}/marketing`],
+    },
+    {
+      title: 'Sohbetler',
+      url: `/${companySlug}/conversations`,
+      icon: Comments,
+      roles: ['OWNER', 'ADMIN'],
+      matchPaths: [`/${companySlug}/conversations`],
     },
     {
       title: 'Ayarlar',

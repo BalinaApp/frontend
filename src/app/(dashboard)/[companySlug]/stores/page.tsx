@@ -162,7 +162,7 @@ const integrationCategories: IntegrationCategory[] = [
     id: 'social',
     title: 'Sosyal Medya',
     items: [
-      { id: 'INSTAGRAM', name: 'Instagram', description: 'Sosyal medya hesabınızı bağlayın.', logo: '/figma/integrations/instagram.png', comingSoon: true },
+      { id: 'INSTAGRAM', name: 'Instagram', description: 'Sosyal medya hesabınızı bağlayın.', logo: '/figma/integrations/instagram.png', comingSoon: false },
       { id: 'WHATSAPP', name: 'WhatsApp', description: 'WhatsApp Business mesajlaşma.', logo: '/figma/integrations/whatsapp.png', comingSoon: true },
     ],
   },
@@ -1602,6 +1602,16 @@ export default function StoresPage() {
       setParasutShowPassword(false);
       setParasutTestResult(null);
       setIsParasutDialogOpen(true);
+      return;
+    }
+    // Instagram — her mağaza için per-store bağlanır.
+    // Stores page'inde tek bir akış olamayacağı için "Sohbetler / Mağaza
+    // ayarları" sayfasına yönlendiriyoruz. Orada mağaza listesinden seçim
+    // yapılır, OAuth flow oradan başlar.
+    if (marketplace.id === 'INSTAGRAM') {
+      if (currentCompany?.slug) {
+        router.push(`/${currentCompany.slug}/conversations/setup`);
+      }
       return;
     }
     if (!marketplace.steps) {

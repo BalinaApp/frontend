@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Calendar,
@@ -34,19 +34,24 @@ import {
   type AudiencePreview,
   type MarketingCampaign,
 } from '@/stores/marketingCampaignStore';
-import { MailBlockEditor } from '@/components/marketing/mail-block-editor';
 import {
   collectProductIds,
   compileBlocksToHtml,
-  compileBlocksToPreviewHtml,
   makeDefaultBlock,
   type MailBlock,
 } from '@/components/marketing/mail-blocks';
+import { EmailCanvas } from '@/components/marketing/email-canvas';
+import { useAiStore } from '@/stores/aiStore';
+import { EmailLeftRail } from '@/components/marketing/email-left-rail';
+import {
+  EmailRightRail,
+  StylePanel,
+} from '@/components/marketing/email-right-rail';
 
 const FIELD_CLASS =
   'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
 
-/** Section card — products/new pattern'i ile aynı (bg-white/60 + 12px). */
+/** Section card — products/new pattern'i ile aynı. */
 function Section({
   children,
   className = '',
@@ -61,7 +66,7 @@ function Section({
   );
 }
 
-/** balinaOS AI chroma-border pill — products/new BalinaAiButton. */
+/** balinaOS AI chroma-border pill. */
 function BalinaAiButton({
   onPress,
   isPending,
@@ -90,7 +95,6 @@ function BalinaAiButton({
   );
 }
 
-/** Tarih input. */
 function DateRow({
   value,
   onChange,
@@ -122,11 +126,13 @@ export default function CampaignEditorPage() {
   const campaignId = params?.id ?? '';
   const { currentCompany } = useCompanyStore();
   const { stores, fetchStores } = useStoreStore();
+  const generateImageRaw = useAiStore((s) => s.generateImageRaw);
   const {
     fetchOne,
     updateCampaign,
     deleteCampaign,
     generateContent,
+    generateBlockText,
     sendNow,
     schedule,
     cancel,
@@ -149,7 +155,14 @@ export default function CampaignEditorPage() {
   const [audienceTagsRaw, setAudienceTagsRaw] = useState('');
   const [audienceLastOrderAfter, setAudienceLastOrderAfter] = useState('');
 
-  // UI state
+  // Builder state
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [rightTab, setRightTab] = useState<'details' | 'style'>('details');
+  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>(
+    'desktop',
+  );
+
+  // UI mutation state
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -168,10 +181,21 @@ export default function CampaignEditorPage() {
   const isReadOnly =
     !!campaign && ['sending', 'sent'].includes(campaign.status);
 
-  // Body html derive — her blok değişiminde hesaplanır, kaydederken
-  // bodyHtml + productIds güncellenir.
-  const compiledHtml = compileBlocksToHtml(blocks);
-  const compiledProductIds = collectProductIds(blocks);
+  /** Block seçimi değiştiğinde sağ paneli otomatik aç. Effect yerine
+   *  doğrudan handler içinde ele alıyoruz — cascading render önlemek için. */
+  const handleSelectBlock = useCallback((id: string | null) => {
+    setSelectedBlockId(id);
+    setRightTab(id ? 'style' : 'details');
+  }, []);
+
+  const selectedBlock = useMemo(
+    () => blocks.find((b) => b.id === selectedBlockId) ?? null,
+    [blocks, selectedBlockId],
+  );
+
+  // Body html derive — her blok değişiminde hesaplanır.
+  const compiledHtml = useMemo(() => compileBlocksToHtml(blocks), [blocks]);
+  const compiledProductIds = useMemo(() => collectProductIds(blocks), [blocks]);
 
   const loadCampaign = useCallback(async () => {
     if (!currentCompany?.id) return;
@@ -187,7 +211,9 @@ export default function CampaignEditorPage() {
         setBlocks(storedBlocks);
       } else if (c.bodyHtml) {
         // Eski format — sade text block olarak migrate et.
-        setBlocks([{ ...makeDefaultBlock('text'), text: stripTagsBrief(c.bodyHtml) } as MailBlock]);
+        setBlocks([
+          { ...makeDefaultBlock('text'), text: stripTagsBrief(c.bodyHtml) } as MailBlock,
+        ]);
       } else {
         setBlocks([]);
       }
@@ -273,12 +299,12 @@ export default function CampaignEditorPage() {
       return;
     }
     setSubject(result.subject);
-    // AI üretimi tek text block olarak — kullanıcı sonra blokları düzenler.
     const base = makeDefaultBlock('text');
     if (base.type === 'text') {
       base.text = stripHtmlToText(result.bodyHtml);
     }
     setBlocks([base]);
+    setSelectedBlockId(null);
     toast.success('İçerik üretildi — blok olarak eklendi, düzenleyebilirsin');
   };
 
@@ -364,6 +390,84 @@ export default function CampaignEditorPage() {
     }
   };
 
+  /** AI block text üretimi — canvas inline panel'den çağrılır. Mevcut tüm
+   *  blokları kısa özet olarak context'e ekler ki AI mail'in akışına uygun
+   *  metin üretsin. */
+  const handleGenerateBlockText = useCallback(
+    async (
+      block: MailBlock,
+      opts: { tone?: string; prompt?: string },
+    ): Promise<{ text: string } | null> => {
+      if (!currentCompany?.id || !campaign) return null;
+      if (
+        block.type !== 'heading' &&
+        block.type !== 'text' &&
+        block.type !== 'button'
+      ) {
+        return null;
+      }
+      const blocksContext = blocks
+        .map((b, i) => {
+          const kind =
+            b.type === 'heading'
+              ? `[${b.level.toUpperCase()}]`
+              : `[${b.type}]`;
+          let preview = '';
+          if (b.type === 'heading' || b.type === 'text') preview = b.text;
+          else if (b.type === 'button') preview = `→ ${b.label}`;
+          else if (b.type === 'image') preview = b.url ? '(görsel)' : '';
+          else if (b.type === 'product') preview = '(ürün kartı)';
+          else if (b.type === 'product-grid')
+            preview = `(${b.columns}-kolon ürün gridi)`;
+          else if (b.type === 'divider') preview = '———';
+          const marker = b.id === block.id ? ' ← DÜZENLENECEK' : '';
+          return `${i + 1}. ${kind} ${preview}${marker}`.trim();
+        })
+        .join('\n');
+      const currentText =
+        block.type === 'button' ? block.label : block.text;
+      return generateBlockText(currentCompany.id, campaign.id, {
+        blockType: block.type,
+        currentText,
+        tone: opts.tone,
+        prompt: opts.prompt,
+        blocksContext,
+      });
+    },
+    [currentCompany?.id, campaign, blocks, generateBlockText],
+  );
+
+  /** Görsel/Logo bloğu için Fal AI ile görsel üretimi. */
+  const handleGenerateImage = useCallback(
+    async (opts: {
+      prompt: string;
+      imageSize:
+        | 'square_hd'
+        | 'portrait_4_3'
+        | 'portrait_16_9'
+        | 'landscape_4_3'
+        | 'landscape_16_9';
+    }): Promise<{ url: string; error?: string }> => {
+      if (!currentCompany?.id) {
+        return { url: '', error: 'Şirket bulunamadı' };
+      }
+      return generateImageRaw(currentCompany.id, {
+        prompt: opts.prompt,
+        imageSize: opts.imageSize,
+      });
+    },
+    [currentCompany?.id, generateImageRaw],
+  );
+
+  const updateSelectedBlock = (patch: Partial<MailBlock>) => {
+    if (!selectedBlockId) return;
+    setBlocks((bs) =>
+      bs.map((b) =>
+        b.id === selectedBlockId ? ({ ...b, ...patch } as MailBlock) : b,
+      ),
+    );
+  };
+
   if (loading) {
     return (
       <>
@@ -383,7 +487,7 @@ export default function CampaignEditorPage() {
 
   return (
     <>
-      {/* Kampanya silme onayı — products/new ile aynı AlertDialog. */}
+      {/* Kampanya silme onayı */}
       <AlertDialog
         isOpen={deleteOpen}
         onOpenChange={(open) => {
@@ -476,7 +580,7 @@ export default function CampaignEditorPage() {
         </Modal.Backdrop>
       </Modal>
 
-      {/* Preview modal — iframe ile gerçek render, mobil/masaüstü toggle. */}
+      {/* Preview modal — backend'in render ettiği gerçek HTML */}
       <Modal
         isOpen={previewHtml !== null}
         onOpenChange={(o) => !o && setPreviewHtml(null)}
@@ -531,7 +635,7 @@ export default function CampaignEditorPage() {
         </Modal.Backdrop>
       </Modal>
 
-      {/* === PageHeader — products/new ile birebir === */}
+      {/* === PageHeader === */}
       <PageHeader
         title={name.trim() || 'İsimsiz Kampanya'}
         leading={
@@ -577,41 +681,24 @@ export default function CampaignEditorPage() {
         }
       />
 
-      {/* 3-kolon layout — SOL: blok editor (mail bloklar listesi = sol menü
-          yapısı), ORTA: canlı canvas iframe (içerik alanı), SAĞ: meta
-          detaylar (başlık/konu/AI brief/hedef kitle/gönderim/performans).
-          min-h-0 + her kolonda overflow-y-auto ile bağımsız scroll. */}
+      {/* === 3-col workbench === */}
       <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* SOL — Bloklar */}
-        <aside className="hidden w-[320px] shrink-0 flex-col border-r border-foreground/[0.06] md:flex">
-          <div className="flex items-center justify-between border-b border-foreground/[0.06] px-4 py-2.5">
-            <h3 className="text-sm font-medium text-foreground">Mail blokları</h3>
-            <span className="text-[10px] uppercase tracking-wide text-muted">
-              {blocks.length} blok
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3">
-            <MailBlockEditor
-              blocks={blocks}
-              onChange={setBlocks}
-              disabled={isReadOnly}
-            />
-          </div>
-        </aside>
-
-        {/* ORTA — Canvas */}
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center justify-between border-b border-foreground/[0.06] px-4 py-2.5">
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted">
-              Canlı önizleme
-            </span>
-            <div className="flex items-center gap-1">
+        <EmailLeftRail
+          blocks={blocks}
+          selectedId={selectedBlockId}
+          onSelect={handleSelectBlock}
+          onChange={setBlocks}
+          disabled={isReadOnly}
+          footer={
+            <div className="flex flex-col gap-1.5">
               <Button
                 variant="tertiary"
                 size="sm"
                 onPress={() => setTestSendOpen(true)}
-                isDisabled={isReadOnly || !subject.trim() || blocks.length === 0}
-                className="h-7 rounded-full px-2 text-xs"
+                isDisabled={
+                  isReadOnly || !subject.trim() || blocks.length === 0
+                }
+                className="w-full justify-start rounded-lg bg-foreground/[0.04] px-3 text-xs"
               >
                 <PaperPlane className="h-3.5 w-3.5" />
                 Test gönder
@@ -621,289 +708,297 @@ export default function CampaignEditorPage() {
                 size="sm"
                 onPress={handlePreview}
                 isDisabled={isReadOnly || blocks.length === 0}
-                className="h-7 rounded-full px-2 text-xs"
+                className="w-full justify-start rounded-lg bg-foreground/[0.04] px-3 text-xs"
               >
                 <Eye className="h-3.5 w-3.5" />
                 Tam önizle
               </Button>
             </div>
-          </div>
-          <div className="flex-1 overflow-auto bg-foreground/[0.03] p-4">
-            <iframe
-              title="Canlı canvas önizleme"
-              srcDoc={compileBlocksToPreviewHtml(blocks)}
-              className="mx-auto block h-full min-h-[640px] w-full max-w-[640px] rounded-lg border border-foreground/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-            />
-          </div>
+          }
+        />
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <EmailCanvas
+            blocks={blocks}
+            onChange={setBlocks}
+            selectedId={selectedBlockId}
+            onSelect={handleSelectBlock}
+            subject={subject}
+            device={device}
+            brandName={currentCompany?.name ?? 'balinaOS'}
+            disabled={isReadOnly}
+            topSlot={<DeviceToggle value={device} onChange={setDevice} />}
+            onGenerateBlockText={handleGenerateBlockText}
+            onGenerateImage={handleGenerateImage}
+          />
         </div>
 
-        {/* SAĞ — Detaylar */}
-        <aside className="hidden w-[360px] shrink-0 flex-col border-l border-foreground/[0.06] lg:flex">
-          <div className="flex-1 overflow-y-auto p-3">
+        <EmailRightRail
+          tab={rightTab}
+          onTabChange={setRightTab}
+          hasSelection={!!selectedBlock}
+        >
+          {rightTab === 'style' && selectedBlock ? (
+            <StylePanel
+              block={selectedBlock}
+              onChange={updateSelectedBlock}
+              disabled={isReadOnly}
+            />
+          ) : (
             <div className="flex flex-col gap-3">
-              {/* === Başlık + Konu + AI brief + Ton === */}
-              <Section>
-                <h3 className="mb-2 text-sm font-medium text-foreground">
-                  Detaylar
-                </h3>
-                <div className="flex flex-col gap-2">
-                  <TextField
-                    value={name}
-                    onChange={setName}
-                    aria-label="Kampanya başlığı"
-                    isDisabled={isReadOnly}
-                  >
-                    <Input
-                      fullWidth
-                      variant="secondary"
-                      placeholder="Kampanya başlığı (iç)"
-                      className="bg-transparent text-sm font-medium placeholder:text-zinc-500"
-                    />
-                  </TextField>
-                  <TextField
-                    value={subject}
-                    onChange={setSubject}
-                    aria-label="Mail konusu"
-                    isDisabled={isReadOnly}
-                  >
-                    <Input
-                      fullWidth
-                      variant="secondary"
-                      placeholder="Mail konusu"
-                      className={FIELD_CLASS}
-                    />
-                  </TextField>
-                  <div className="relative">
-                    <TextField
-                      value={aiPrompt}
-                      onChange={setAiPrompt}
-                      aria-label="AI içerik brief'i"
-                      isDisabled={isReadOnly}
-                    >
-                      <TextArea
-                        fullWidth
-                        variant="secondary"
-                        placeholder='AI brief — "Bahar indirimi, %20 elbiseler, 3 gün, samimi"'
-                        rows={3}
-                        className="min-h-[80px] resize-none bg-transparent placeholder:text-zinc-500"
-                      />
-                    </TextField>
-                    <div className="pointer-events-none absolute bottom-2 right-2 z-10">
-                      <div className="pointer-events-auto">
-                        <BalinaAiButton
-                          onPress={handleGenerate}
-                          isPending={isGenerating}
-                          isDisabled={
-                            isGenerating || isReadOnly || !aiPrompt.trim()
-                          }
-                          label="Üret"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
-                      <Pencil className="h-3.5 w-3.5" />
-                      Ton
-                    </div>
-                    <TextField
-                      value={aiTone}
-                      onChange={setAiTone}
-                      isDisabled={isReadOnly}
-                      aria-label="Ton"
-                    >
-                      <Input
-                        fullWidth
-                        variant="secondary"
-                        placeholder="samimi, espirili, resmi"
-                        className={FIELD_CLASS}
-                      />
-                    </TextField>
-                  </div>
+        {/* === Başlık + Konu + AI brief + Ton === */}
+        <Section>
+          <h3 className="mb-2 text-sm font-medium text-foreground">Detaylar</h3>
+          <div className="flex flex-col gap-2">
+            <TextField
+              value={name}
+              onChange={setName}
+              aria-label="Kampanya başlığı"
+              isDisabled={isReadOnly}
+            >
+              <Input
+                fullWidth
+                variant="secondary"
+                placeholder="Kampanya başlığı (iç)"
+                className="bg-transparent text-sm font-medium placeholder:text-zinc-500"
+              />
+            </TextField>
+            <TextField
+              value={subject}
+              onChange={setSubject}
+              aria-label="Mail konusu"
+              isDisabled={isReadOnly}
+            >
+              <Input
+                fullWidth
+                variant="secondary"
+                placeholder="Mail konusu"
+                className={FIELD_CLASS}
+              />
+            </TextField>
+            <div className="relative">
+              <TextField
+                value={aiPrompt}
+                onChange={setAiPrompt}
+                aria-label="AI içerik brief'i"
+                isDisabled={isReadOnly}
+              >
+                <TextArea
+                  fullWidth
+                  variant="secondary"
+                  placeholder='AI brief — "Bahar indirimi, %20 elbiseler, 3 gün, samimi"'
+                  rows={3}
+                  className="min-h-[80px] resize-none bg-transparent placeholder:text-zinc-500"
+                />
+              </TextField>
+              <div className="pointer-events-none absolute bottom-2 right-2 z-10">
+                <div className="pointer-events-auto">
+                  <BalinaAiButton
+                    onPress={handleGenerate}
+                    isPending={isGenerating}
+                    isDisabled={isGenerating || isReadOnly || !aiPrompt.trim()}
+                    label="Üret"
+                  />
                 </div>
-              </Section>
-
-              {/* === Hedef kitle === */}
-              <Section>
-                <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-foreground">
-                    Hedef kitle
-                  </h3>
-                  <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
-                    {audience?.count ?? '—'} kişi
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2.5">
-                  <div className="flex flex-col gap-1">
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      <Tag className="h-3.5 w-3.5" />
-                      Mağazalar
-                    </span>
-                    <div className="flex flex-wrap gap-1">
-                      {stores.length === 0 ? (
-                        <span className="text-xs text-muted">Mağaza yok</span>
-                      ) : (
-                        stores.map((s) => {
-                          const selected = audienceStoreIds.includes(s.id);
-                          return (
-                            <button
-                              key={s.id}
-                              type="button"
-                              disabled={isReadOnly}
-                              onClick={() =>
-                                setAudienceStoreIds((prev) =>
-                                  prev.includes(s.id)
-                                    ? prev.filter((x) => x !== s.id)
-                                    : [...prev, s.id],
-                                )
-                              }
-                              className={[
-                                'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors',
-                                selected
-                                  ? 'bg-foreground/[0.10] text-foreground'
-                                  : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
-                              ].join(' ')}
-                            >
-                              {s.name}
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      <Tag className="h-3.5 w-3.5" />
-                      Tag&apos;ler
-                    </span>
-                    <TextField
-                      value={audienceTagsRaw}
-                      onChange={setAudienceTagsRaw}
-                      isDisabled={isReadOnly}
-                      aria-label="Tag'ler"
-                    >
-                      <Input
-                        fullWidth
-                        variant="secondary"
-                        placeholder="vip, mart-2026 (virgülle)"
-                        className={FIELD_CLASS}
-                      />
-                    </TextField>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="flex items-center gap-1.5 text-xs text-muted">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Son sipariş
-                    </span>
-                    <input
-                      type="date"
-                      value={audienceLastOrderAfter}
-                      onChange={(e) =>
-                        setAudienceLastOrderAfter(e.target.value)
-                      }
-                      disabled={isReadOnly}
-                      className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
-                    />
-                  </div>
-                </div>
-              </Section>
-
-              {/* === Gönderim === */}
-              {!isReadOnly && (
-                <Section>
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-sm font-medium text-foreground">
-                      Gönderim
-                    </h3>
-                    {campaign.status !== 'draft' && (
-                      <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
-                        {campaign.status}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex flex-col gap-1">
-                      <span className="flex items-center gap-1.5 text-xs text-muted">
-                        <Clock className="h-3.5 w-3.5" />
-                        Planla
-                      </span>
-                      <DateRow
-                        value={scheduleAt}
-                        onChange={setScheduleAt}
-                        disabled={isScheduling || isSending}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2 pt-1">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onPress={handleSendNow}
-                        isPending={isSending}
-                        isDisabled={
-                          isSending ||
-                          !subject.trim() ||
-                          blocks.length === 0 ||
-                          (audience?.count ?? 0) === 0
-                        }
-                        className="w-full rounded-full"
-                      >
-                        <PaperPlane className="h-3.5 w-3.5" />
-                        Hemen gönder
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onPress={handleSchedule}
-                        isPending={isScheduling}
-                        isDisabled={
-                          isScheduling ||
-                          !scheduleAt ||
-                          !subject.trim() ||
-                          blocks.length === 0
-                        }
-                        className="w-full rounded-full"
-                      >
-                        <Clock className="h-3.5 w-3.5" />
-                        Planla
-                      </Button>
-                      {(campaign.status === 'scheduled' ||
-                        campaign.status === 'sending') && (
-                        <Button
-                          variant="danger"
-                          size="sm"
-                          onPress={handleCancel}
-                          className="w-full rounded-full"
-                        >
-                          İptal et
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </Section>
-              )}
-
-              {/* === Performans (sent only) === */}
-              {campaign.status === 'sent' && (
-                <Section>
-                  <h3 className="mb-2 text-sm font-medium text-foreground">
-                    Performans
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <Stat label="Gönderildi" value={campaign.sentCount} />
-                    <Stat label="Açıldı" value={campaign.openedCount} />
-                    <Stat label="Tıklandı" value={campaign.clickedCount} />
-                    <Stat label="Başarısız" value={campaign.failedCount} />
-                    <Stat label="Bounce/şikayet" value={0} />
-                    <Stat
-                      label="Aboneliği iptal"
-                      value={campaign.unsubscribedCount}
-                    />
-                  </div>
-                </Section>
-              )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-0.5">
+              <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+                <Pencil className="h-3.5 w-3.5" />
+                Ton
+              </div>
+              <TextField
+                value={aiTone}
+                onChange={setAiTone}
+                isDisabled={isReadOnly}
+                aria-label="Ton"
+              >
+                <Input
+                  fullWidth
+                  variant="secondary"
+                  placeholder="samimi, espirili, resmi"
+                  className={FIELD_CLASS}
+                />
+              </TextField>
             </div>
           </div>
-        </aside>
+        </Section>
+
+        {/* === Hedef kitle === */}
+        <Section>
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-foreground">Hedef kitle</h3>
+            <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
+              {audience?.count ?? '—'} kişi
+            </span>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-xs text-muted">
+                <Tag className="h-3.5 w-3.5" />
+                Mağazalar
+              </span>
+              <div className="flex flex-wrap gap-1">
+                {stores.length === 0 ? (
+                  <span className="text-xs text-muted">Mağaza yok</span>
+                ) : (
+                  stores.map((s) => {
+                    const selected = audienceStoreIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        disabled={isReadOnly}
+                        onClick={() =>
+                          setAudienceStoreIds((prev) =>
+                            prev.includes(s.id)
+                              ? prev.filter((x) => x !== s.id)
+                              : [...prev, s.id],
+                          )
+                        }
+                        className={[
+                          'inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[11px] font-medium transition-colors',
+                          selected
+                            ? 'bg-foreground/[0.10] text-foreground'
+                            : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+                        ].join(' ')}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-xs text-muted">
+                <Tag className="h-3.5 w-3.5" />
+                Tag&apos;ler
+              </span>
+              <TextField
+                value={audienceTagsRaw}
+                onChange={setAudienceTagsRaw}
+                isDisabled={isReadOnly}
+                aria-label="Tag'ler"
+              >
+                <Input
+                  fullWidth
+                  variant="secondary"
+                  placeholder="vip, mart-2026 (virgülle)"
+                  className={FIELD_CLASS}
+                />
+              </TextField>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="flex items-center gap-1.5 text-xs text-muted">
+                <Calendar className="h-3.5 w-3.5" />
+                Son sipariş
+              </span>
+              <input
+                type="date"
+                value={audienceLastOrderAfter}
+                onChange={(e) => setAudienceLastOrderAfter(e.target.value)}
+                disabled={isReadOnly}
+                className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
+              />
+            </div>
+          </div>
+        </Section>
+
+        {/* === Gönderim === */}
+        {!isReadOnly && (
+          <Section>
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-foreground">Gönderim</h3>
+              {campaign.status !== 'draft' && (
+                <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
+                  {campaign.status}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2.5">
+              <div className="flex flex-col gap-1">
+                <span className="flex items-center gap-1.5 text-xs text-muted">
+                  <Clock className="h-3.5 w-3.5" />
+                  Planla
+                </span>
+                <DateRow
+                  value={scheduleAt}
+                  onChange={setScheduleAt}
+                  disabled={isScheduling || isSending}
+                />
+              </div>
+              <div className="flex flex-col gap-2 pt-1">
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onPress={handleSendNow}
+                  isPending={isSending}
+                  isDisabled={
+                    isSending ||
+                    !subject.trim() ||
+                    blocks.length === 0 ||
+                    (audience?.count ?? 0) === 0
+                  }
+                  className="w-full rounded-full"
+                >
+                  <PaperPlane className="h-3.5 w-3.5" />
+                  Hemen gönder
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onPress={handleSchedule}
+                  isPending={isScheduling}
+                  isDisabled={
+                    isScheduling ||
+                    !scheduleAt ||
+                    !subject.trim() ||
+                    blocks.length === 0
+                  }
+                  className="w-full rounded-full"
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  Planla
+                </Button>
+                {(campaign.status === 'scheduled' ||
+                  campaign.status === 'sending') && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onPress={handleCancel}
+                    className="w-full rounded-full"
+                  >
+                    İptal et
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Section>
+        )}
+
+        {/* === Performans === */}
+        {campaign.status === 'sent' && (
+          <Section>
+            <h3 className="mb-2 text-sm font-medium text-foreground">
+              Performans
+            </h3>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <Stat label="Gönderildi" value={campaign.sentCount} />
+              <Stat label="Açıldı" value={campaign.openedCount} />
+              <Stat label="Tıklandı" value={campaign.clickedCount} />
+              <Stat label="Başarısız" value={campaign.failedCount} />
+              <Stat label="Bounce/şikayet" value={0} />
+              <Stat
+                label="Aboneliği iptal"
+                value={campaign.unsubscribedCount}
+              />
+            </div>
+          </Section>
+        )}
+          </div>
+          )}
+        </EmailRightRail>
       </div>
     </>
   );
@@ -920,7 +1015,60 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-/** AI üretiminden gelen HTML'i tek paragraf text'e çevir — block-text init için. */
+function DeviceToggle({
+  value,
+  onChange,
+}: {
+  value: 'desktop' | 'tablet' | 'mobile';
+  onChange: (v: 'desktop' | 'tablet' | 'mobile') => void;
+}) {
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-md bg-foreground/[0.04] p-0.5">
+      {(['desktop', 'tablet', 'mobile'] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => onChange(d)}
+          aria-label={d}
+          className={[
+            'inline-flex h-6 w-7 items-center justify-center rounded text-xs transition-colors',
+            value === d
+              ? 'bg-foreground/[0.10] text-foreground'
+              : 'text-muted hover:bg-foreground/[0.06]',
+          ].join(' ')}
+        >
+          <DeviceIcon kind={d} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function DeviceIcon({ kind }: { kind: 'desktop' | 'tablet' | 'mobile' }) {
+  if (kind === 'desktop') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+        <rect x="2" y="3" width="16" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M7 17h6M10 14v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === 'tablet') {
+    return (
+      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+        <rect x="4" y="2" width="12" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+        <path d="M9 16h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
+      <rect x="6" y="2" width="8" height="16" rx="1.5" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M9 16h2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function stripHtmlToText(html: string): string {
   return html
     .replace(/<br\s*\/?>/gi, '\n')
@@ -930,8 +1078,6 @@ function stripHtmlToText(html: string): string {
     .trim();
 }
 
-/** Migrasyon — eski raw HTML kampanyaları için kısa metin çıkart. */
 function stripTagsBrief(html: string): string {
   return stripHtmlToText(html).slice(0, 4000);
 }
-

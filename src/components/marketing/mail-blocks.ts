@@ -7,27 +7,56 @@
  * kullanılır. {{firstName}} / {{product:id}} placeholder'ları yine destekli.
  */
 
+/** Block-level stil ayarları — sağ paneldeki "Stil" tab'i bunları
+ *  düzenler. Tüm alanlar opsiyonel; tanımsız olan defaults'a düşer
+ *  (renderBlock içindeki tip-bazlı fallback değerleri). Email-safe inline
+ *  CSS üretmek için sınırlı tutuldu. */
+export interface BlockStyle {
+  // Typography
+  fontSize?: number;            // px
+  fontWeight?: 400 | 500 | 600 | 700;
+  textColor?: string;           // hex, "#rrggbb"
+  lineHeight?: number;          // unitless multiplier
+
+  // Color
+  fillColor?: string;           // background-color (hex)
+  strokeColor?: string;         // border color
+  strokeWidth?: number;         // 0-4 px
+
+  // Layout (wrapper padding)
+  paddingTop?: number;
+  paddingRight?: number;
+  paddingBottom?: number;
+  paddingLeft?: number;
+
+  // Appearance
+  opacity?: number;             // 0-100
+  cornerRadius?: number;        // px
+}
+
 export type MailBlock =
-  | { id: string; type: 'heading'; text: string; level: 'h1' | 'h2' | 'h3'; align?: 'left' | 'center' | 'right' }
-  | { id: string; type: 'text'; text: string; align?: 'left' | 'center' | 'right' }
+  | { id: string; type: 'heading'; text: string; level: 'h1' | 'h2' | 'h3'; align?: 'left' | 'center' | 'right'; style?: BlockStyle }
+  | { id: string; type: 'text'; text: string; align?: 'left' | 'center' | 'right'; style?: BlockStyle }
   | {
       id: string;
       type: 'image';
       url: string;
       alt: string;
       href: string | null;
+      style?: BlockStyle;
     }
-  | { id: string; type: 'logo'; url: string; href: string | null }
-  | { id: string; type: 'product'; productId: string }
+  | { id: string; type: 'logo'; url: string; href: string | null; style?: BlockStyle }
+  | { id: string; type: 'product'; productId: string; style?: BlockStyle }
   | {
       id: string;
       type: 'product-grid';
       productIds: string[];
       columns: 2 | 3;
+      style?: BlockStyle;
     }
-  | { id: string; type: 'button'; label: string; href: string; align: 'left' | 'center' | 'right' }
-  | { id: string; type: 'divider' }
-  | { id: string; type: 'spacer'; height: number };
+  | { id: string; type: 'button'; label: string; href: string; align: 'left' | 'center' | 'right'; style?: BlockStyle }
+  | { id: string; type: 'divider'; style?: BlockStyle }
+  | { id: string; type: 'spacer'; height: number; style?: BlockStyle };
 
 export const BLOCK_LABELS: Record<MailBlock['type'], string> = {
   heading: 'Başlık',
@@ -102,27 +131,69 @@ function escapeHtml(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/** Wrapper div için padding / border / radius / opacity / fill stilleri.
+ *  Inline block içeriğinin etrafına saran kabuk olarak uygulanır. */
+function wrapperCss(style: BlockStyle | undefined): string {
+  if (!style) return '';
+  const parts: string[] = [];
+  if (style.paddingTop != null) parts.push(`padding-top:${style.paddingTop}px`);
+  if (style.paddingRight != null) parts.push(`padding-right:${style.paddingRight}px`);
+  if (style.paddingBottom != null) parts.push(`padding-bottom:${style.paddingBottom}px`);
+  if (style.paddingLeft != null) parts.push(`padding-left:${style.paddingLeft}px`);
+  if (style.fillColor) parts.push(`background-color:${style.fillColor}`);
+  if (style.strokeWidth != null && style.strokeColor && style.strokeWidth > 0) {
+    parts.push(`border:${style.strokeWidth}px solid ${style.strokeColor}`);
+  }
+  if (style.cornerRadius != null && style.cornerRadius > 0) {
+    parts.push(`border-radius:${style.cornerRadius}px`);
+  }
+  if (style.opacity != null && style.opacity < 100) {
+    parts.push(`opacity:${(style.opacity / 100).toFixed(2)}`);
+  }
+  return parts.join(';');
+}
+
+/** Wrapper varsa içeriği saran div ekler; yoksa içeriği aynen döndürür. */
+function withWrapper(inner: string, style: BlockStyle | undefined): string {
+  const css = wrapperCss(style);
+  if (!css) return inner;
+  return `<div style="${css}">${inner}</div>`;
+}
+
 /** Tek bir bloğu inline HTML'e derler. Wrapper template kendisi tablo
- *  + body container'ı sağlar; biz yalnızca içerikleri üretiyoruz. */
+ *  + body container'ı sağlar; biz yalnızca içerikleri üretiyoruz.
+ *  block.style varsa Typography/Color/Layout/Appearance alanları uygulanır. */
 function renderBlock(block: MailBlock): string {
   switch (block.type) {
     case 'heading': {
-      const sizes = { h1: 26, h2: 20, h3: 16 } as const;
-      const size = sizes[block.level];
+      const defaults = { h1: 26, h2: 20, h3: 16 } as const;
+      const fontSize = block.style?.fontSize ?? defaults[block.level];
       const align = block.align ?? 'left';
-      return `<${block.level} style="margin:0 0 12px 0;font-size:${size}px;line-height:1.3;color:#111827;font-weight:600;text-align:${align};">${escapeHtml(block.text)}</${block.level}>`;
+      const color = block.style?.textColor ?? '#111827';
+      const weight = block.style?.fontWeight ?? 600;
+      const lineHeight = block.style?.lineHeight ?? 1.3;
+      const inner = `<${block.level} style="margin:0 0 12px 0;font-size:${fontSize}px;line-height:${lineHeight};color:${color};font-weight:${weight};text-align:${align};">${escapeHtml(block.text)}</${block.level}>`;
+      return withWrapper(inner, block.style);
     }
     case 'text': {
       const align = block.align ?? 'left';
+      const fontSize = block.style?.fontSize ?? 15;
+      const color = block.style?.textColor ?? '#111827';
+      const weight = block.style?.fontWeight ?? 400;
+      const lineHeight = block.style?.lineHeight ?? 1.6;
       const html = escapeHtml(block.text).replace(/\n/g, '<br/>');
-      return `<p style="margin:0 0 14px 0;font-size:15px;line-height:1.6;color:#111827;text-align:${align};">${html}</p>`;
+      const inner = `<p style="margin:0 0 14px 0;font-size:${fontSize}px;line-height:${lineHeight};color:${color};font-weight:${weight};text-align:${align};">${html}</p>`;
+      return withWrapper(inner, block.style);
     }
     case 'image': {
-      const img = `<img src="${escapeHtml(block.url || '')}" alt="${escapeHtml(block.alt || '')}" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:8px;" />`;
+      const radius = block.style?.cornerRadius ?? 8;
+      const img = `<img src="${escapeHtml(block.url || '')}" alt="${escapeHtml(block.alt || '')}" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:${radius}px;" />`;
       const inner = block.href
         ? `<a href="${escapeHtml(block.href)}" style="text-decoration:none;color:inherit;">${img}</a>`
         : img;
-      return `<div style="margin:8px 0 16px 0;">${inner}</div>`;
+      // image wrapper'ı zaten margin uygular; style varsa onu kullan.
+      const wrapperStyle = wrapperCss(block.style);
+      return `<div style="margin:8px 0 16px 0;${wrapperStyle}">${inner}</div>`;
     }
     case 'logo': {
       if (!block.url) return '';
@@ -130,17 +201,17 @@ function renderBlock(block: MailBlock): string {
       const inner = block.href
         ? `<a href="${escapeHtml(block.href)}" style="text-decoration:none;">${img}</a>`
         : img;
-      return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 20px 0;"><tr><td align="center">${inner}</td></tr></table>`;
+      return withWrapper(
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:8px 0 20px 0;"><tr><td align="center">${inner}</td></tr></table>`,
+        block.style,
+      );
     }
     case 'product': {
       // bodyHtml içine placeholder bırak — backend template renderer
       // {{product:id}}'yi ürün kartına çevirir.
-      return `{{product:${block.productId}}}`;
+      return withWrapper(`{{product:${block.productId}}}`, block.style);
     }
     case 'product-grid': {
-      // Çok kolonlu ürün grid — placeholder'ları tek bir tabloda kümele.
-      // Backend template her placeholder'ı tam-genişlik kart olarak render
-      // ediyor; burada manuel tablo ile yan yana sığdırıyoruz.
       const cols = block.columns;
       const ids = block.productIds.filter(Boolean);
       if (ids.length === 0) return '';
@@ -157,7 +228,6 @@ function renderBlock(block: MailBlock): string {
                 `<td valign="top" width="${cellWidth}" style="padding:8px;">{{product:${id}}}</td>`,
             )
             .join('');
-          // Eksik hücreleri boş td ile doldur ki son satır da hizalı olsun.
           const padding =
             row.length < cols
               ? Array(cols - row.length)
@@ -167,18 +237,46 @@ function renderBlock(block: MailBlock): string {
           return `<tr>${cells}${padding}</tr>`;
         })
         .join('');
-      return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:16px 0;border-collapse:collapse;">${trs}</table>`;
+      return withWrapper(
+        `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:16px 0;border-collapse:collapse;">${trs}</table>`,
+        block.style,
+      );
     }
     case 'button': {
       const align = block.align === 'left' ? 'left' : block.align === 'right' ? 'right' : 'center';
-      return `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:16px 0;">
+      const bg = block.style?.fillColor ?? '#111827';
+      const textColor = block.style?.textColor ?? '#ffffff';
+      const fontSize = block.style?.fontSize ?? 14;
+      const weight = block.style?.fontWeight ?? 600;
+      const radius = block.style?.cornerRadius ?? 9999;
+      const borderCss =
+        block.style?.strokeColor && (block.style?.strokeWidth ?? 0) > 0
+          ? `border:${block.style.strokeWidth}px solid ${block.style.strokeColor};`
+          : '';
+      const inner = `<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin:16px 0;">
   <tr><td align="${align}">
-    <a href="${escapeHtml(block.href || '#')}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 24px;border-radius:9999px;text-decoration:none;font-size:14px;font-weight:600;">${escapeHtml(block.label)}</a>
+    <a href="${escapeHtml(block.href || '#')}" style="display:inline-block;background:${bg};color:${textColor};padding:12px 24px;border-radius:${radius}px;text-decoration:none;font-size:${fontSize}px;font-weight:${weight};${borderCss}">${escapeHtml(block.label)}</a>
   </td></tr>
 </table>`;
+      // button kendi container'ında padding zaten margin ile sağlanıyor; wrapper
+      // sadece opacity/wrap-padding için gerekiyorsa eklenir.
+      const wrapperStyle = wrapperCss({
+        ...block.style,
+        fillColor: undefined, // button kendi rengi
+        strokeColor: undefined,
+        strokeWidth: undefined,
+        cornerRadius: undefined,
+      });
+      return wrapperStyle ? `<div style="${wrapperStyle}">${inner}</div>` : inner;
     }
-    case 'divider':
-      return `<hr style="border:0;border-top:1px solid #e5e7eb;margin:20px 0;" />`;
+    case 'divider': {
+      const color = block.style?.strokeColor ?? '#e5e7eb';
+      const width = block.style?.strokeWidth ?? 1;
+      return withWrapper(
+        `<hr style="border:0;border-top:${width}px solid ${color};margin:20px 0;" />`,
+        block.style,
+      );
+    }
     case 'spacer':
       return `<div style="height:${Math.max(0, Math.min(120, block.height))}px;line-height:1px;">&nbsp;</div>`;
   }

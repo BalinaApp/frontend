@@ -2,20 +2,25 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { Envelope, Person } from '@gravity-ui/icons';
+import {
+  BookOpen,
+  Comments,
+  Sparkles,
+} from '@gravity-ui/icons';
 
 interface RailItem {
-  id: 'contacts' | 'campaigns';
+  id: 'threads' | 'kb' | 'learning';
   label: string;
   href: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
-  /** Tailwind background-color class for the small color tile. */
   tile: string;
 }
 
-/** Marketing alt nav — settings rail patternıyla aynı: solda dikey menü,
- *  sağda içerik kartı. Kontaklar / Kampanyalar arası geçiş. */
-export default function MarketingLayout({
+/** Sohbetler alt nav — Pazarlama layout patterniyle aynı: solda dikey menü,
+ *  sağda içerik kartı. Sohbetler / Bilgi tabanı / Öğrenme kuyruğu arası
+ *  geçiş. Editor / thread-detail gibi tam ekran ihtiyacı olan alt route'lar
+ *  rail'i gizlemek için kendi koşullarını eklesin. */
+export default function ConversationsLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -24,35 +29,34 @@ export default function MarketingLayout({
   const slug = params?.companySlug ?? '';
   const pathname = usePathname();
 
-  const isCampaignEditor = /\/marketing\/campaigns\/[^/]+$/.test(pathname);
-  if (isCampaignEditor) {
-    // Rail yok — children dikey stack (PageHeader + workbench bar + 3-col)
-    return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        {children}
-      </div>
-    );
-  }
-
   const items: RailItem[] = [
     {
-      id: 'contacts',
-      label: 'Kontaklar',
-      href: `/${slug}/marketing/contacts`,
-      icon: Person,
-      tile: 'bg-emerald-500',
+      id: 'threads',
+      label: 'Sohbetler',
+      href: `/${slug}/conversations`,
+      icon: Comments,
+      tile: 'bg-sky-500',
     },
     {
-      id: 'campaigns',
-      label: 'Kampanyalar',
-      href: `/${slug}/marketing/campaigns`,
-      icon: Envelope,
-      tile: 'bg-indigo-500',
+      id: 'kb',
+      label: 'Bilgi tabanı',
+      href: `/${slug}/conversations/knowledge-base`,
+      icon: BookOpen,
+      tile: 'bg-amber-500',
+    },
+    {
+      id: 'learning',
+      label: 'Öğrenme kuyruğu',
+      href: `/${slug}/conversations/learning`,
+      icon: Sparkles,
+      tile: 'bg-violet-500',
     },
   ];
-  const activeId: RailItem['id'] = pathname.includes('/marketing/campaigns')
-    ? 'campaigns'
-    : 'contacts';
+  const activeId: RailItem['id'] = pathname.includes('/knowledge-base')
+    ? 'kb'
+    : pathname.includes('/learning')
+      ? 'learning'
+      : 'threads';
 
   return (
     <div className="flex flex-1 overflow-hidden">
@@ -60,7 +64,7 @@ export default function MarketingLayout({
       <aside className="hidden w-64 shrink-0 flex-col gap-4 px-4 pb-3 pt-3 md:flex">
         <div className="flex items-center gap-1 py-1">
           <h1 className="flex-1 text-base font-medium text-foreground">
-            Pazarlama
+            Sohbetler
           </h1>
         </div>
         <nav className="flex flex-col gap-1">
@@ -90,7 +94,6 @@ export default function MarketingLayout({
         </nav>
       </aside>
 
-      {/* Right pane container — settings ile birebir aynı */}
       <div className="flex flex-1 flex-col p-1">
         <div className="scrollbar-none flex flex-1 flex-col overflow-y-auto rounded-lg bg-white/40 shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]">
           {children}

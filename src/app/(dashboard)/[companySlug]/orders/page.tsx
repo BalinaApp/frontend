@@ -14,6 +14,7 @@ import {
   Tag,
   LayoutSideContentRight,
   Printer,
+  TriangleExclamation,
 } from '@gravity-ui/icons';
 import {
   AlertDialog,
@@ -42,6 +43,7 @@ import {
   clearFilters as clearAllFilters,
 } from '@/components/products/filter-types';
 import type { FilterDef } from '@/components/products/filter-types';
+import { CargoRecipientEditModal } from '@/components/orders/cargo-recipient-edit-modal';
 
 type StatusFilter = 'all' | 'completed' | 'processing' | 'cancelled' | 'refunded';
 
@@ -457,6 +459,66 @@ function isLabelBlockedStatus(status: string): boolean {
   return LABEL_BLOCKED_STATUSES.has(status);
 }
 
+type CargoOutcome = 'normal' | 'alreadyExists' | 'recovered';
+
+// Backend `/cargo/barcode` üç farklı başarı şekli dönebilir:
+// - normal: MNG'nin ham response'u (labelUrl/labelPdf/.../zpl)
+// - alreadyExists: yerel Shipment kaydı vardı, idempotent dönüş
+// - recovered: MNG 20011 attı, backend getOrder/getShipment ile tracking'i kurtardı
+function classifyCargoResponse(data: unknown): CargoOutcome {
+  if (!data || typeof data !== 'object') return 'normal';
+  const d = data as { alreadyExists?: unknown; recovered?: unknown };
+  if (d.alreadyExists === true) return 'alreadyExists';
+  if (d.recovered === true) return 'recovered';
+  return 'normal';
+}
+
+// Backend hata payload'undan kullanıcıya gösterilebilir mesaj çıkar.
+// Üç şekil olabilir: string, string[], `{message,code,...}` objesi. MNG
+// passthrough hataları "MNG xyz error: {"error":{...}}" formatında string
+// içinde gömülü JSON taşıyor — Description alanını yüzeye çıkarıyoruz.
+function extractCargoErrorMessage(err: unknown): { text: string; code?: string } {
+  const e = err as {
+    response?: { data?: { message?: unknown; code?: unknown; error?: unknown } };
+  };
+  const data = e.response?.data;
+  const rawCode = typeof data?.code === 'string' ? data.code : undefined;
+  const raw = data?.message ?? data?.error;
+  let text = 'Kargo etiketi oluşturulamadı';
+  if (typeof raw === 'string') text = raw;
+  else if (Array.isArray(raw)) text = raw.map(String).join(', ');
+  else if (raw && typeof raw === 'object') {
+    const obj = raw as { message?: unknown; code?: unknown };
+    if (typeof obj.message === 'string') text = obj.message;
+    else if (typeof obj.code === 'string') text = obj.code;
+    else text = JSON.stringify(raw);
+  }
+  // 20011_NO_SHIPMENT: MNG sipariş'i kaydetmiş ama henüz shipment'a
+  // çevirmemiş — kullanıcıya ne yapacağını söyle, ham mesajı gösterme.
+  if (rawCode === '20011_NO_SHIPMENT') {
+    text =
+      'Kargo etiketi henüz hazır değil. MNG portalında gönderici profilinizin dolu olduğundan emin olun veya birkaç dakika sonra tekrar deneyin.';
+  } else {
+    const mngMatch = text.match(/\{[\s\S]*\}$/);
+    if (mngMatch) {
+      try {
+        const parsed: {
+          error?: { Description?: string; Message?: string; Code?: string };
+        } = JSON.parse(mngMatch[0]);
+        const inner = parsed.error;
+        const desc = inner?.Description || inner?.Message;
+        if (typeof desc === 'string' && desc.trim()) {
+          const code = inner?.Code ? ` (${inner.Code})` : '';
+          text = `${desc.replace(/^Exception:\s*/i, '').trim()}${code}`;
+        }
+      } catch {
+        // JSON parse başarısız — orijinal text kalır.
+      }
+    }
+  }
+  return { text, code: rawCode };
+}
+
 const statusOptions: { id: StatusFilter; label: string }[] = [
   { id: 'all', label: 'Tüm Siparişler' },
   { id: 'processing', label: 'İşleniyor' },
@@ -496,6 +558,18 @@ export default function OrdersPage() {
   const [isCreatingBulkLabels, setIsCreatingBulkLabels] = useState(false);
   const [isCancellingShipments, setIsCancellingShipments] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+
+  // Kargo alıcı validation cache — referenceId → valid (undefined=henüz check
+  // edilmedi). Orders list mount'unda batch endpoint'le doldurulur; row'da
+  // uyarı rozeti olarak gösterilir.
+  const [cargoValidByRef, setCargoValidByRef] = useState<
+    Record<string, boolean>
+  >({});
+  // "Adresi Düzelt" modal state — kullanıcı uyarı rozetine basınca açılır,
+  // form prefilled (GET /cargo/recipient/:referenceId), kaydet PATCH eder.
+  const [recipientEditOrder, setRecipientEditOrder] = useState<Order | null>(
+    null,
+  );
   // Sıralama — Products page ile aynı pattern. Backend safe mapping yapıyor
   // (storeName relation üzerinden, bilinmeyenler orderDate fallback).
   const [sortField, setSortField] = useState<SortField>('orderDate');
@@ -606,19 +680,41 @@ export default function OrdersPage() {
     // (MNG doc: "2 servis ardarda çağırıldığında varışsız nedeniyle hata"),
     // bu yüzden bulk'ta sırayla çağırıyoruz. Her cevap kendi referenceId'siyle
     // logla — failure'da hangi sipariş patladı görünsün.
-    const succeeded: Array<{ order: Order; data: unknown }> = [];
-    const failed: Array<{ order: Order; reason: unknown }> = [];
+    const succeeded: Array<{
+      order: Order;
+      data: unknown;
+      outcome: CargoOutcome;
+    }> = [];
+    const failed: Array<{ order: Order; message: string; code?: string }> = [];
 
     for (const o of eligibleOrders) {
       const referenceId = toMngReferenceId(o.orderNumber);
       if (!referenceId) {
-        failed.push({ order: o, reason: new Error('referenceId üretilemedi') });
+        failed.push({ order: o, message: 'Sipariş no MNG referansına çevrilemedi' });
         continue;
       }
       const content = `${o.customerName || 'Misafir'} - ${o.itemsCount} ürün`.slice(
         0,
         200,
       );
+      // 1. Adım — MNG CreateOrder: backend yerel Order + taze WC datasından
+      // recipient'i kurar, il/ilçe normalizer'ından geçirir, MNG'ye iletir.
+      // MNG'de zaten varsa idempotent ({alreadyExists:true}).
+      try {
+        await api.post(
+          `/company/${companyId}/cargo/order/from-local/${referenceId}`,
+          { desi, kg, content, packagingType: 1, isCOD: 0, codAmount: 0, marketPlaceShortCode: '' },
+        );
+      } catch (e) {
+        const { text, code } = extractCargoErrorMessage(e);
+        console.error(
+          `[bulk-cargo] order=${o.orderNumber} CreateOrder failed code=${code ?? '-'}: ${text}`,
+        );
+        failed.push({ order: o, message: `Sipariş kaydı: ${text}`, code });
+        continue;
+      }
+      // 2. Adım — MNG createbarcode: order zaten kayıtlı; backend createbarcode
+      // çağırır, 20011 olursa kurtarma (5×3sn retry) devreye girer.
       try {
         const { data } = await api.post(
           `/company/${companyId}/cargo/barcode`,
@@ -642,30 +738,30 @@ export default function OrdersPage() {
             ],
           },
         );
-        // Eğer alreadyExists döndüyse MNG'de eski kayıt var demek; cargo
-        // label ZPL'i bu cevapta olmayabilir, kullanıcıya görünür şekilde
-        // bildirim verelim ama yine de yazdırmaya götürelim.
-        if (
-          data &&
-          typeof data === 'object' &&
-          (data as { alreadyExists?: unknown }).alreadyExists === true
-        ) {
-          console.warn(
-            `[bulk-cargo] order=${o.orderNumber} alreadyExists; label ZPL response'unda olmayabilir`,
-          );
-        }
-        succeeded.push({ order: o, data });
+        const outcome = classifyCargoResponse(data);
+        succeeded.push({ order: o, data, outcome });
       } catch (e) {
-        console.error(`[bulk-cargo] order=${o.orderNumber} failed`, e);
-        failed.push({ order: o, reason: e });
+        const { text, code } = extractCargoErrorMessage(e);
+        console.error(
+          `[bulk-cargo] order=${o.orderNumber} createBarcode failed code=${code ?? '-'}: ${text}`,
+        );
+        failed.push({ order: o, message: `Etiket: ${text}`, code });
       }
     }
 
     // API çağrıları bitti ama Labelary render'ı + print iframe oluşturma
     // hâlâ sürecek; bu yüzden loading'i print tetiklenene kadar tutuyoruz.
+    const newCount = succeeded.filter((s) => s.outcome === 'normal').length;
+    const existingCount = succeeded.filter(
+      (s) => s.outcome === 'alreadyExists',
+    ).length;
+    const recoveredCount = succeeded.filter(
+      (s) => s.outcome === 'recovered',
+    ).length;
+
     if (succeeded.length > 0) {
       console.log(
-        `[bulk-cargo] printing ${succeeded.length} orders`,
+        `[bulk-cargo] printing ${succeeded.length} orders (new=${newCount} existing=${existingCount} recovered=${recoveredCount})`,
         succeeded.map((s) => s.order.orderNumber),
       );
       await printCargoLabels(
@@ -674,23 +770,30 @@ export default function OrdersPage() {
           orderNumber: s.order.orderNumber,
         })),
       );
+      // Toast özetini outcome dağılımına göre kur: yeni / zaten var / kurtarılan.
+      const parts: string[] = [];
+      if (newCount > 0) parts.push(`${newCount} yeni etiket`);
+      if (existingCount > 0) parts.push(`${existingCount} mevcut etiket`);
+      if (recoveredCount > 0)
+        parts.push(`${recoveredCount} kurtarılan etiket (MNG'den)`);
+      const summary = parts.join(', ');
       toast.success(
         failed.length === 0
-          ? `${succeeded.length} kargo etiketi oluşturuldu`
-          : `${succeeded.length} etiket oluşturuldu, ${failed.length} hata`,
+          ? `${summary} yazdırılıyor`
+          : `${summary} yazdırılıyor, ${failed.length} hata`,
       );
     }
     if (failed.length > 0 && succeeded.length === 0) {
-      toast.danger(`Tüm etiketler başarısız oldu (${failed.length} sipariş)`);
-    } else if (failed.length > 0) {
-      // Detayda kaybolmaması için ilk başarısız sebebini de göster.
       const first = failed[0];
-      const reason =
-        first.reason instanceof Error
-          ? first.reason.message
-          : 'Bilinmeyen hata';
       toast.danger(
-        `${failed.length} sipariş için etiket başarısız: ${reason}`,
+        failed.length === 1
+          ? first.message
+          : `${failed.length} sipariş için etiket başarısız: ${first.message}`,
+      );
+    } else if (failed.length > 0) {
+      const first = failed[0];
+      toast.danger(
+        `${failed.length} sipariş için etiket başarısız: ${first.message}`,
       );
     }
 
@@ -847,6 +950,60 @@ export default function OrdersPage() {
   useEffect(() => {
     fetchOrdersList();
   }, [fetchOrdersList]);
+
+  // Orders list değişince görünür siparişler için kargo recipient validation
+  // batch sorgusu çalıştır. Sadece kargo etiketi basılabilir olanları sor
+  // (iptal/iade siparişler için anlamsız). Cache'i temizleyip yeniden doldur.
+  useEffect(() => {
+    if (!currentCompany?.id || orders.length === 0) {
+      setCargoValidByRef({});
+      return;
+    }
+    const refs = orders
+      .filter((o) => !isLabelBlockedStatus(o.status))
+      .map((o) => toMngReferenceId(o.orderNumber))
+      .filter(Boolean);
+    if (refs.length === 0) {
+      setCargoValidByRef({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.post<
+          Array<{ referenceId: string; valid: boolean }>
+        >(`/company/${currentCompany.id}/cargo/recipient/validate-batch`, {
+          referenceIds: refs,
+        });
+        if (cancelled) return;
+        const next: Record<string, boolean> = {};
+        for (const item of data) next[item.referenceId] = item.valid;
+        setCargoValidByRef(next);
+        // Validation sonucu invalid çıkan siparişler hâlâ seçili kalmışsa
+        // çıkar — bulk akışa girememeleri lazım, hayalet seçim yaratmayalım.
+        setSelected((prev) => {
+          if (prev.size === 0) return prev;
+          const cleaned = new Set(prev);
+          let changed = false;
+          for (const id of prev) {
+            const o = orders.find((x) => x.id === id);
+            if (!o) continue;
+            const ref = toMngReferenceId(o.orderNumber);
+            if (next[ref] === false) {
+              cleaned.delete(id);
+              changed = true;
+            }
+          }
+          return changed ? cleaned : prev;
+        });
+      } catch {
+        // Sessizce yut — rozet gösterilmez, normal akış bozulmaz.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentCompany?.id, orders]);
 
   const handlePageChange = (page: number) => {
     if (!currentCompany?.id) return;
@@ -1062,6 +1219,12 @@ export default function OrdersPage() {
                 // İptal/iade siparişler için kargo etiketi anlamsız —
                 // checkbox kapalı.
                 const isShippable = !isLabelBlockedStatus(order.status);
+                // Alıcı adresi MNG için geçersizse de seçim kapalı —
+                // kullanıcı önce "Adres hatalı" rozetine basıp düzeltmeli,
+                // aksi halde bulk akış CreateOrder'da patlar.
+                const cargoRef = toMngReferenceId(order.orderNumber);
+                const addressInvalid = cargoValidByRef[cargoRef] === false;
+                const canSelect = isShippable && !addressInvalid;
                 return (
                   <div
                     key={order.id}
@@ -1086,7 +1249,7 @@ export default function OrdersPage() {
                       <div onClick={(e) => e.stopPropagation()}>
                         <Checkbox
                           isSelected={isChecked}
-                          isDisabled={!isShippable}
+                          isDisabled={!canSelect}
                           onChange={(next) => {
                             setSelected((prev) => {
                               const updated = new Set(prev);
@@ -1096,9 +1259,11 @@ export default function OrdersPage() {
                             });
                           }}
                           aria-label={
-                            isShippable
-                              ? `${order.orderNumber} seç`
-                              : `${order.orderNumber} — iptal/iade siparişler için kargo etiketi basılamaz`
+                            !isShippable
+                              ? `${order.orderNumber} — iptal/iade siparişler için kargo etiketi basılamaz`
+                              : addressInvalid
+                                ? `${order.orderNumber} — alıcı adresi MNG'ye uygun değil, önce "Adres hatalı" rozetine basıp düzeltin`
+                                : `${order.orderNumber} seç`
                           }
                         >
                           <Checkbox.Control>
@@ -1119,9 +1284,29 @@ export default function OrdersPage() {
                         <span className="truncate text-sm font-medium leading-5 text-foreground">
                           {formatOrderNo(order.orderNumber)}
                         </span>
-                        <span className="truncate text-xs leading-4 text-muted">
-                          {order.customerName || 'Misafir'}
-                          {order.customerEmail ? ` · ${order.customerEmail}` : ''}
+                        <span className="flex items-center gap-1.5 truncate text-xs leading-4 text-muted">
+                          <span className="truncate">
+                            {order.customerName || 'Misafir'}
+                            {order.customerEmail
+                              ? ` · ${order.customerEmail}`
+                              : ''}
+                          </span>
+                          {isShippable &&
+                          cargoValidByRef[toMngReferenceId(order.orderNumber)] ===
+                            false ? (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRecipientEditOrder(order);
+                              }}
+                              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium leading-3 text-warning transition-colors hover:bg-warning/20"
+                              title="Müşteri adresi kargoya gönderilemez — düzeltmek için tıkla"
+                            >
+                              <TriangleExclamation className="h-3 w-3" />
+                              Adres hatalı
+                            </button>
+                          ) : null}
                         </span>
                       </div>
                     </div>
@@ -1347,6 +1532,23 @@ export default function OrdersPage() {
         </Modal.Backdrop>
       </Modal>
 
+      {/* Adres düzeltme modal — Adres hatalı rozetinden açılır */}
+      {recipientEditOrder && currentCompany?.id ? (
+        <CargoRecipientEditModal
+          isOpen={true}
+          onClose={() => setRecipientEditOrder(null)}
+          companyId={currentCompany.id}
+          referenceId={toMngReferenceId(recipientEditOrder.orderNumber)}
+          orderNumber={recipientEditOrder.orderNumber}
+          onSaved={() => {
+            // Kaydedince batch validation cache'i güncelle — bu sipariş artık
+            // valid kabul edilsin (override DTO-zorunluyu dolduruyor).
+            const ref = toMngReferenceId(recipientEditOrder.orderNumber);
+            setCargoValidByRef((prev) => ({ ...prev, [ref]: true }));
+          }}
+        />
+      ) : null}
+
       {/* Kargo iptali onay dialog'u */}
       <AlertDialog
         isOpen={cancelConfirmOpen}
@@ -1522,8 +1724,28 @@ function OrderDetailDrawer({
     setIsCreatingLabel(true);
     setCargoErr(null);
     try {
-      // Defaults: COD kapalı, paket type "Paket" (1), hata durumunda barcode
-      // bas (1). Bu alanlar MNG DTO zorunlu — boş bırakılamaz.
+      // 1. Adım — MNG CreateOrder: backend yerel Order + taze WC datasından
+      // recipient'i kurar, il/ilçe normalizer'ından geçirir, MNG'ye iletir.
+      // MNG'de zaten varsa idempotent dönüş.
+      try {
+        await api.post(
+          `/company/${currentCompanyId}/cargo/order/from-local/${mngReferenceId}`,
+          {
+            desi,
+            kg,
+            content,
+            packagingType: 1,
+            isCOD: 0,
+            codAmount: 0,
+            marketPlaceShortCode: '',
+          },
+        );
+      } catch (orderErr) {
+        const { text } = extractCargoErrorMessage(orderErr);
+        throw new Error(`Sipariş kaydı: ${text}`);
+      }
+      // 2. Adım — MNG createbarcode: order zaten kayıtlı; backend createbarcode
+      // çağırır, 20011 olursa kurtarma (5×3sn retry) devreye girer.
       const { data } = await api.post(
         `/company/${currentCompanyId}/cargo/barcode`,
         {
@@ -1549,61 +1771,36 @@ function OrderDetailDrawer({
           ],
         },
       );
-      // Backend idempotency guard: bu sipariş için zaten barkod varsa MNG'ye
-      // tekrar gitmeden mevcut bilgi döner. Kullanıcıya farklı toast göster.
-      const alreadyExists =
-        data && typeof data === 'object' && (data as { alreadyExists?: unknown }).alreadyExists === true;
       // API çağrısı bitti ama Labelary render'ı + print iframe oluşturma
       // hâlâ sürecek; modal'ı şimdi kapatırsak kullanıcı 5-10sn ne olduğunu
       // anlamadan bekliyor. Print tamamlanana kadar loading'i tut.
       await runPrintLabel(data);
-      if (alreadyExists) {
-        toast.info('Bu sipariş için barkod zaten oluşturulmuş, mevcut etiket yazdırılıyor');
+      // Backend üç farklı başarı şekli dönebilir: yeni etiket / zaten var /
+      // 20011 sonrası MNG'den kurtarılan etiket. Her birine ayrı toast.
+      const outcome = classifyCargoResponse(data);
+      if (outcome === 'alreadyExists') {
+        toast.info(
+          'Bu sipariş için barkod zaten oluşturulmuş, mevcut etiket yazdırılıyor',
+        );
+      } else if (outcome === 'recovered') {
+        toast.info(
+          "Etiket MNG'den kurtarıldı (sipariş zaten kayıtlıydı), yazdırılıyor",
+        );
       } else {
         toast.success('Kargo etiketi oluşturuldu');
       }
       setCargoOpen(false);
     } catch (err: unknown) {
-      // Backend error.response.data.message bazen string, bazen string[],
-      // bazen `{code, message, details}` objesi olabiliyor. MNG passthrough
-      // hataları ise "MNG createbarcode error: {...}" formatında bir string
-      // içinde gömülü JSON taşıyor — Description alanını çıkar.
-      const e = err as {
-        response?: {
-          data?: {
-            message?: unknown;
-            error?: unknown;
-          };
-        };
-      };
-      const raw = e.response?.data?.message ?? e.response?.data?.error;
-      let text = 'Kargo etiketi oluşturulamadı';
-      if (typeof raw === 'string') text = raw;
-      else if (Array.isArray(raw)) text = raw.map(String).join(', ');
-      else if (raw && typeof raw === 'object') {
-        const obj = raw as { message?: unknown; code?: unknown };
-        if (typeof obj.message === 'string') text = obj.message;
-        else if (typeof obj.code === 'string') text = obj.code;
-        else text = JSON.stringify(raw);
+      // Order-step (1) için zaten formatlı Error throw ediyoruz; barcode-step
+      // (2) için axios error doğrudan gelir, extractor onu işler.
+      const isAxiosLike =
+        err && typeof err === 'object' && 'response' in (err as object);
+      if (!isAxiosLike && err instanceof Error && err.message) {
+        setCargoErr(err.message);
+      } else {
+        const { text } = extractCargoErrorMessage(err);
+        setCargoErr(`Etiket: ${text}`);
       }
-      // MNG-specific: "MNG xyz error: {"error":{"Code":...,"Description":...}}"
-      // içinden Description alanını çek.
-      const mngMatch = text.match(/\{[\s\S]*\}$/);
-      if (mngMatch) {
-        try {
-          const parsed: { error?: { Description?: string; Message?: string; Code?: string } } =
-            JSON.parse(mngMatch[0]);
-          const inner = parsed.error;
-          const desc = inner?.Description || inner?.Message;
-          if (typeof desc === 'string' && desc.trim()) {
-            const code = inner?.Code ? ` (${inner.Code})` : '';
-            text = `${desc.replace(/^Exception:\s*/i, '').trim()}${code}`;
-          }
-        } catch {
-          // JSON parse başarısız — orijinal text kalır.
-        }
-      }
-      setCargoErr(text);
     } finally {
       setIsCreatingLabel(false);
     }

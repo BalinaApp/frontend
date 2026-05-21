@@ -1019,9 +1019,10 @@ export const useAiStore = create<AiState>((set, get) => ({
           integrationId:
             args.integrationId ?? selectedVideoIntegrationId ?? selectedFalId ?? undefined,
         },
-        // Kling Master 3-8 dk; backend timeout 6 dk. Frontend default
-        // (180s) yetmiyor — 7 dk veriyoruz (backend'den biraz uzun).
-        { timeout: 7 * 60_000 },
+        // Kling Master 10sn videolar 5-8 dk sürebiliyor. Backend axios 10 dk,
+        // HTTP server 12 dk; frontend 11 dk veriyoruz (backend'den biraz kısa,
+        // ki backend hata mesajı dönmeden frontend timeout etmesin).
+        { timeout: 11 * 60_000 },
       );
       return data.video?.url
         ? { url: data.video.url }

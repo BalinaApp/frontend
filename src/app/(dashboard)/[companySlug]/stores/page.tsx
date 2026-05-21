@@ -16,6 +16,7 @@ import { MobileSidebarToggle } from '@/components/layout/mobile-sidebar-toggle';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
+import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
 
@@ -458,6 +459,63 @@ export default function StoresPage() {
   const manageBizimhesap = manageBizimhesapId
     ? bizimhesaps.find((b) => b.id === manageBizimhesapId) ?? null
     : null;
+
+  // Instagram — Bağla akışı (per-store OAuth). Marketplace stepper
+  // modal'ı ile aynı desen: önce mağaza seçilir, sonra Meta'ya redirect.
+  const [isInstagramDialogOpen, setIsInstagramDialogOpen] = useState(false);
+  const [igCurrentStep, setIgCurrentStep] = useState(0);
+  const [igSelectedStoreId, setIgSelectedStoreId] = useState<string | null>(
+    null,
+  );
+  const [igBusyStoreId, setIgBusyStoreId] = useState<string | null>(null);
+  const igTotalSteps = 1; // Sadece "Mağaza Seç" — son adım (2) yönlendirme.
+  const igIsLastStep = igCurrentStep === igTotalSteps;
+  const handleIgDialogClose = () => {
+    setIsInstagramDialogOpen(false);
+    setIgCurrentStep(0);
+    setIgSelectedStoreId(null);
+  };
+  const {
+    configs: igConfigs,
+    fetchConfig: fetchIgConfig,
+    startOAuth: startIgOAuth,
+  } = useInstagramIntegrationStore();
+
+  // Modal açılınca tüm mağazaların IG config'ini çek (404'lar sessiz geçer).
+  useEffect(() => {
+    if (!isInstagramDialogOpen || !currentCompany?.id) return;
+    for (const s of stores) {
+      void fetchIgConfig(currentCompany.id, s.id);
+    }
+  }, [isInstagramDialogOpen, currentCompany?.id, stores, fetchIgConfig]);
+
+  // OAuth dönüşünden geldiyse (?ig=connected), modal'ı aç + configları çek.
+  useEffect(() => {
+    if (searchParams?.get('ig') === 'connected' && currentCompany?.id) {
+      setIsInstagramDialogOpen(true);
+      // Query'i temizle ki refresh'te tekrar açılmasın
+      if (companySlug) {
+        router.replace(`/${companySlug}/stores`, { scroll: false });
+      }
+    }
+  }, [searchParams, currentCompany?.id, companySlug, router]);
+
+  const handleConnectInstagram = async (storeId: string) => {
+    if (!currentCompany?.id || !currentCompany?.slug) return;
+    setIgBusyStoreId(storeId);
+    const redirectUri = `${window.location.origin}/integrations/instagram/return`;
+    const result = await startIgOAuth(currentCompany.id, storeId, redirectUri);
+    setIgBusyStoreId(null);
+    if (!result) {
+      toast.danger('OAuth başlatılamadı');
+      return;
+    }
+    sessionStorage.setItem('igAuthCompanyId', currentCompany.id);
+    sessionStorage.setItem('igAuthStoreId', storeId);
+    sessionStorage.setItem('igAuthState', result.state);
+    sessionStorage.setItem('igAuthSlug', currentCompany.slug);
+    window.location.href = result.authorizeUrl;
+  };
 
   // Paraşüt — Bağla akışı
   const [isParasutDialogOpen, setIsParasutDialogOpen] = useState(false);
@@ -1604,14 +1662,11 @@ export default function StoresPage() {
       setIsParasutDialogOpen(true);
       return;
     }
-    // Instagram — her mağaza için per-store bağlanır.
-    // Stores page'inde tek bir akış olamayacağı için "Sohbetler / Mağaza
-    // ayarları" sayfasına yönlendiriyoruz. Orada mağaza listesinden seçim
-    // yapılır, OAuth flow oradan başlar.
+    // Instagram — her mağaza için per-store bağlanır. Burada inline modal
+    // aç; modal mağaza listesini gösterir, kullanıcı seçtiği mağaza için
+    // OAuth flow'unu başlatır (return page → /stores'a geri döner).
     if (marketplace.id === 'INSTAGRAM') {
-      if (currentCompany?.slug) {
-        router.push(`/${currentCompany.slug}/conversations/setup`);
-      }
+      setIsInstagramDialogOpen(true);
       return;
     }
     if (!marketplace.steps) {
@@ -4948,6 +5003,219 @@ export default function StoresPage() {
                       Kaydet
                     </Button>
                   </div>
+                </div>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {/* Instagram bağlama modal — Shopify/Trendyol stepper deseni:
+          numaralı adımlar + dikey çizgi, her adım açılıp kapanır. */}
+      <Modal
+        isOpen={isInstagramDialogOpen}
+        onOpenChange={(o) => !o && handleIgDialogClose()}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-md">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading className="flex items-center gap-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/figma/integrations/instagram.png"
+                    alt="Instagram"
+                    className="h-6 w-6 object-contain"
+                  />
+                  Instagram Bağla
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <div className="py-2">
+                  {/* Step 1: Mağaza Seç */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          igCurrentStep > 0 && setIgCurrentStep(0)
+                        }
+                        disabled={igCurrentStep === 0}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                          igCurrentStep === 0
+                            ? 'bg-accent text-accent-foreground'
+                            : 'cursor-pointer bg-default text-muted hover:bg-default/80'
+                        }`}
+                      >
+                        {igCurrentStep > 0 ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          1
+                        )}
+                      </button>
+                      <div className="min-h-4 w-0.5 flex-1 bg-default" />
+                    </div>
+                    <div
+                      className={`flex-1 ${igCurrentStep === 0 ? 'pb-6' : 'pb-4'}`}
+                    >
+                      {igCurrentStep === 0 ? (
+                        <div className="flex flex-col gap-3">
+                          <Label>Mağaza Seç</Label>
+                          {stores.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-foreground/[0.10] bg-foreground/[0.02] p-4 text-center text-xs text-muted">
+                              Önce bir mağaza bağla, sonra Instagram hesabını
+                              eşleştirebilirsin.
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-1.5">
+                              {stores.map((store) => {
+                                const isSelected =
+                                  igSelectedStoreId === store.id;
+                                const cfg = igConfigs[store.id];
+                                const connected = !!cfg?.connected;
+                                return (
+                                  <button
+                                    key={store.id}
+                                    type="button"
+                                    onClick={() =>
+                                      !connected &&
+                                      setIgSelectedStoreId(store.id)
+                                    }
+                                    disabled={connected}
+                                    className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-colors ${
+                                      isSelected
+                                        ? 'border-accent bg-accent/[0.08]'
+                                        : 'border-default-200 hover:bg-surface-secondary'
+                                    } ${connected ? 'cursor-not-allowed opacity-60' : ''}`}
+                                  >
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-foreground/[0.06] text-[10px] font-semibold text-foreground/70">
+                                      {store.name.slice(0, 2).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate text-sm font-medium text-foreground">
+                                        {store.name}
+                                      </div>
+                                      {connected && (
+                                        <div className="truncate text-[11px] text-muted">
+                                          @{cfg?.username}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {connected && (
+                                      <Chip
+                                        color="success"
+                                        variant="soft"
+                                        size="sm"
+                                      >
+                                        Bağlı
+                                      </Chip>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                          <p className="text-sm text-muted">
+                            Instagram hesabını bağlayacağın mağazayı seç.
+                          </p>
+                          <Button
+                            onPress={() => setIgCurrentStep(1)}
+                            isDisabled={!igSelectedStoreId}
+                            fullWidth
+                          >
+                            İleri
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setIgCurrentStep(0)}
+                          className="w-full cursor-pointer pt-1.5 text-left hover:opacity-80"
+                        >
+                          <span className="text-sm text-muted">
+                            Mağaza Seç
+                          </span>
+                          <p className="mt-0.5 truncate text-xs text-muted/70">
+                            {
+                              stores.find((s) => s.id === igSelectedStoreId)
+                                ?.name
+                            }
+                          </p>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Step 2: Meta'ya yönlendir */}
+                  <div className="flex gap-4">
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                          igIsLastStep
+                            ? 'bg-accent text-accent-foreground'
+                            : 'bg-default text-muted'
+                        }`}
+                      >
+                        2
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      {igIsLastStep ? (
+                        <div className="flex flex-col gap-3">
+                          <Label>Meta&apos;ya yönlendir</Label>
+                          <p className="text-sm text-muted">
+                            Sonraki adımda Instagram giriş ekranına
+                            gideceksin. Hesabı onayladıktan sonra otomatik
+                            olarak geri döneceksin.
+                          </p>
+                          <Card>
+                            <Card.Content className="flex flex-col gap-1 text-sm">
+                              <p>
+                                <span className="text-muted">Mağaza:</span>{' '}
+                                {
+                                  stores.find(
+                                    (s) => s.id === igSelectedStoreId,
+                                  )?.name
+                                }
+                              </p>
+                            </Card.Content>
+                          </Card>
+                          <Button
+                            onPress={() =>
+                              igSelectedStoreId &&
+                              handleConnectInstagram(igSelectedStoreId)
+                            }
+                            isPending={!!igBusyStoreId}
+                            isDisabled={
+                              !!igBusyStoreId || !igSelectedStoreId
+                            }
+                            fullWidth
+                          >
+                            <Plug className="h-4 w-4" />
+                            Instagram&apos;a Git
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="pt-1.5">
+                          <span className="text-sm text-muted">
+                            Meta&apos;ya yönlendir
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="pt-4">
+                  <a
+                    href="https://developers.facebook.com/docs/instagram-platform"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
+                  >
+                    Dokümantasyon
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
                 </div>
               </Modal.Body>
             </Modal.Dialog>

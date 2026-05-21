@@ -17,6 +17,7 @@ import {
 import { Avatar } from '@heroui/react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
+import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';
 import { useUIStore } from '@/stores/uiStore';
 
 interface NavItemConfig {
@@ -25,6 +26,8 @@ interface NavItemConfig {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   roles: string[];
   matchPaths?: string[];
+  /** Görünmesi için ek bir ön-koşul (örn. sosyal medya bağlı olması). */
+  showIf?: boolean;
 }
 
 export function AppSidebar() {
@@ -35,9 +38,25 @@ export function AppSidebar() {
   const isMobileOpen = useUIStore((s) => s.isMobileSidebarOpen);
   const setIsMobileOpen = useUIStore((s) => s.setMobileSidebarOpen);
 
+  // Sosyal medya (Instagram) bağlantı durumu — "Sohbetler" menü item'ı gate'i.
+  // Şirket değişince yeniden çek; boş cache değeri "henüz bilinmiyor" demek
+  // ve item'ı gizli tutar (false-positive flash yerine güvenli default).
+  const availability = useInstagramIntegrationStore((s) =>
+    currentCompany?.id ? s.availability[currentCompany.id] : null,
+  );
+  const fetchAvailability = useInstagramIntegrationStore(
+    (s) => s.fetchAvailability,
+  );
+
   React.useEffect(() => {
     fetchCompanies();
   }, [fetchCompanies]);
+
+  React.useEffect(() => {
+    if (currentCompany?.id) {
+      void fetchAvailability(currentCompany.id);
+    }
+  }, [currentCompany?.id, fetchAvailability]);
 
   React.useEffect(() => {
     setIsMobileOpen(false);
@@ -45,6 +64,7 @@ export function AppSidebar() {
 
   const companySlug = currentCompany?.slug || '';
   const userRole = currentCompany?.role;
+  const isSocialConnected = availability?.instagramConnected ?? false;
 
   const navItems: NavItemConfig[] = [
     { title: 'Anasayfa', url: `/${companySlug}`, icon: House, roles: ['OWNER', 'ADMIN'] },
@@ -86,6 +106,8 @@ export function AppSidebar() {
       icon: Comments,
       roles: ['OWNER', 'ADMIN'],
       matchPaths: [`/${companySlug}/conversations`],
+      // Sosyal medya bağlı değilken menüde gösterme.
+      showIf: isSocialConnected,
     },
     {
       title: 'Ayarlar',
@@ -96,7 +118,8 @@ export function AppSidebar() {
   ];
 
   const visibleNavItems = navItems.filter(
-    (item) => !userRole || item.roles.includes(userRole)
+    (item) =>
+      (!userRole || item.roles.includes(userRole)) && item.showIf !== false,
   );
 
   const isItemActive = (item: NavItemConfig, index: number) => {

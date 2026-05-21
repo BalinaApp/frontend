@@ -7,7 +7,7 @@ import { api } from '@/services/api';
 // Types — backend spec 00-backend-spec/SPEC.md ile uyumlu
 // ============================================================================
 
-export type ThreadStatus = 'ai' | 'human_takeover' | 'closed';
+export type ThreadStatus = 'ai' | 'observing' | 'human_takeover' | 'closed';
 export type ThreadOutcome =
   | 'sale'
   | 'cancel'
@@ -108,6 +108,17 @@ interface ChatThreadState {
     companyId: string,
     threadId: string,
   ) => Promise<ChatThreadDetailResponse | null>;
+  /** Generic thread state transition.
+   *  Backward-compat: ikinci parametre boolean ise (true → human_takeover,
+   *  false → ai) eski API olarak çağrılır. */
+  setThreadStatus: (
+    companyId: string,
+    threadId: string,
+    next:
+      | { status: 'ai' | 'observing' | 'human_takeover'; reason?: string }
+      | { takeover: boolean; reason?: string },
+  ) => Promise<ChatThreadDetail | null>;
+  /** Deprecated — `setThreadStatus({ takeover })` ile aynı. */
   toggleTakeover: (
     companyId: string,
     threadId: string,
@@ -204,14 +215,17 @@ export const useChatThreadStore = create<ChatThreadState>((set, get) => ({
     }
   },
 
-  toggleTakeover: async (companyId, threadId, takeover, reason) => {
+  setThreadStatus: async (companyId, threadId, next) => {
     set({ isMutating: true });
     try {
+      const body =
+        'status' in next
+          ? { status: next.status, reason: next.reason }
+          : { takeover: next.takeover, reason: next.reason };
       const res = await api.patch<ChatThreadDetail>(
         `/company/${companyId}/chat-threads/${threadId}/takeover`,
-        { takeover, reason },
+        body,
       );
-      // Listede ve selected'da güncelle
       set((s) => ({
         isMutating: false,
         selectedThread:
@@ -225,6 +239,10 @@ export const useChatThreadStore = create<ChatThreadState>((set, get) => ({
       set({ error: extractError(err), isMutating: false });
       return null;
     }
+  },
+
+  toggleTakeover: async (companyId, threadId, takeover, reason) => {
+    return get().setThreadStatus(companyId, threadId, { takeover, reason });
   },
 
   refreshMessages: async (companyId, threadId) => {

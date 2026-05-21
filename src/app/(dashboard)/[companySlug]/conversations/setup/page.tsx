@@ -290,6 +290,7 @@ function ChatbotSettingsModal({
   onSave: (
     patch: Partial<{
       chatbotActive: boolean;
+      chatbotMode: 'learning' | 'live';
       sysPromptOverride: string | null;
       adminInstagramId: string;
       iban: string;
@@ -300,6 +301,9 @@ function ChatbotSettingsModal({
   ) => Promise<void>;
 }) {
   const [chatbotActive, setChatbotActive] = useState(config.chatbotActive);
+  const [chatbotMode, setChatbotMode] = useState<'learning' | 'live'>(
+    config.chatbotMode ?? 'learning',
+  );
   const [sysPrompt, setSysPrompt] = useState(config.sysPromptOverride ?? '');
   const [adminInstagramId, setAdminInstagramId] = useState(
     config.adminInstagramId ?? '',
@@ -317,6 +321,7 @@ function ChatbotSettingsModal({
     setSaving(true);
     await onSave({
       chatbotActive,
+      chatbotMode,
       sysPromptOverride: sysPrompt.trim() ? sysPrompt : null,
       adminInstagramId: adminInstagramId.trim(),
       iban: iban.trim(),
@@ -327,6 +332,7 @@ function ChatbotSettingsModal({
     setSaving(false);
   }, [
     chatbotActive,
+    chatbotMode,
     sysPrompt,
     adminInstagramId,
     iban,
@@ -365,6 +371,40 @@ function ChatbotSettingsModal({
                       <Switch.Thumb />
                     </Switch.Control>
                   </Switch>
+                </div>
+
+                {/* Çalışma modu — Learning (gözlem) vs Live (AI aktif).
+                    Live'a alındığında mevcut observing thread'ler toplu
+                    "ai" status'una geçer (backend yapar). */}
+                <div className="flex items-center justify-between rounded-xl bg-foreground/[0.04] p-3">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Çalışma modu
+                    </div>
+                    <div className="text-xs text-muted">
+                      <strong>Learning</strong>: AI sessiz, sadece mesajları
+                      kaydeder (admin analiz eder).
+                      <br />
+                      <strong>Live</strong>: AI gelen mesajlara otomatik cevap
+                      verir.
+                    </div>
+                  </div>
+                  <div className="inline-flex items-center gap-0.5 rounded-full bg-foreground/[0.06] p-0.5">
+                    {(['learning', 'live'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setChatbotMode(m)}
+                        className={`inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition-colors ${
+                          chatbotMode === m
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted hover:text-foreground'
+                        }`}
+                      >
+                        {m === 'learning' ? 'Learning' : 'Live'}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <TextField

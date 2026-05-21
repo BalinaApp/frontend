@@ -35,7 +35,8 @@ export default function InstagramReturnPage() {
       return;
     }
 
-    setRedirectHref(slug ? `/${slug}/conversations/setup` : null);
+    // Bağlama akışı `/stores` sayfasından modal ile başlıyor — geri oraya dön.
+    setRedirectHref(slug ? `/${slug}/stores?ig=connected` : null);
     setStatus('polling');
 
     let cancelled = false;

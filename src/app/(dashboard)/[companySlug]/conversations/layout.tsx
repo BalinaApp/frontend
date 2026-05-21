@@ -1,12 +1,15 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import {
   BookOpen,
   Comments,
   Sparkles,
 } from '@gravity-ui/icons';
+import { useCompanyStore } from '@/stores/companyStore';
+import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';
 
 interface RailItem {
   id: 'threads' | 'kb' | 'learning';
@@ -28,6 +31,31 @@ export default function ConversationsLayout({
   const params = useParams<{ companySlug: string }>();
   const slug = params?.companySlug ?? '';
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Erişim gate'i — sosyal medya bağlı değilse Entegrasyon sayfasına çevir.
+  // Setup alt rotaları her zaman erişilebilir kalsın (kullanıcı bağlama
+  // adımındaysa loop'a girmesin).
+  const { currentCompany } = useCompanyStore();
+  const availability = useInstagramIntegrationStore((s) =>
+    currentCompany?.id ? s.availability[currentCompany.id] : null,
+  );
+  const fetchAvailability = useInstagramIntegrationStore(
+    (s) => s.fetchAvailability,
+  );
+
+  useEffect(() => {
+    if (currentCompany?.id && availability === undefined) {
+      void fetchAvailability(currentCompany.id);
+    }
+  }, [currentCompany?.id, availability, fetchAvailability]);
+
+  useEffect(() => {
+    if (!availability) return;
+    if (availability.instagramConnected) return;
+    if (pathname.includes('/conversations/setup')) return;
+    router.replace(`/${slug}/stores`);
+  }, [availability, pathname, router, slug]);
 
   const items: RailItem[] = [
     {

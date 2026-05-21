@@ -34,22 +34,25 @@ const POLL_INTERVAL_MS = 45_000;
 
 const STATUS_LABEL: Record<ThreadStatus, string> = {
   ai: 'AI',
+  observing: 'Gözlem',
   human_takeover: 'Devralındı',
   closed: 'Kapandı',
 };
 
 const STATUS_CHIP_COLOR: Record<
   ThreadStatus,
-  'success' | 'warning' | 'default'
+  'success' | 'warning' | 'accent' | 'default'
 > = {
   ai: 'success',
+  observing: 'accent',
   human_takeover: 'warning',
   closed: 'default',
 };
 
 const STATUS_TABS: { id: ThreadStatus | 'all'; label: string }[] = [
   { id: 'all', label: 'Hepsi' },
-  { id: 'ai', label: 'AI aktif' },
+  { id: 'observing', label: 'Gözlem' },
+  { id: 'ai', label: 'AI' },
   { id: 'human_takeover', label: 'Devralındı' },
   { id: 'closed', label: 'Kapandı' },
 ];
@@ -123,6 +126,7 @@ export default function ConversationsPage() {
   const counts = useMemo(() => {
     const c: Record<ThreadStatus, number> = {
       ai: 0,
+      observing: 0,
       human_takeover: 0,
       closed: 0,
     };
@@ -430,7 +434,7 @@ function ThreadDetailPanel({
           <IconButton label="Kapat" onPress={onClose}>
             <Xmark className="h-4 w-4" />
           </IconButton>
-          {status === 'ai' ? (
+          {status === 'ai' || status === 'observing' ? (
             <IconButton label="Devral" onPress={onTakeover}>
               <TriangleExclamation className="h-4 w-4" />
             </IconButton>
@@ -533,6 +537,13 @@ function ThreadDetailPanel({
               al.
             </div>
           )}
+        </div>
+      )}
+      {status === 'observing' && !replying && (
+        <div className="shrink-0 border-t border-default-200 px-6 py-3 text-center text-xs text-muted">
+          Bu sohbet <strong>gözlem (learning)</strong> modunda — AI cevap
+          üretmiyor, sadece mesajlar kaydediliyor. Devralırsan kendin cevap
+          yazabilirsin; mağazayı <em>Live</em>'a alırsan AI devreye girer.
         </div>
       )}
       {status === 'closed' && (

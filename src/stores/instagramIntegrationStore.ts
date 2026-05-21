@@ -7,12 +7,16 @@ import { api } from '@/services/api';
 // Types — backend spec 00-backend-spec/SPEC.md ile uyumlu
 // ============================================================================
 
+export type ChatbotMode = 'learning' | 'live';
+
 export interface InstagramConfig {
   accountId: string | null;
   username: string | null;
   connected: boolean;
   connectedAt: string | null;
   chatbotActive: boolean;
+  /** Chatbot çalışma modu — learning: AI sessiz (observing), live: AI aktif. */
+  chatbotMode: ChatbotMode;
   sysPromptOverride: string | null;
   adminInstagramId: string | null;
   iban: string | null;
@@ -34,6 +38,7 @@ export interface InstagramAuthStatus {
 
 export type InstagramConfigPatch = Partial<{
   chatbotActive: boolean;
+  chatbotMode: ChatbotMode;
   sysPromptOverride: string | null;
   adminInstagramId: string;
   iban: string;
@@ -42,13 +47,21 @@ export type InstagramConfigPatch = Partial<{
   defaultModel: string;
 }>;
 
+export interface ChatbotAvailability {
+  instagramConnected: boolean;
+  connectedStoreIds: string[];
+}
+
 interface InstagramIntegrationState {
   /** Store ID → config cache */
   configs: Record<string, InstagramConfig>;
+  /** Company ID → availability cache (sidebar gate). null = bilinmiyor */
+  availability: Record<string, ChatbotAvailability | null>;
   isLoading: boolean;
   isMutating: boolean;
   error: string | null;
 
+  fetchAvailability: (companyId: string) => Promise<ChatbotAvailability | null>;
   fetchConfig: (
     companyId: string,
     storeId: string,
@@ -92,9 +105,33 @@ function extractError(err: unknown): string {
 export const useInstagramIntegrationStore = create<InstagramIntegrationState>(
   (set) => ({
     configs: {},
+    availability: {},
     isLoading: false,
     isMutating: false,
     error: null,
+
+    fetchAvailability: async (companyId) => {
+      try {
+        const res = await api.get<ChatbotAvailability>(
+          `/company/${companyId}/chatbot/availability`,
+        );
+        set((s) => ({
+          availability: { ...s.availability, [companyId]: res.data },
+        }));
+        return res.data;
+      } catch {
+        // Erişim yoksa / hata olursa "bağlı değil" varsayımıyla devam et —
+        // sidebar item gizlenir, kullanıcı 403/404 alıp boş ekran görmez.
+        const fallback: ChatbotAvailability = {
+          instagramConnected: false,
+          connectedStoreIds: [],
+        };
+        set((s) => ({
+          availability: { ...s.availability, [companyId]: fallback },
+        }));
+        return fallback;
+      }
+    },
 
     fetchConfig: async (companyId, storeId) => {
       set({ isLoading: true, error: null });

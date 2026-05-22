@@ -33,9 +33,8 @@ export default function ConversationsLayout({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Erişim gate'i — sosyal medya bağlı değilse Entegrasyon sayfasına çevir.
-  // Setup alt rotaları her zaman erişilebilir kalsın (kullanıcı bağlama
-  // adımındaysa loop'a girmesin).
+  // Erişim gate'i — Instagram bağlı değilse Stores sayfasına çevir.
+  // Bağlama akışı artık Stores entegrasyonlar modal'ından yapılıyor.
   const { currentCompany } = useCompanyStore();
   const availability = useInstagramIntegrationStore((s) =>
     currentCompany?.id ? s.availability[currentCompany.id] : null,
@@ -53,7 +52,6 @@ export default function ConversationsLayout({
   useEffect(() => {
     if (!availability) return;
     if (availability.instagramConnected) return;
-    if (pathname.includes('/conversations/setup')) return;
     router.replace(`/${slug}/stores`);
   }, [availability, pathname, router, slug]);
 

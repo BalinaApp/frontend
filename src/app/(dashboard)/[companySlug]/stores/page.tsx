@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 import { ArrowsRotateRight as Loader2, TrashBin as Trash2, ArrowUpRightFromSquare as ExternalLink, Check, Sparkles, Gear as Settings, Key } from '@gravity-ui/icons';
 import { ArrowsRotateRight as Loader, ArrowsRotateRight as RefreshCw, CircleExclamation as AlertCircle, Link as LinkIcon, PlugConnection as Plug, Copy, Eye, EyeSlash as EyeOff } from '@gravity-ui/icons';
-import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, Modal, SearchField, Switch, Tabs, TextField, toast } from '@heroui/react';
+import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, Modal, SearchField, Switch, Tabs, TextArea, TextField, toast } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useProductMappingStore } from '@/stores/productMappingStore';
@@ -16,7 +16,7 @@ import { MobileSidebarToggle } from '@/components/layout/mobile-sidebar-toggle';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
-import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';
+import { useInstagramIntegrationStore, type InstagramConfig, type InstagramConfigPatch } from '@/stores/instagramIntegrationStore';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
 
@@ -479,15 +479,52 @@ export default function StoresPage() {
     configs: igConfigs,
     fetchConfig: fetchIgConfig,
     startOAuth: startIgOAuth,
+    disconnect: disconnectIg,
+    testConnection: testIg,
+    updateConfig: updateIgConfig,
   } = useInstagramIntegrationStore();
 
-  // Modal açılınca tüm mağazaların IG config'ini çek (404'lar sessiz geçer).
+  // "Bağlı Olanlar" listesinde IG kartlarını render edebilmek için sayfa
+  // mount'unda tüm store'ların IG config'ini çek (404'lar sessiz geçer).
   useEffect(() => {
-    if (!isInstagramDialogOpen || !currentCompany?.id) return;
+    if (!currentCompany?.id) return;
     for (const s of stores) {
       void fetchIgConfig(currentCompany.id, s.id);
     }
-  }, [isInstagramDialogOpen, currentCompany?.id, stores, fetchIgConfig]);
+  }, [currentCompany?.id, stores, fetchIgConfig]);
+
+  // Bağlı IG hesapları için Yönet & Bağlantıyı kaldır state'i
+  const [manageIgStoreId, setManageIgStoreId] = useState<string | null>(null);
+  const [disconnectIgStoreId, setDisconnectIgStoreId] = useState<string | null>(
+    null,
+  );
+  const [igTestingStoreId, setIgTestingStoreId] = useState<string | null>(null);
+  const [igDisconnecting, setIgDisconnecting] = useState(false);
+
+  const handleIgTest = async (storeId: string) => {
+    if (!currentCompany?.id) return;
+    setIgTestingStoreId(storeId);
+    const result = await testIg(currentCompany.id, storeId);
+    setIgTestingStoreId(null);
+    if (result?.ok) {
+      toast.success(`Bağlantı çalışıyor: @${result.account?.username}`);
+    } else {
+      toast.danger('Bağlantı testi başarısız');
+    }
+  };
+
+  const handleIgDisconnect = async () => {
+    if (!currentCompany?.id || !disconnectIgStoreId) return;
+    setIgDisconnecting(true);
+    const ok = await disconnectIg(currentCompany.id, disconnectIgStoreId);
+    setIgDisconnecting(false);
+    if (ok) {
+      toast.success('Instagram bağlantısı kaldırıldı');
+      setDisconnectIgStoreId(null);
+    } else {
+      toast.danger('Bağlantı kaldırılamadı');
+    }
+  };
 
   // OAuth dönüşünden geldiyse (?ig=connected), modal'ı aç + configları çek.
   useEffect(() => {
@@ -2275,6 +2312,53 @@ export default function StoresPage() {
                         variant="tertiary"
                         size="sm"
                         onPress={() => setSettingsModalStoreId(store.id)}
+                        className={pillBtnClass}
+                      >
+                        Yönet
+                      </Button>
+                    </div>
+                  );
+                })}
+
+                {/* Bağlı Instagram hesapları — her mağaza için per-store.
+                    Mağaza adı + @username · chatbot durumu, Yönet ayar
+                    modal'ını açar. */}
+                {filteredStores.map((store) => {
+                  const cfg = igConfigs[store.id];
+                  if (!cfg?.connected) return null;
+                  const isTesting = igTestingStoreId === store.id;
+                  return (
+                    <div
+                      key={`ig-${store.id}`}
+                      className="flex items-center gap-3 p-3"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src="/figma/integrations/instagram.png"
+                        alt="Instagram"
+                        className="h-10 w-10 shrink-0 rounded-xl object-cover"
+                      />
+                      <div className="flex flex-1 flex-col gap-0.5 overflow-hidden">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {store.name}
+                        </span>
+                        <span className="truncate text-xs text-[#737373]">
+                          @{cfg.username} ·{' '}
+                          {cfg.chatbotActive
+                            ? 'Chatbot aktif'
+                            : 'Chatbot kapalı'}
+                        </span>
+                      </div>
+                      {isTesting && (
+                        <Loader
+                          className="h-4 w-4 animate-spin text-muted"
+                          aria-label="Test ediliyor"
+                        />
+                      )}
+                      <Button
+                        variant="tertiary"
+                        size="sm"
+                        onPress={() => setManageIgStoreId(store.id)}
                         className={pillBtnClass}
                       >
                         Yönet
@@ -5222,6 +5306,316 @@ export default function StoresPage() {
           </Modal.Container>
         </Modal.Backdrop>
       </Modal>
+
+      {/* Instagram chatbot ayarları — bağlı her mağaza için Yönet butonu açar */}
+      {manageIgStoreId && igConfigs[manageIgStoreId] && (
+        <ChatbotSettingsModal
+          isOpen={manageIgStoreId !== null}
+          onClose={() => setManageIgStoreId(null)}
+          config={igConfigs[manageIgStoreId]}
+          onTest={() => handleIgTest(manageIgStoreId)}
+          onDisconnect={() => {
+            setDisconnectIgStoreId(manageIgStoreId);
+            setManageIgStoreId(null);
+          }}
+          onSave={async (patch) => {
+            if (!currentCompany?.id || !manageIgStoreId) return;
+            const updated = await updateIgConfig(
+              currentCompany.id,
+              manageIgStoreId,
+              patch,
+            );
+            if (updated) {
+              toast.success('Ayarlar kaydedildi');
+              setManageIgStoreId(null);
+            } else {
+              toast.danger('Kaydedilemedi');
+            }
+          }}
+        />
+      )}
+
+      {/* Instagram bağlantısını kaldır — confirm */}
+      <AlertDialog
+        isOpen={disconnectIgStoreId !== null}
+        onOpenChange={(open) => {
+          if (!igDisconnecting && !open) setDisconnectIgStoreId(null);
+        }}
+      >
+        <AlertDialog.Backdrop>
+          <AlertDialog.Container>
+            <AlertDialog.Dialog className="sm:max-w-[420px]">
+              <AlertDialog.Header>
+                <AlertDialog.Icon status="danger" />
+                <AlertDialog.Heading>Bağlantıyı kaldır</AlertDialog.Heading>
+              </AlertDialog.Header>
+              <AlertDialog.Body className="px-2 pb-0">
+                Instagram bağlantısı kaldırıldığında chatbot kapanır ve yeni
+                gelen mesajlar işlenmez. Mevcut sohbet geçmişi silinmez.
+              </AlertDialog.Body>
+              <AlertDialog.Footer className="!mt-3 px-2">
+                <Button
+                  variant="tertiary"
+                  slot="close"
+                  isDisabled={igDisconnecting}
+                >
+                  Vazgeç
+                </Button>
+                <Button
+                  variant="danger"
+                  onPress={handleIgDisconnect}
+                  isPending={igDisconnecting}
+                  isDisabled={igDisconnecting}
+                >
+                  Kaldır
+                </Button>
+              </AlertDialog.Footer>
+            </AlertDialog.Dialog>
+          </AlertDialog.Container>
+        </AlertDialog.Backdrop>
+      </AlertDialog>
     </>
+  );
+}
+
+// ============================================================================
+// Instagram chatbot ayarları modal — eski /conversations/setup sayfasından
+// taşındı. Yönet butonu açar; Vazgeç / Kaydet / Test et / Bağlantıyı kaldır.
+// ============================================================================
+
+function ChatbotSettingsModal({
+  isOpen,
+  onClose,
+  config,
+  onSave,
+  onTest,
+  onDisconnect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  config: InstagramConfig;
+  onSave: (patch: InstagramConfigPatch) => Promise<void>;
+  onTest: () => void;
+  onDisconnect: () => void;
+}) {
+  const [chatbotActive, setChatbotActive] = useState(config.chatbotActive);
+  const [chatbotMode, setChatbotMode] = useState<'learning' | 'live'>(
+    config.chatbotMode ?? 'learning',
+  );
+  const [sysPrompt, setSysPrompt] = useState(config.sysPromptOverride ?? '');
+  const [adminInstagramId, setAdminInstagramId] = useState(
+    config.adminInstagramId ?? '',
+  );
+  const [iban, setIban] = useState(config.iban ?? '');
+  const [accountName, setAccountName] = useState(config.accountName ?? '');
+  const [dhlCode, setDhlCode] = useState(config.dhlCode ?? '');
+  const [defaultModel, setDefaultModel] = useState(
+    config.defaultModel ?? 'gpt-4o',
+  );
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = useCallback(async () => {
+    setSaving(true);
+    await onSave({
+      chatbotActive,
+      chatbotMode,
+      sysPromptOverride: sysPrompt.trim() ? sysPrompt : null,
+      adminInstagramId: adminInstagramId.trim(),
+      iban: iban.trim(),
+      accountName: accountName.trim(),
+      dhlCode: dhlCode.trim(),
+      defaultModel,
+    });
+    setSaving(false);
+  }, [
+    chatbotActive,
+    chatbotMode,
+    sysPrompt,
+    adminInstagramId,
+    iban,
+    accountName,
+    dhlCode,
+    defaultModel,
+    onSave,
+  ]);
+
+  return (
+    <Modal isOpen={isOpen} onOpenChange={(o) => !o && onClose()}>
+      <Modal.Backdrop>
+        <Modal.Container>
+          <Modal.Dialog className="sm:max-w-[560px]">
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <Modal.Heading>Chatbot ayarları</Modal.Heading>
+            </Modal.Header>
+            <Modal.Body className="px-4">
+              <div className="flex flex-col gap-3">
+                {/* Hesap özeti */}
+                <div className="flex items-center justify-between rounded-xl bg-foreground/[0.04] p-3">
+                  <div className="flex flex-col">
+                    <div className="text-sm font-medium text-foreground">
+                      @{config.username}
+                    </div>
+                    <div className="text-[11px] text-muted">
+                      {config.connected
+                        ? 'Instagram bağlı'
+                        : 'Instagram bağlı değil'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="tertiary"
+                      size="sm"
+                      onPress={onTest}
+                      aria-label="Bağlantıyı test et"
+                      isIconOnly
+                      className="h-8 w-8 rounded-full bg-foreground/[0.06]"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      isIconOnly
+                      onPress={onDisconnect}
+                      aria-label="Bağlantıyı kaldır"
+                      className="h-8 w-8 rounded-full"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl bg-foreground/[0.04] p-3">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Chatbot aktif
+                    </div>
+                    <div className="text-xs text-muted">
+                      Kapalı iken gelen mesajlar Sohbetler&apos;de görünür ama
+                      AI cevap üretmez.
+                    </div>
+                  </div>
+                  <Switch
+                    isSelected={chatbotActive}
+                    onChange={setChatbotActive}
+                  >
+                    <Switch.Control>
+                      <Switch.Thumb />
+                    </Switch.Control>
+                  </Switch>
+                </div>
+
+                {/* Çalışma modu — Learning (gözlem) vs Live (AI aktif). */}
+                <div className="flex items-center justify-between rounded-xl bg-foreground/[0.04] p-3">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Çalışma modu
+                    </div>
+                    <div className="text-xs text-muted">
+                      <strong>Learning</strong>: AI sessiz, sadece mesajları
+                      kaydeder (admin analiz eder).
+                      <br />
+                      <strong>Live</strong>: AI gelen mesajlara otomatik cevap
+                      verir.
+                    </div>
+                  </div>
+                  <div className="inline-flex items-center gap-0.5 rounded-full bg-foreground/[0.06] p-0.5">
+                    {(['learning', 'live'] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setChatbotMode(m)}
+                        className={`inline-flex h-7 items-center rounded-full px-3 text-xs font-medium transition-colors ${
+                          chatbotMode === m
+                            ? 'bg-background text-foreground shadow-sm'
+                            : 'text-muted hover:text-foreground'
+                        }`}
+                      >
+                        {m === 'learning' ? 'Learning' : 'Live'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <TextField
+                  value={adminInstagramId}
+                  onChange={setAdminInstagramId}
+                  aria-label="Admin Instagram PSID"
+                >
+                  <Label>Admin Instagram ID</Label>
+                  <Input placeholder="26701310816144690" />
+                </TextField>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <TextField value={iban} onChange={setIban}>
+                    <Label>IBAN</Label>
+                    <Input placeholder="TR70 0020 ..." />
+                  </TextField>
+                  <TextField value={accountName} onChange={setAccountName}>
+                    <Label>Hesap sahibi</Label>
+                    <Input placeholder="İsim Soyisim" />
+                  </TextField>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <TextField value={dhlCode} onChange={setDhlCode}>
+                    <Label>DHL kodu</Label>
+                    <Input placeholder="915737309" />
+                  </TextField>
+                  <TextField value={defaultModel} onChange={setDefaultModel}>
+                    <Label>Varsayılan model</Label>
+                    <Input placeholder="gpt-4o" />
+                  </TextField>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label>Sistem promptu (özelleştirme)</Label>
+                  <button
+                    type="button"
+                    onClick={() => setShowPrompt((v) => !v)}
+                    className="inline-flex items-center gap-1 text-[11px] text-muted hover:text-foreground"
+                  >
+                    {showPrompt ? (
+                      <>
+                        <EyeOff className="h-3 w-3" /> Gizle
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="h-3 w-3" /> Göster
+                      </>
+                    )}
+                  </button>
+                </div>
+                {showPrompt && (
+                  <TextField value={sysPrompt} onChange={setSysPrompt}>
+                    <TextArea
+                      rows={8}
+                      placeholder="Boş bırakırsan varsayılan prompt kullanılır."
+                      className="font-mono text-xs"
+                    />
+                  </TextField>
+                )}
+              </div>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button variant="tertiary" slot="close" isDisabled={saving}>
+                Vazgeç
+              </Button>
+              <Button
+                variant="primary"
+                onPress={handleSubmit}
+                isPending={saving}
+                isDisabled={saving}
+              >
+                <Check className="h-3.5 w-3.5" />
+                Kaydet
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }

@@ -1676,14 +1676,15 @@ function AiMediaCard({
         </button>
       </div>
 
-      {/* Metadata — default state. Hover'da blur+fade, yukarı kayar. */}
-      <div className="pointer-events-none flex flex-col items-center gap-0.5 transition-all duration-200 group-hover:-translate-y-2.5 group-hover:opacity-0 group-hover:blur-sm">
+      {/* Metadata — mobile'da hep görünür; md+ hover'da blur+fade, yukarı kayar. */}
+      <div className="pointer-events-none flex flex-col items-center gap-0.5 transition-all duration-200 md:group-hover:-translate-y-2.5 md:group-hover:opacity-0 md:group-hover:blur-sm">
         <span className="text-sm font-medium text-foreground">{filename}</span>
         <span className="text-xs text-muted">{subtitle}</span>
       </div>
 
-      {/* Action bar — hover'da alttan fade-in. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 flex translate-y-[10%] items-center justify-center opacity-0 blur-sm transition-all duration-200 group-hover:pointer-events-auto group-hover:-translate-y-4 group-hover:opacity-100 group-hover:blur-none">
+      {/* Action bar — mobile'da metadata altında static & hep görünür;
+          md+ absolute + hover'da alttan fade-in. */}
+      <div className="mt-1 flex items-center justify-center md:pointer-events-none md:absolute md:inset-x-0 md:bottom-0 md:mt-0 md:translate-y-[10%] md:opacity-0 md:blur-sm md:transition-all md:duration-200 md:group-hover:pointer-events-auto md:group-hover:-translate-y-4 md:group-hover:opacity-100 md:group-hover:blur-none">
         <Button
           variant="ghost"
           size="sm"

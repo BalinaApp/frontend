@@ -1567,17 +1567,40 @@ function filenameFor(item: AiMediaPreviewItem): string {
   return `${base}.${extForType(item.type)}`;
 }
 
-/** Blob/data/HTTP URL'leri için programatik indirme. `<a download>` JSX'iyle
- *  yapsak HeroUI Button'ın press handler'ı ile çakışıyor; tek bir anchor
- *  oluşturup tıklamak en stabil yol. */
-function triggerDownload(url: string, filename: string) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+/** Programatik indirme. Cross-origin URL'lerde (`fal.media` vb.) `<a download>`
+ *  attribute'u tarayıcı tarafından sessizce yok sayılır ve sayfa video URL'sine
+ *  gider — mobilde özellikle bariz. Bu yüzden önce fetch ile blob'a çeviriyoruz,
+ *  ardından same-origin blob URL üzerinden download tetikliyoruz. CORS veya
+ *  fetch hatasında fallback olarak _blank ile aç. */
+async function triggerDownload(url: string, filename: string): Promise<void> {
+  const clickAnchor = (href: string, opts?: { newTab?: boolean }) => {
+    const a = document.createElement('a');
+    a.href = href;
+    a.download = filename;
+    a.rel = 'noopener';
+    if (opts?.newTab) a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // Blob/data URL ise direkt indir.
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    clickAnchor(url);
+    return;
+  }
+
+  try {
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    clickAnchor(blobUrl);
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  } catch {
+    // CORS reddi veya network hatası: kullanıcı en azından dosyayı görsün.
+    clickAnchor(url, { newTab: true });
+  }
 }
 
 /** Mesaj metadata satırı için Türkçe relative zaman: "Bugün 15:48",

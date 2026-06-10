@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 import { ArrowsRotateRight as Loader2, TrashBin as Trash2, ArrowUpRightFromSquare as ExternalLink, Check, Sparkles, Gear as Settings, Key } from '@gravity-ui/icons';
 import { ArrowsRotateRight as Loader, ArrowsRotateRight as RefreshCw, CircleExclamation as AlertCircle, Link as LinkIcon, PlugConnection as Plug, Copy, Eye, EyeSlash as EyeOff } from '@gravity-ui/icons';
-import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, Modal, SearchField, Switch, Tabs, TextArea, TextField, toast } from '@heroui/react';
+import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, ListBox, Modal, SearchField, Select, Switch, Tabs, TextArea, TextField, toast } from '@heroui/react';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useProductMappingStore } from '@/stores/productMappingStore';
@@ -19,6 +19,15 @@ import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
 import { useInstagramIntegrationStore, type InstagramConfig, type InstagramConfigPatch } from '@/stores/instagramIntegrationStore';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
+
+// ===== Fal video üretim varsayılanları (Yönet modalı) =====
+const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/standard/image-to-video';
+/** Modaldaki "Varsayılan video modeli" Select'i için video katalogu. */
+const VIDEO_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'video');
+// Kling 2.1: aspect 16:9|9:16|1:1, süre 5|10 sn. (Veo modelleri ek olarak
+// auto/720p/1080p/ses kullanır — bu seçenekler aşağıda korunur.)
+const VEO_ASPECT_OPTIONS = ['9:16', '16:9', '1:1', 'auto'] as const;
+const VEO_DURATION_OPTIONS = ['5', '10'] as const;
 
 type Marketplace = {
   id: string;
@@ -401,8 +410,12 @@ export default function StoresPage() {
   >(null);
   // Header card switch — kapatıp Kaydet derse hesap kaldırılır.
   const [manageFalActive, setManageFalActive] = useState(true);
-  // Üretilen görsellerin SKU öneki (örn 'KZ'). Boş ise sadece kod kullanılır.
-  const [manageFalCodePrefix, setManageFalCodePrefix] = useState('');
+  // ===== Video üretim ayarları (sadece Fal) — sohbette prompt'suz üretim =====
+  const [manageFalVideoModel, setManageFalVideoModel] = useState(
+    DEFAULT_FAL_VIDEO_MODEL,
+  );
+  const [manageFalAspectRatio, setManageFalAspectRatio] = useState('9:16');
+  const [manageFalDuration, setManageFalDuration] = useState('10');
   const [isManageSaving, setIsManageSaving] = useState(false);
   // Anahtar değiştirme alt-modalı — Yönet modalı içindeki butondan açılır.
   const [isChangeKeyOpen, setIsChangeKeyOpen] = useState(false);
@@ -1152,7 +1165,9 @@ export default function StoresPage() {
     setManageFalTestResult(null);
     setIsChangeKeyOpen(false);
     setManageFalActive(true);
-    setManageFalCodePrefix('');
+    setManageFalVideoModel(DEFAULT_FAL_VIDEO_MODEL);
+    setManageFalAspectRatio('9:16');
+    setManageFalDuration('10');
     setIsManageSaving(false);
   };
 
@@ -1220,16 +1235,22 @@ export default function StoresPage() {
       handleManageClose();
       return;
     }
-    // Switch veya kod öneki değiştiyse update — ikisini tek istekte yolla.
-    const nextPrefix = manageFalCodePrefix.trim();
-    const prevPrefix = (manageFal.codePrefix ?? '').trim();
+    // Switch veya video ayarları (model/oran/süre) değiştiyse tek istekte yolla.
     const activeChanged = manageFal.isActive !== manageFalActive;
-    const prefixChanged = prevPrefix !== nextPrefix;
-    if (activeChanged || prefixChanged) {
+    const videoModelChanged =
+      (manageFal.videoModel ?? DEFAULT_FAL_VIDEO_MODEL) !== manageFalVideoModel;
+    const aspectChanged =
+      (manageFal.videoAspectRatio ?? '9:16') !== manageFalAspectRatio;
+    const durationChanged =
+      (manageFal.videoDuration ?? '10') !== manageFalDuration;
+    const anyVideoChanged = videoModelChanged || aspectChanged || durationChanged;
+    if (activeChanged || anyVideoChanged) {
       setIsManageSaving(true);
       const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
         ...(activeChanged ? { isActive: manageFalActive } : {}),
-        ...(prefixChanged ? { codePrefix: nextPrefix } : {}),
+        ...(videoModelChanged ? { videoModel: manageFalVideoModel } : {}),
+        ...(aspectChanged ? { videoAspectRatio: manageFalAspectRatio } : {}),
+        ...(durationChanged ? { videoDuration: manageFalDuration } : {}),
       });
       setIsManageSaving(false);
       if (updated) {
@@ -2392,7 +2413,11 @@ export default function StoresPage() {
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(fal.isActive);
-                        setManageFalCodePrefix(fal.codePrefix ?? '');
+                        setManageFalVideoModel(
+                          fal.videoModel ?? DEFAULT_FAL_VIDEO_MODEL,
+                        );
+                        setManageFalAspectRatio(fal.videoAspectRatio ?? '9:16');
+                        setManageFalDuration(fal.videoDuration ?? '10');
                       }}
                       className={pillBtnClass}
                     >
@@ -2428,7 +2453,6 @@ export default function StoresPage() {
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(fashn.isActive);
-                        setManageFalCodePrefix(fashn.codePrefix ?? '');
                       }}
                       className={pillBtnClass}
                     >
@@ -2463,7 +2487,6 @@ export default function StoresPage() {
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(oa.isActive);
-                        setManageFalCodePrefix(oa.codePrefix ?? '');
                       }}
                       className={pillBtnClass}
                     >
@@ -3387,58 +3410,115 @@ export default function StoresPage() {
                     </div>
                   )}
 
-                  {/* Modeller bölümü — sadece Fal hesabı için. Fashn'da tek model var. */}
+                  {/* ===== Video ayarları — sadece Fal. Sohbette prompt yazılmazsa
+                      sabit varsayılan prompt kullanılır; buradan model, en-boy oranı
+                      ve süre seçilir. ===== */}
                   {manageFal && manageProvider === 'fal' && (
-                    <div className="flex flex-col gap-2">
-                      <Label>Modeller</Label>
-                      <div className="flex flex-wrap gap-1.5">
-                        {manageFal.models.length === 0 ? (
-                          <span className="text-xs text-muted">
-                            Hiç model seçilmedi.
-                          </span>
-                        ) : (
-                          manageFal.models.map((m) => {
-                            const meta = FAL_MODEL_CATALOG.find((c) => c.id === m);
-                            return (
-                              <Chip key={m} variant="secondary" size="sm">
-                                {meta?.label ?? m}
-                              </Chip>
-                            );
-                          })
-                        )}
+                    <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-surface-secondary/30 p-3">
+                      <div className="flex flex-col gap-0.5">
+                        <Label className="text-sm font-semibold">Video ayarları</Label>
+                        <p className="text-[11px] text-muted">
+                          Model, en-boy oranı ve süre. Prompt sabittir.
+                        </p>
                       </div>
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={handleModelPickerOpen}
-                        className={`self-start ${pillBtnClass}`}
-                      >
-                        Modelleri Değiştir
-                      </Button>
+
+                      {/* Varsayılan video modeli */}
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Varsayılan video modeli</Label>
+                        <Select
+                          selectedKey={manageFalVideoModel}
+                          onSelectionChange={(key) =>
+                            setManageFalVideoModel(
+                              String(key) || DEFAULT_FAL_VIDEO_MODEL,
+                            )
+                          }
+                          aria-label="Varsayılan video modeli"
+                          className="w-full"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {VIDEO_MODEL_OPTIONS.map((m) => (
+                                <ListBox.Item
+                                  key={m.id}
+                                  id={m.id}
+                                  textValue={m.label}
+                                >
+                                  <div className="flex flex-col">
+                                    <span>{m.label}</span>
+                                    <span className="text-[11px] text-muted">
+                                      {m.description}
+                                    </span>
+                                  </div>
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+
+                      {/* Parametreler: en-boy oranı / süre */}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1.5">
+                          <Label>En boy oranı</Label>
+                          <Select
+                            selectedKey={manageFalAspectRatio}
+                            onSelectionChange={(key) =>
+                              setManageFalAspectRatio(String(key) || '9:16')
+                            }
+                            aria-label="En boy oranı"
+                            className="w-full"
+                          >
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {VEO_ASPECT_OPTIONS.map((o) => (
+                                  <ListBox.Item key={o} id={o} textValue={o}>
+                                    {o}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <Label>Süre</Label>
+                          <Select
+                            selectedKey={manageFalDuration}
+                            onSelectionChange={(key) =>
+                              setManageFalDuration(String(key) || '10')
+                            }
+                            aria-label="Süre"
+                            className="w-full"
+                          >
+                            <Select.Trigger>
+                              <Select.Value />
+                              <Select.Indicator />
+                            </Select.Trigger>
+                            <Select.Popover>
+                              <ListBox>
+                                {VEO_DURATION_OPTIONS.map((o) => (
+                                  <ListBox.Item key={o} id={o} textValue={o}>
+                                    {o}
+                                    <ListBox.ItemIndicator />
+                                  </ListBox.Item>
+                                ))}
+                              </ListBox>
+                            </Select.Popover>
+                          </Select>
+                        </div>
+                      </div>
                     </div>
                   )}
-
-                  {/* Ürün kodu öneki — chat'te girilen koda eklenecek prefix.
-                      Örn 'KZ' + kullanıcı kodu '001' → SKU 'KZ-001'.
-                      Üretilen tüm görsel/videoların sağ-altına bu kod overlay
-                      olarak basılır ve ürün yüklemede SKU olarak kullanılır. */}
-                  {manageFal && (
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Ürün kodu öneki</Label>
-                      <TextField
-                        value={manageFalCodePrefix}
-                        onChange={setManageFalCodePrefix}
-                        aria-label="Ürün kodu öneki"
-                      >
-                        <Input placeholder="örn. KZ" />
-                      </TextField>
-                      <p className="text-[11px] text-muted">
-                        Üretilen görsel/videoların sol alt köşesinde gösterilir.
-                        Örn: <span className="font-mono">{manageFalCodePrefix.trim() || 'KZ'}-001</span>
-                      </p>
-                    </div>
-                  )}
-
 
                   {/* API Anahtarı — değiştirme alt-modalını açan satır */}
                   <div className="flex flex-col gap-2">

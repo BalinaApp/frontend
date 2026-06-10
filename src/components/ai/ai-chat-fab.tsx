@@ -10,24 +10,23 @@ import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 /**
  * AI launcher — bottom strip içinde inline buton.
- * OpenAI entegrasyonu yoksa click → /stores'a redirect + highlight,
- * drawer açılmaz.
+ * Hiçbir AI entegrasyonu yoksa click → /stores'a redirect, drawer açılmaz.
+ * En az bir aktif entegrasyon (OpenAI / Fal / Fashn) varsa drawer açılır;
+ * eksik provider'a özgü uyarı ilgili modda gösterilir.
  */
 export function AiChatFab() {
   const { isAiDrawerOpen, toggleAiDrawer, setAiDrawerOpen } = useUIStore();
   const router = useRouter();
   const { currentCompany } = useCompanyStore();
   const integrations = useAiStore((s) => s.integrations);
-  const hasOpenAi = integrations.some(
-    (i) => i.isActive && i.provider === 'openai',
-  );
+  const hasAnyIntegration = integrations.some((i) => i.isActive);
 
   const handleClick = () => {
-    if (!hasOpenAi) {
+    if (!hasAnyIntegration) {
       if (isAiDrawerOpen) setAiDrawerOpen(false);
-      toast.warning('OpenAI entegrasyonu yok — bağla sayfasından ekleyin');
+      toast.warning('Henüz bir AI entegrasyonu yok — bağla sayfasından ekleyin');
       if (currentCompany?.slug) {
-        router.push(`/${currentCompany.slug}/stores?highlight=OPENAI`);
+        router.push(`/${currentCompany.slug}/stores`);
       }
       return;
     }

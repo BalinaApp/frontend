@@ -57,6 +57,17 @@ export interface FalIntegration {
   /** Üretilen görsellerin SKU prefix'i (örn 'KZ'). Chat'te kullanıcı kod
    *  girer; tam SKU `${codePrefix}-${productCode}` olur. */
   codePrefix?: string;
+  /** ===== Video üretim varsayılanları (entegrasyon ayarından) ===== */
+  /** Varsayılan video modeli (Fal id). Boşsa Kling 2.1 Standard I2V. */
+  videoModel?: string;
+  /** aspect_ratio: Kling '16:9'|'9:16'|'1:1' · Veo 'auto'|'16:9'|'9:16'. */
+  videoAspectRatio?: string;
+  /** Süre: Kling '5'|'10' · Veo '4s'|'6s'|'8s'. */
+  videoDuration?: string;
+  /** Çözünürlük (yalnızca Veo): '720p' | '1080p'. */
+  videoResolution?: string;
+  /** Ses üretimi (yalnızca Veo). */
+  videoGenerateAudio?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -243,11 +254,16 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
 
   // ===== Video modelleri =====
   {
+    id: 'fal-ai/veo3.1/fast/image-to-video',
+    label: 'Veo 3.1 Fast (Image-to-Video)',
+    description: 'Google Veo 3.1 hızlı — referans görselden video.',
+    kind: 'video',
+  },
+  {
     id: 'fal-ai/kling-video/v2.1/master/image-to-video',
     label: 'Kling 2.1 Master (Image-to-Video)',
     description: 'En yüksek kalite Kling — referans görselden video.',
     kind: 'video',
-    isDefault: true,
   },
   {
     id: 'fal-ai/kling-video/v2.1/master/text-to-video',
@@ -258,8 +274,9 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   {
     id: 'fal-ai/kling-video/v2.1/standard/image-to-video',
     label: 'Kling 2.1 Standard (I2V)',
-    description: 'Daha hızlı/ucuz Kling I2V.',
+    description: 'Daha hızlı/ucuz Kling I2V. Varsayılan video modeli.',
     kind: 'video',
+    isDefault: true,
   },
   {
     id: 'fal-ai/kling-video/v2.1/standard/text-to-video',
@@ -459,6 +476,11 @@ interface AiState {
       isActive?: boolean;
       productTypes?: ProductType[];
       codePrefix?: string;
+      videoModel?: string;
+      videoAspectRatio?: string;
+      videoDuration?: string;
+      videoResolution?: string;
+      videoGenerateAudio?: boolean;
     }
   ) => Promise<AiIntegration | null>;
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -489,6 +511,11 @@ interface AiState {
       isActive?: boolean;
       productTypes?: ProductType[];
       codePrefix?: string;
+      videoModel?: string;
+      videoAspectRatio?: string;
+      videoDuration?: string;
+      videoResolution?: string;
+      videoGenerateAudio?: boolean;
     }
   ) => Promise<FalIntegration | null>;
   removeFalIntegration: (companyId: string, integrationId: string) => Promise<void>;

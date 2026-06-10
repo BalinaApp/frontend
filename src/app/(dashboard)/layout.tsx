@@ -54,12 +54,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const currentCompanyId = useCompanyStore((s) => s.currentCompany?.id);
   const integrations = useAiStore((s) => s.integrations);
   const fetchIntegrations = useAiStore((s) => s.fetchIntegrations);
+  // En az bir aktif AI entegrasyonu (OpenAI / Fal / Fashn) varsa drawer mount
+  // edilir. Yoksa fab tıklayınca /stores'a yönlendirir. Provider'a özgü uyarı
+  // ilgili modda (text=OpenAI, video=Fal) gösterilir.
   const hasActiveAi = integrations.some((i) => i.isActive);
-  // Drawer text-default ile çalışır → OpenAI gerekli. Yoksa drawer mount edilmez,
-  // fab tıklayınca /stores'a yönlendirir.
-  const hasOpenAi = integrations.some(
-    (i) => i.isActive && i.provider === 'openai',
-  );
 
   // Trial gün sayısı için "clock state" tutuyoruz — saatte bir Date.now() ile
   // tazelenir, böylece sayfa açık kalsa bile gece yarısında stale kalmaz.
@@ -126,7 +124,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <SidePanelProvider>
       <DashboardLayoutInner
         hasActiveAi={hasActiveAi}
-        hasOpenAi={hasOpenAi}
         showBottomStrip={showBottomStrip}
         stripHeight={stripHeight}
         isAiDrawerExpanded={isAiDrawerExpanded}
@@ -145,7 +142,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function DashboardLayoutInner({
   hasActiveAi,
-  hasOpenAi,
   showBottomStrip,
   stripHeight,
   isAiDrawerExpanded,
@@ -158,7 +154,6 @@ function DashboardLayoutInner({
   children,
 }: {
   hasActiveAi: boolean;
-  hasOpenAi: boolean;
   showBottomStrip: boolean;
   stripHeight: number;
   isAiDrawerExpanded: boolean;
@@ -215,7 +210,7 @@ function DashboardLayoutInner({
           </div>
           {/* Drawer sadece OpenAI varsa mount edilir — yoksa fab tıklayınca
               /stores'a yönlendirir. */}
-          {hasOpenAi && <AiChatDrawer />}
+          {hasActiveAi && <AiChatDrawer />}
         </div>
         {/* Bottom strip — AI fab veya UsageWarning olduğunda görünür.
             Hepsi en sağda toplanır: UsageWarning + AiChatFab yan yana. */}

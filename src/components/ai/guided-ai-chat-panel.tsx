@@ -125,8 +125,12 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   // Aktif modeller — composer'daki Model dropdown'undan seçilmişse onu
   // kullan, yoksa provider'a göre default'a düş.
   const selectedImageModel = selectedImageModelId ?? 'fashn-ai/tryon-max';
+  // Composer'da explicit seçim varsa onu kullan; yoksa Fal entegrasyonunda
+  // kayıtlı varsayılan video modeline, o da yoksa Veo 3.1 Fast I2V'ye düş.
   const selectedVideoModel =
-    selectedVideoModelId ?? 'fal-ai/kling-video/v2.1/master/image-to-video';
+    selectedVideoModelId ??
+    videoIntegration?.videoModel ??
+    'fal-ai/kling-video/v2.1/standard/image-to-video';
 
   useEffect(() => {
     if (currentCompany?.id) {
@@ -135,15 +139,55 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
   }, [currentCompany?.id, fetchIntegrations, fetchSessions]);
 
-  // İlk açılışta selamlama bot mesajı. Default mode 'text' (OpenAI sohbet).
+  // İlk açılışta selamlama bot mesajı. Mevcut entegrasyonlara göre uyarlanır.
   useEffect(() => {
     if (messages.length === 0 && hasIntegration) {
-      const greeting = textIntegration
-        ? 'Merhaba! Ben balinaOS AI. Soru sorabilir, ürün açıklaması üretebilir veya pazarlama metni yazmamı isteyebilirsin. Görsel/video için composer\'dan modu değiştir.'
-        : 'Merhaba! Composer\'da modu seçin (Görsel/Video), görsel ekleyin ve istediğinizi yazın.';
+      let greeting: string;
+      if (textIntegration) {
+        greeting =
+          'Merhaba! Ben balinaOS AI. Soru sorabilir, ürün açıklaması üretebilir veya pazarlama metni yazmamı isteyebilirsin. Görsel/video için composer\'dan modu değiştir.';
+      } else if (videoIntegration && !imageIntegration) {
+        greeting =
+          'Merhaba! Ürün videosu oluşturmak için bir görsel ekleyin ve oluştur\'a basın.';
+      } else if (imageIntegration && !videoIntegration) {
+        greeting =
+          'Merhaba! Görsel oluşturmak için görselleri ekleyin ve istediğinizi yazın.';
+      } else {
+        greeting =
+          'Merhaba! Composer\'da modu seçin (Görsel/Video), görsel ekleyin ve istediğinizi yazın.';
+      }
       start(greeting);
     }
-  }, [messages.length, hasIntegration, textIntegration, start]);
+  }, [
+    messages.length,
+    hasIntegration,
+    textIntegration,
+    videoIntegration,
+    imageIntegration,
+    start,
+  ]);
+
+  // OpenAI bağlı değilse text modu kullanılamaz — entegrasyonlar yüklendiğinde
+  // uygun bir moda geç (video öncelikli, sonra görsel). Aksi halde composer
+  // "Metin" modunda takılı kalır ve gönderim OpenAI uyarısı verir.
+  useEffect(() => {
+    if (mode === 'text' && !textIntegration) {
+      if (videoIntegration) setMode('video');
+      else if (imageIntegration) setMode('image');
+    }
+  }, [mode, textIntegration, videoIntegration, imageIntegration, setMode]);
+
+  // Composer'ın video modelini entegrasyonda kayıtlı varsayılan modele eşitle.
+  // Settings'te seçilen model değişince composer da güncellenir ve eski persist
+  // edilmiş seçim (örn. Kling) düzeltilir. Sadece kayıtlı model değişince çalışır
+  // — kullanıcı dropdown'dan değiştirirse oturum içinde korunur.
+  useEffect(() => {
+    const m = videoIntegration?.videoModel;
+    if (m && m !== selectedVideoModelId) {
+      setSelectedVideoModelId(m);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [videoIntegration?.videoModel]);
 
   // Mesaj listesi her güncellendiğinde en alta kaydır.
   useEffect(() => {
@@ -286,8 +330,6 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       ((resolvedMode === 'image' && attachedImages.length >= 2) ||
         (resolvedMode === 'video' && attachedImages.length >= 1));
     if (needsCodePrompt) {
-      const prefix = imageIntegration?.codePrefix?.trim() ?? '';
-      const exampleSku = prefix ? `${prefix}-001` : '001';
       attachedImages.forEach((url, i) => {
         const name =
           attachedImages.length >= 2 ? (i === 0 ? 'model' : 'urun') : 'gorsel';
@@ -301,11 +343,11 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
         });
       });
       if (rawText) appendMessage({ id: '', kind: 'user-text', text: rawText });
-      const target = resolvedMode === 'video' ? 'videonun' : 'görselin';
+      const target = resolvedMode === 'video' ? 'videoya' : 'görsele';
       appendMessage({
         id: '',
         kind: 'bot-text',
-        text: `Üretimden önce ürün kodunu yazın (örn: 001 → ${exampleSku} olarak ${target} sol altına yerleştirilecek).`,
+        text: `Ürün kodunu yazın — hangi kodu verirseniz o kod ${target} işlenecektir.`,
       });
       setPendingCodeFor({
         files: [...attachedImages],
@@ -513,7 +555,9 @@ KURALLAR:
       );
       return;
     }
-    const prompt = buildVideoPrompt(promptText);
+    // Kullanıcı bir şey yazdıysa zenginleştir; boş bıraktıysa boş gönder —
+    // backend entegrasyon ayarındaki kayıtlı (native/genel) prompt'u uygular.
+    const prompt = promptText.trim() ? buildVideoPrompt(promptText) : '';
     const result = await generateVideoRaw(currentCompany.id, {
       prompt,
       imageUrl: files[0],
@@ -938,6 +982,7 @@ KURALLAR:
               <ToolsButton
                 mode={mode}
                 onSelect={setMode}
+                hasTextIntegration={!!textIntegration}
                 hasImageIntegration={!!imageIntegration}
                 hasVideoIntegration={!!videoIntegration}
               />
@@ -995,6 +1040,7 @@ function AiLogo() {
 function ModeDropdown({
   mode,
   onSelect,
+  hasTextIntegration,
   hasImageIntegration,
   hasVideoIntegration,
   triggerClassName,
@@ -1003,6 +1049,7 @@ function ModeDropdown({
 }: {
   mode: ChatMode;
   onSelect: (mode: ChatMode) => void;
+  hasTextIntegration: boolean;
   hasImageIntegration: boolean;
   hasVideoIntegration: boolean;
   triggerClassName?: string;
@@ -1025,11 +1072,13 @@ function ModeDropdown({
             }
           }}
         >
-          <Dropdown.Item id="text" textValue="Metin">
-            <Dropdown.ItemIndicator />
-            <FileText className="size-4 shrink-0 text-muted" />
-            <Label>Metin (OpenAI)</Label>
-          </Dropdown.Item>
+          {hasTextIntegration ? (
+            <Dropdown.Item id="text" textValue="Metin">
+              <Dropdown.ItemIndicator />
+              <FileText className="size-4 shrink-0 text-muted" />
+              <Label>Metin (OpenAI)</Label>
+            </Dropdown.Item>
+          ) : null}
           {hasImageIntegration ? (
             <Dropdown.Item id="image" textValue="Görsel">
               <Dropdown.ItemIndicator />
@@ -1270,11 +1319,13 @@ function ModelDropdown({
 function ToolsButton({
   mode,
   onSelect,
+  hasTextIntegration,
   hasImageIntegration,
   hasVideoIntegration,
 }: {
   mode: ChatMode;
   onSelect: (mode: ChatMode) => void;
+  hasTextIntegration: boolean;
   hasImageIntegration: boolean;
   hasVideoIntegration: boolean;
 }) {
@@ -1297,6 +1348,7 @@ function ToolsButton({
     <ModeDropdown
       mode={mode}
       onSelect={onSelect}
+      hasTextIntegration={hasTextIntegration}
       hasImageIntegration={hasImageIntegration}
       hasVideoIntegration={hasVideoIntegration}
       triggerClassName={triggerClass}

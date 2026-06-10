@@ -28,8 +28,7 @@ import {
 import { useAiStore, MODEL_CATALOG } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
-import { applySkuOverlayToImage, applySkuOverlayToVideo } from '@/lib/sku-overlay';
-import { api } from '@/services/api';
+import { applySkuOverlayToImage } from '@/lib/sku-overlay';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 interface Props {
@@ -288,7 +287,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
         if (pendingMode === 'image') {
           await runImageGeneration(promptText, files, code);
         } else {
-          await runVideoGeneration(promptText, files, code);
+          await runVideoGeneration(promptText, files);
         }
       } finally {
         removeMessage(pendingId);
@@ -321,14 +320,15 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     const resolvedMode: 'image' | 'video' =
       mode === 'image' || mode === 'video' ? mode : 'image';
 
-    // ----- Image/Video üretimi öncesi: kod yoksa AI önce kodu sorsun -----
+    // ----- Görsel üretimi öncesi: kod yoksa AI önce kodu sorsun -----
+    // Video tarafında kod/SKU kaldırıldı — sadece görselde kod sorulur.
     const codeInProductState = productCode.trim();
     const codeFromText = codeMatch?.[1]?.trim() ?? '';
     const needsCodePrompt =
       !codeInProductState &&
       !codeFromText &&
-      ((resolvedMode === 'image' && attachedImages.length >= 2) ||
-        (resolvedMode === 'video' && attachedImages.length >= 1));
+      resolvedMode === 'image' &&
+      attachedImages.length >= 2;
     if (needsCodePrompt) {
       attachedImages.forEach((url, i) => {
         const name =
@@ -343,11 +343,10 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
         });
       });
       if (rawText) appendMessage({ id: '', kind: 'user-text', text: rawText });
-      const target = resolvedMode === 'video' ? 'videoya' : 'görsele';
       appendMessage({
         id: '',
         kind: 'bot-text',
-        text: `Ürün kodunu yazın — hangi kodu verirseniz o kod ${target} işlenecektir.`,
+        text: 'Ürün kodunu yazın — hangi kodu verirseniz o kod görsele işlenecektir.',
       });
       setPendingCodeFor({
         files: [...attachedImages],
@@ -539,11 +538,7 @@ KURALLAR:
     setProductCode('');
   };
 
-  const runVideoGeneration = async (
-    promptText: string,
-    files: string[],
-    explicitCode?: string,
-  ) => {
+  const runVideoGeneration = async (promptText: string, files: string[]) => {
     if (!currentCompany?.id) return;
     if (!videoIntegration) {
       redirectToIntegration('FAL_AI', 'Fal.ai');
@@ -568,30 +563,13 @@ KURALLAR:
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
       return;
     }
-    const code = explicitCode?.trim() || productCode.trim();
-    const prefix = imageIntegration?.codePrefix?.trim() ?? '';
-    const sku = code ? (prefix ? `${prefix}-${code}` : code) : '';
-    // SKU varsa backend ffmpeg endpoint'ine yolla — başarılıysa blob URL ve
-    // skuEmbedded=true, başarısızsa orijinal URL ve UI CSS overlay'e düşer.
-    const overlaid =
-      sku && currentCompany?.id
-        ? await applySkuOverlayToVideo({
-            companyId: currentCompany.id,
-            videoUrl: result.url,
-            sku,
-            api,
-          })
-        : { url: result.url, embedded: false };
+    // Video tarafında kod/SKU yok — üretilen videoyu doğrudan göster.
     appendMessage({
       id: '',
       kind: 'bot-video',
-      url: overlaid.url,
-      sku,
-      skuEmbedded: overlaid.embedded,
+      url: result.url,
       createdAt: Date.now(),
     });
-    // Bir sonraki ürün için kod tekrar sorulsun.
-    setProductCode('');
   };
 
   const pushBotError = (text: string) =>

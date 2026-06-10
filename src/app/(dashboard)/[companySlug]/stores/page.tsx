@@ -17,6 +17,8 @@ import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
 import { useInstagramIntegrationStore, type InstagramConfig, type InstagramConfigPatch } from '@/stores/instagramIntegrationStore';
+import { useTiktokIntegrationStore } from '@/stores/tiktokIntegrationStore';
+import { TiktokMark } from '@/components/icons/tiktok-mark';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
 
@@ -173,6 +175,7 @@ const integrationCategories: IntegrationCategory[] = [
     title: 'Sosyal Medya',
     items: [
       { id: 'INSTAGRAM', name: 'Instagram', description: 'Sosyal medya hesabınızı bağlayın.', logo: '/figma/integrations/instagram.png', comingSoon: false },
+      { id: 'TIKTOK', name: 'TikTok', description: 'TikTok hesabınızı bağlayın, video paylaşın.', logo: '', comingSoon: false },
       { id: 'WHATSAPP', name: 'WhatsApp', description: 'WhatsApp Business mesajlaşma.', logo: '/figma/integrations/whatsapp.png', comingSoon: true },
     ],
   },
@@ -566,6 +569,65 @@ export default function StoresPage() {
     sessionStorage.setItem('igAuthSlug', currentCompany.slug);
     window.location.href = result.authorizeUrl;
   };
+
+  // ===== TikTok — Bağla akışı (per-store OAuth, Login Kit / PKCE) =====
+  const [isTiktokDialogOpen, setIsTiktokDialogOpen] = useState(false);
+  const [ttBusyStoreId, setTtBusyStoreId] = useState<string | null>(null);
+  const [ttDisconnectingStoreId, setTtDisconnectingStoreId] = useState<
+    string | null
+  >(null);
+  const {
+    configs: ttConfigs,
+    fetchConfig: fetchTtConfig,
+    startOAuth: startTtOAuth,
+    disconnect: disconnectTt,
+  } = useTiktokIntegrationStore();
+
+  const handleTiktokDialogClose = () => setIsTiktokDialogOpen(false);
+
+  const handleConnectTiktok = async (storeId: string) => {
+    if (!currentCompany?.id || !currentCompany?.slug) return;
+    setTtBusyStoreId(storeId);
+    const redirectUri = `${window.location.origin}/integrations/tiktok/return`;
+    const result = await startTtOAuth(currentCompany.id, storeId, redirectUri);
+    setTtBusyStoreId(null);
+    if (!result) {
+      toast.danger('TikTok OAuth başlatılamadı');
+      return;
+    }
+    // Return sayfası bu slug'ı okuyup /{slug}/stores?tiktok=connected'e döner.
+    sessionStorage.setItem('ttAuthSlug', currentCompany.slug);
+    window.location.href = result.authorizeUrl;
+  };
+
+  const handleTtDisconnect = async (storeId: string) => {
+    if (!currentCompany?.id) return;
+    setTtDisconnectingStoreId(storeId);
+    const ok = await disconnectTt(currentCompany.id, storeId);
+    setTtDisconnectingStoreId(null);
+    if (ok) toast.success('TikTok bağlantısı kaldırıldı');
+    else toast.danger('Bağlantı kaldırılamadı');
+  };
+
+  // Mount'ta tüm store'ların TikTok bağlantı durumunu çek (404/403 sessiz).
+  useEffect(() => {
+    if (!currentCompany?.id) return;
+    for (const s of stores) {
+      void fetchTtConfig(currentCompany.id, s.id);
+    }
+  }, [currentCompany?.id, stores, fetchTtConfig]);
+
+  // OAuth dönüşü (?tiktok=connected) → modal aç + durumları tazele + query temizle.
+  useEffect(() => {
+    if (searchParams?.get('tiktok') === 'connected' && currentCompany?.id) {
+      setIsTiktokDialogOpen(true);
+      for (const s of stores) void fetchTtConfig(currentCompany.id, s.id);
+      if (companySlug) {
+        router.replace(`/${companySlug}/stores`, { scroll: false });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, currentCompany?.id, companySlug, router]);
 
   // Paraşüt — Bağla akışı
   const [isParasutDialogOpen, setIsParasutDialogOpen] = useState(false);
@@ -1727,6 +1789,10 @@ export default function StoresPage() {
       setIsInstagramDialogOpen(true);
       return;
     }
+    if (marketplace.id === 'TIKTOK') {
+      setIsTiktokDialogOpen(true);
+      return;
+    }
     if (!marketplace.steps) {
       toast.info('Bu entegrasyon yakında eklenecek');
       return;
@@ -2632,6 +2698,12 @@ export default function StoresPage() {
                     >
                       {item.id === 'FAL_AI' ? (
                         <FalMark
+                          className="h-10 w-10 shrink-0 rounded-xl"
+                          role="img"
+                          aria-label={item.name}
+                        />
+                      ) : item.id === 'TIKTOK' ? (
+                        <TiktokMark
                           className="h-10 w-10 shrink-0 rounded-xl"
                           role="img"
                           aria-label={item.name}
@@ -5167,6 +5239,90 @@ export default function StoresPage() {
                       Kaydet
                     </Button>
                   </div>
+                </div>
+              </Modal.Body>
+            </Modal.Dialog>
+          </Modal.Container>
+        </Modal.Backdrop>
+      </Modal>
+
+      {/* TikTok bağlama modal — mağaza listesi; her mağaza için Bağlan/Kaldır.
+          Bağlan → Login Kit OAuth'a yönlendirir, dönüşte ?tiktok=connected. */}
+      <Modal
+        isOpen={isTiktokDialogOpen}
+        onOpenChange={(o) => !o && handleTiktokDialogClose()}
+      >
+        <Modal.Backdrop>
+          <Modal.Container>
+            <Modal.Dialog className="sm:max-w-md">
+              <Modal.CloseTrigger />
+              <Modal.Header>
+                <Modal.Heading className="flex items-center gap-2">
+                  <TiktokMark className="h-6 w-6 rounded-md" />
+                  TikTok Bağla
+                </Modal.Heading>
+              </Modal.Header>
+              <Modal.Body>
+                <div className="flex flex-col gap-2 py-2">
+                  {stores.length === 0 ? (
+                    <p className="text-sm text-muted">
+                      Önce bir mağaza eklemelisiniz.
+                    </p>
+                  ) : (
+                    stores.map((store) => {
+                      const cfg = ttConfigs[store.id];
+                      const connected = !!cfg?.connected;
+                      const busy = ttBusyStoreId === store.id;
+                      const disconnecting = ttDisconnectingStoreId === store.id;
+                      return (
+                        <div
+                          key={store.id}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-border/60 p-3"
+                        >
+                          <div className="flex min-w-0 flex-col">
+                            <span className="truncate text-sm font-medium">
+                              {store.name}
+                            </span>
+                            {connected ? (
+                              <span className="truncate text-[11px] text-success">
+                                Bağlı
+                                {cfg?.displayName ? ` · ${cfg.displayName}` : ''}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-muted">
+                                Bağlı değil
+                              </span>
+                            )}
+                          </div>
+                          {connected ? (
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              className={pillBtnClass}
+                              isDisabled={disconnecting}
+                              onPress={() => void handleTtDisconnect(store.id)}
+                            >
+                              {disconnecting ? 'Kaldırılıyor...' : 'Kaldır'}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              className={pillBtnClass}
+                              isDisabled={busy}
+                              onPress={() => void handleConnectTiktok(store.id)}
+                            >
+                              {busy ? 'Yönlendiriliyor...' : 'Bağlan'}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                  <p className="text-[11px] text-muted">
+                    TikTok Login Kit ile yetkilendirme yapılır; video paylaşımı
+                    için kullanılır.
+                  </p>
                 </div>
               </Modal.Body>
             </Modal.Dialog>

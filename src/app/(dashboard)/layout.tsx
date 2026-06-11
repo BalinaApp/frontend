@@ -49,12 +49,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const fetchSubscription = useSubscriptionStore((s) => s.fetchCurrent);
   const isAiDrawerExpanded = useUIStore((s) => s.isAiDrawerExpanded);
 
-  // Fal veya Fashn aktif mi? Layout'tan fetch ediyoruz — bottom strip ve drawer
+  // Fal veya OpenAI aktif mi? Layout'tan fetch ediyoruz — bottom strip ve drawer
   // bu listeye göre render edilir, panel mount'una bağlı değil.
   const currentCompanyId = useCompanyStore((s) => s.currentCompany?.id);
   const integrations = useAiStore((s) => s.integrations);
   const fetchIntegrations = useAiStore((s) => s.fetchIntegrations);
-  // En az bir aktif AI entegrasyonu (OpenAI / Fal / Fashn) varsa drawer mount
+  // En az bir aktif AI entegrasyonu (OpenAI / Fal) varsa drawer mount
   // edilir. Yoksa fab tıklayınca /stores'a yönlendirir. Provider'a özgü uyarı
   // ilgili modda (text=OpenAI, video=Fal) gösterilir.
   const hasActiveAi = integrations.some((i) => i.isActive);

@@ -66,15 +66,16 @@ export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
     selectedVideoModelId,
   ]);
 
-  // Görsel için: aktif fashn + fal. Video için: sadece aktif fal.
+  // Görsel için: aktif fal + openai. Video için: sadece aktif fal.
   const imageProviders: AiIntegration[] = useMemo(
-    () => integrations.filter((i) => i.isActive),
+    () =>
+      integrations.filter(
+        (i) => i.isActive && (i.provider === 'fal' || i.provider === 'openai'),
+      ),
     [integrations],
   );
-  // Video tarafında Fashn de listelensin (kullanıcı isteği). Fashn şu an video
-  // üretmiyor; seçilse backend ilk aktif Fal hesabına düşer.
   const videoProviders: AiIntegration[] = useMemo(
-    () => integrations.filter((i) => i.isActive),
+    () => integrations.filter((i) => i.isActive && i.provider === 'fal'),
     [integrations],
   );
 
@@ -90,9 +91,7 @@ export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
       ),
     [imageProvider?.provider],
   );
-  // Video modeller — provider'a göre filtrele. Fashn seçiliyse boş döner;
-  // dropdown empty state'i gösterilir, kullanıcı yine de "kaydet" diyebilir
-  // (backend Fal'a düşer).
+  // Video modeller — provider'a göre filtrele.
   const videoModels = useMemo(
     () =>
       MODEL_CATALOG.filter(
@@ -347,13 +346,11 @@ function ProviderChip({
     >
       <span
         className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white ${
-          provider === 'fashn'
-            ? 'bg-gradient-to-br from-fuchsia-500 to-violet-600'
-            : 'bg-rose-500'
+          provider === 'openai' ? 'bg-emerald-600' : 'bg-rose-500'
         }`}
         aria-hidden="true"
       >
-        {provider === 'fashn' ? 'Fn' : 'Fa'}
+        {provider === 'openai' ? 'Ai' : 'Fa'}
       </span>
       {label}
     </button>
@@ -361,7 +358,7 @@ function ProviderChip({
 }
 
 function providerLabel(p: ModelProvider): string {
-  return p === 'fashn' ? 'Fashn.ai' : 'Fal.ai';
+  return p === 'openai' ? 'OpenAI' : 'Fal.ai';
 }
 
 function EmptyState({

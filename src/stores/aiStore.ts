@@ -2,12 +2,21 @@ import { create } from 'zustand';
 import { api } from '@/services/api';
 
 export type FalImageModel =
+  | 'fal-ai/nano-banana-2'
+  | 'fal-ai/nano-banana-2/edit'
   | 'fal-ai/nano-banana'
+  | 'fal-ai/nano-banana/edit'
+  | 'fal-ai/kling/v1-5/kolors-virtual-try-on'
   | 'fal-ai/flux/dev'
   | 'fal-ai/flux/schnell'
   | 'fal-ai/flux-pro/v1.1';
 
-export type FalVideoModel = 'fal-ai/kling-video/v2.1/master/text-to-video';
+export type FalVideoModel =
+  | 'fal-ai/kling-video/v2.1/pro/image-to-video'
+  | 'fal-ai/kling-video/v2.1/pro/text-to-video'
+  | 'fal-ai/kling-video/v2.1/master/image-to-video'
+  | 'fal-ai/kling-video/v2.1/master/text-to-video'
+  | 'fal-ai/kling-video/v2.1/standard/image-to-video';
 
 /** Görsel/video oluşturma modu. */
 export type FalGenerationKind = 'image' | 'video';
@@ -72,12 +81,12 @@ export interface FalIntegration {
   updatedAt: string;
 }
 
-/** Multi-provider AI entegrasyonu — fal/fashn/openai ile ayrılır. */
+/** Multi-provider AI entegrasyonu — fal/openai ile ayrılır. */
 export interface AiIntegration extends FalIntegration {
-  provider: 'fal' | 'fashn' | 'openai';
+  provider: 'fal' | 'openai';
 }
 
-export type ModelProvider = 'fal' | 'fashn' | 'openai';
+export type ModelProvider = 'fal' | 'openai';
 
 export interface ModelCatalogEntry {
   id: string;
@@ -88,24 +97,45 @@ export interface ModelCatalogEntry {
   isDefault?: boolean;
 }
 
-/** Provider'ı model id prefix'inden çıkar. */
+/** Provider'ı model id prefix'inden çıkar. OpenAI modelleri ayrı; geri kalan
+ *  tüm görsel/video modelleri Fal üzerinden. (Fashn kaldırıldı.) */
 export function getModelProvider(modelId: string): ModelProvider {
-  return modelId.startsWith('fashn-ai/') ? 'fashn' : 'fal';
+  return modelId.startsWith('openai') ? 'openai' : 'fal';
 }
 
 /** UI'da gösterilen, kullanıcıya sunulacak Fal.ai model kataloğu. Her modelin
  * `kind` alanı bu modelin görsel mi video mu üreteceğini belirtir.
- * Görsel sanal-deneme (VTON) artık Fashn.ai üzerinden yapıldığı için Fal'in
- * VTON modelleri (idm-vton, cat-vton, leffa, kolors) bu listeden çıkarıldı. */
+ * Görsel sanal-deneme (VTON) Fal'in kolors-virtual-try-on modeliyle yapılır. */
 export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   // ===== Görsel modelleri =====
+  {
+    id: 'fal-ai/nano-banana-2',
+    label: 'Nano Banana 2',
+    description:
+      'Google Nano Banana 2 — varsayılan, yüksek kalite, 14 referans görsele kadar.',
+    kind: 'image',
+    isDefault: true,
+  },
+  {
+    id: 'fal-ai/nano-banana-2/edit',
+    label: 'Nano Banana 2 — Edit',
+    description:
+      'Nano Banana 2 image-to-image; referans görsellerle düzenleme (14 görsele kadar).',
+    kind: 'image',
+  },
+  {
+    id: 'fal-ai/kling/v1-5/kolors-virtual-try-on',
+    label: 'Kolors Virtual Try-On',
+    description:
+      'Fal sanal kıyafet deneme (VTON) — kişi + ürün görselinden yeni görsel.',
+    kind: 'image',
+  },
   {
     id: 'fal-ai/nano-banana',
     label: 'Nano Banana',
     description:
-      'Google Nano Banana — varsayılan, hızlı, görsel-gönderimi destekler.',
+      'Google Nano Banana — önceki sürüm, hızlı, görsel-gönderimi destekler.',
     kind: 'image',
-    isDefault: true,
   },
   {
     id: 'fal-ai/nano-banana/edit',
@@ -260,6 +290,20 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
     kind: 'video',
   },
   {
+    id: 'fal-ai/kling-video/v2.1/pro/image-to-video',
+    label: 'Kling 2.1 Pro (Image-to-Video)',
+    description:
+      'Profesyonel kalite Kling I2V — varsayılan video modeli. Başlangıç + bitiş karesi.',
+    kind: 'video',
+    isDefault: true,
+  },
+  {
+    id: 'fal-ai/kling-video/v2.1/pro/text-to-video',
+    label: 'Kling 2.1 Pro (Text-to-Video)',
+    description: 'Profesyonel kalite Kling — sadece prompt ile.',
+    kind: 'video',
+  },
+  {
     id: 'fal-ai/kling-video/v2.1/master/image-to-video',
     label: 'Kling 2.1 Master (Image-to-Video)',
     description: 'En yüksek kalite Kling — referans görselden video.',
@@ -274,9 +318,8 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   {
     id: 'fal-ai/kling-video/v2.1/standard/image-to-video',
     label: 'Kling 2.1 Standard (I2V)',
-    description: 'Daha hızlı/ucuz Kling I2V. Varsayılan video modeli.',
+    description: 'Daha hızlı/ucuz Kling I2V.',
     kind: 'video',
-    isDefault: true,
   },
   {
     id: 'fal-ai/kling-video/v2.1/standard/text-to-video',
@@ -388,27 +431,13 @@ export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   },
 ];
 
-/** Fashn.ai sanal-deneme (VTON) modelleri. Tek görev: kişi + kıyafet
- *  görselinden body-aware warp + mask-based transfer ile yeni görsel. */
-export const FASHN_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
-  {
-    id: 'fashn-ai/tryon-max',
-    label: 'Fashn Tryon Max ⭐',
-    description:
-      'Fashn.ai sanal kıyafet deneme — 2K çıktı, quality mode. Web UI ile aynı pipeline.',
-    kind: 'image',
-    isDefault: true,
-  },
-];
-
 /** Tüm provider'lardan birleşik katalog — composer ve mode chip filter'ı
- *  buradan üretilir. */
+ *  buradan üretilir. (Görsel + video tamamı Fal üzerinden.) */
 export const MODEL_CATALOG: ModelCatalogEntry[] = [
   ...FAL_MODEL_CATALOG.map((m) => ({ ...m, provider: 'fal' as ModelProvider })),
-  ...FASHN_MODEL_CATALOG.map((m) => ({ ...m, provider: 'fashn' as ModelProvider })),
 ];
 
-export const DEFAULT_IMAGE_MODEL = FASHN_MODEL_CATALOG.find(
+export const DEFAULT_IMAGE_MODEL = FAL_MODEL_CATALOG.find(
   (m) => m.kind === 'image' && m.isDefault,
 )?.id as FalImageModel;
 
@@ -435,7 +464,7 @@ interface AiState {
   integrations: AiIntegration[];
   isLoadingIntegrations: boolean;
   isSavingIntegration: boolean;
-  /** Görsel üretiminde kullanılacak entegrasyon (önerilen: fashn). */
+  /** Görsel üretiminde kullanılacak entegrasyon (Fal). */
   selectedImageIntegrationId: string | null;
   /** Video üretiminde kullanılacak entegrasyon (sadece fal). */
   selectedVideoIntegrationId: string | null;
@@ -463,7 +492,7 @@ interface AiState {
   fetchIntegrations: (companyId: string) => Promise<void>;
   createIntegration: (
     companyId: string,
-    provider: 'fal' | 'fashn' | 'openai',
+    provider: 'fal' | 'openai',
     args: { name?: string; apiKey: string }
   ) => Promise<AiIntegration | null>;
   updateIntegration: (
@@ -486,7 +515,7 @@ interface AiState {
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
   testApiKey: (
     companyId: string,
-    provider: 'fal' | 'fashn' | 'openai',
+    provider: 'fal' | 'openai',
     apiKey: string,
   ) => Promise<FalTestResult>;
   testIntegration: (companyId: string, integrationId: string) => Promise<FalTestResult>;
@@ -653,7 +682,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       const list = (data ?? []).map((i) => ({
         ...i,
         // Backend tarafı enum'u büyük harf gönderebilir; normalize et.
-        provider: (String(i.provider || 'fal').toLowerCase() as 'fal' | 'fashn' | 'openai'),
+        provider: (String(i.provider || 'fal').toLowerCase() as 'fal' | 'openai'),
       }));
       const fals = falsOnly(list);
 
@@ -706,7 +735,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       );
       const normalized: AiIntegration = {
         ...data,
-        provider: (String(data.provider || provider).toLowerCase() as 'fal' | 'fashn' | 'openai'),
+        provider: (String(data.provider || provider).toLowerCase() as 'fal' | 'openai'),
       };
       set((state) => {
         const integrations = [...state.integrations, normalized];
@@ -753,7 +782,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       );
       const normalized: AiIntegration = {
         ...data,
-        provider: (String(data.provider || 'fal').toLowerCase() as 'fal' | 'fashn' | 'openai'),
+        provider: (String(data.provider || 'fal').toLowerCase() as 'fal' | 'openai'),
       };
       set((state) => {
         const integrations = state.integrations.map((i) =>

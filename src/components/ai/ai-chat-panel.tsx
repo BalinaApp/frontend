@@ -15,6 +15,7 @@ import {
   useAiStore,
   type FalImageSize,
   MODEL_CATALOG,
+  DEFAULT_IMAGE_MODEL,
 } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -28,13 +29,13 @@ interface AiChatPanelProps {
   expandHref?: string;
 }
 
-// Default model katalog — `MODEL_CATALOG`'dan türetiliyor (Fal + Fashn).
+// Default model katalog — `MODEL_CATALOG`'dan türetiliyor (Fal).
 // Seçili hesabın izin verdiği modeller varsa o filtre uygulanır (aşağıda).
 const allModelOptions: Array<{
   value: string;
   label: string;
   kind: 'image' | 'video';
-  provider: 'fal' | 'fashn' | 'openai';
+  provider: 'fal' | 'openai';
 }> = MODEL_CATALOG.map((m) => ({
   value: m.id,
   label: m.label,
@@ -60,35 +61,28 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
   const toggleAiDrawerExpanded = useUIStore((s) => s.toggleAiDrawerExpanded);
 
   const [prompt, setPrompt] = useState('');
-  const [selectedModel, setSelectedModel] = useState<string>('fashn-ai/tryon-max');
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_IMAGE_MODEL);
   // Output ratio sabit kalıyor — Figma'da boyut chip'i yok; gelecekte mod
   // popover'ında çıkacak.
   const imageSize: FalImageSize = 'square_hd';
   // Çoklu referans görsel — virtual try-on gibi compositional prompt'lar için
   // birden fazla input gerekiyor (nano-banana/edit 4 image'a kadar destekler).
-  const MAX_REFERENCE_FRAMES = 4;
+  const MAX_REFERENCE_FRAMES = 14;
   const [referenceFrames, setReferenceFrames] = useState<
     Array<{ url: string; name: string }>
   >([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const startInputRef = useRef<HTMLInputElement>(null);
 
-  const fashnIntegrations = integrations.filter((i) => i.provider === 'fashn');
   const falIntegrations = integrations.filter((i) => i.provider === 'fal');
   const hasIntegration = integrations.length > 0;
 
-  // Seçili modelin provider'ından, hangi entegrasyonun kullanılacağını çıkar.
-  const selectedModelProvider: 'fal' | 'fashn' = selectedModel.startsWith('fashn-ai/')
-    ? 'fashn'
-    : 'fal';
-  const integrationListForModel =
-    selectedModelProvider === 'fashn' ? fashnIntegrations : falIntegrations;
+  // Görsel + video üretimi Fal üzerinden — entegrasyon listesi her zaman Fal.
+  const integrationListForModel = falIntegrations;
   const selectedIntegrationId =
-    selectedModelProvider === 'fashn'
-      ? selectedImageIntegrationId
-      : (allModelOptions.find((o) => o.value === selectedModel)?.kind === 'video'
-          ? selectedVideoIntegrationId
-          : selectedImageIntegrationId);
+    allModelOptions.find((o) => o.value === selectedModel)?.kind === 'video'
+      ? selectedVideoIntegrationId
+      : selectedImageIntegrationId;
   const selectedIntegration =
     integrationListForModel.find((i) => i.id === selectedIntegrationId) ??
     integrationListForModel[0] ??
@@ -96,10 +90,8 @@ export function AiChatPanel({ variant, onClose }: AiChatPanelProps) {
 
   // Seçili hesabın izin verdiği modeller. Liste boşsa tüm katalog gösterilir
   // (legacy/yeni eklenmiş ama henüz model seçilmemiş hesaplarda kırılmasın).
-  // Fashn entegrasyonları için kataloga fashn modellerini, fal için fal'i.
-  const candidateOptions = allModelOptions.filter(
-    (o) => o.provider === selectedModelProvider,
-  );
+  // Görsel/video üretimi Fal üzerinden — sadece fal modelleri listelenir.
+  const candidateOptions = allModelOptions.filter((o) => o.provider === 'fal');
   const allowedModels = selectedIntegration?.models?.length
     ? selectedIntegration.models
     : candidateOptions.map((m) => m.value);
@@ -341,15 +333,13 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
             selectedKey={selectedIntegration?.id ?? integrationListForModel[0]?.id ?? ''}
             onSelectionChange={(k) => {
               const id = String(k);
-              if (selectedModelProvider === 'fashn') {
-                setSelectedImageIntegrationId(id);
-              } else if (currentKind === 'video') {
+              if (currentKind === 'video') {
                 setSelectedVideoIntegrationId(id);
               } else {
                 setSelectedImageIntegrationId(id);
               }
             }}
-            aria-label={selectedModelProvider === 'fashn' ? 'Fashn hesabı' : 'Fal hesabı'}
+            aria-label="Fal hesabı"
             className="w-full"
           >
             <Select.Trigger className="h-7 rounded-lg border border-border bg-surface px-2 text-[11px]">

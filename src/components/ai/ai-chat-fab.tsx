@@ -11,7 +11,7 @@ import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 /**
  * AI launcher — bottom strip içinde inline buton.
  * Hiçbir AI entegrasyonu yoksa click → /stores'a redirect, drawer açılmaz.
- * En az bir aktif entegrasyon (OpenAI / Fal / Fashn) varsa drawer açılır;
+ * En az bir aktif entegrasyon (OpenAI / Fal) varsa drawer açılır;
  * eksik provider'a özgü uyarı ilgili modda gösterilir.
  */
 export function AiChatFab() {

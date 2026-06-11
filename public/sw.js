@@ -4,7 +4,7 @@
 // Davranış: network passthrough (offline cache yok). Tam offline desteği
 // gerektiğinde serwist/workbox ile genişletilebilir.
 
-const CACHE_VERSION = 'balina-v3';
+const CACHE_VERSION = 'balina-v4';
 
 self.addEventListener('install', (event) => {
   // Yeni SW'yi hemen aktive et — eski sürüm beklemesin.
@@ -29,13 +29,24 @@ self.addEventListener('activate', (event) => {
 // Network passthrough — istekler doğrudan ağa gider. Cache'leme yok.
 // Listener'ın varlığı Chrome'un install prompt kriteri için yeterli.
 self.addEventListener('fetch', (event) => {
-  // Yalnızca aynı origin'deki GET isteklerini ele al; diğerleri tarayıcı
-  // varsayılan davranışına düşsün.
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  // HTML sayfa navigasyonlarına ASLA müdahale etme. Eski sürüm tüm GET'leri
+  // `event.respondWith(fetch(req))` ile yakalıyordu; bu tek bir geçici ağ
+  // hatasında (veya redirect senaryosunda) sayfa navigasyonunu fallback'siz
+  // reddedip "network error response: the promise was rejected" / sw.js
+  // Failed to fetch hatasıyla sayfanın hiç açılmamasına yol açıyordu.
+  // Navigasyonu tarayıcının kendi ağ davranışına bırak.
+  if (req.mode === 'navigate') return;
+
+  const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  event.respondWith(fetch(event.request));
+  // Diğer same-origin GET'ler: passthrough, ama fetch reddederse uncaught
+  // rejection üretmeyelim — başarısız bir alt-istek SW olmadan nasıl
+  // davranıyorsa öyle (network error response) ele alınsın.
+  event.respondWith(fetch(req).catch(() => Response.error()));
 });
 
 // ---- Web Push -----------------------------------------------------------

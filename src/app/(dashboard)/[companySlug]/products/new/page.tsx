@@ -387,7 +387,7 @@ export default function NewProductPage() {
   const fetchAiIntegrations = useAiStore((s) => s.fetchIntegrations);
   const generateText = useAiStore((s) => s.generateText);
   const hasAiIntegration = aiIntegrations.some(
-    (i) => i.isActive && i.provider === 'fashn',
+    (i) => i.isActive && i.provider === 'fal',
   );
   const hasOpenAi = aiIntegrations.some(
     (i) => i.isActive && i.provider === 'openai',
@@ -398,11 +398,11 @@ export default function NewProductPage() {
     if (currentCompany?.id) fetchAiIntegrations(currentCompany.id);
   }, [currentCompany?.id, fetchAiIntegrations]);
 
-  /** AI modalını aç — Fashn yoksa /stores'a highlight ile yönlendir. */
+  /** AI modalını aç — Fal yoksa /stores'a highlight ile yönlendir. */
   const openAiImageModalOrRedirect = () => {
     if (!hasAiIntegration) {
-      toast.warning('Fashn.ai entegrasyonu yok — bağla sayfasından ekleyin');
-      router.push(`/${companySlug}/stores?highlight=FASHN_AI`);
+      toast.warning('Fal.ai entegrasyonu yok — bağla sayfasından ekleyin');
+      router.push(`/${companySlug}/stores?highlight=FAL_AI`);
       return;
     }
     setAiModalOpen(true);

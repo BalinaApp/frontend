@@ -26,7 +26,7 @@ const FRAMINGS: Array<{ id: Framing; label: string; description: string; prompt:
   {
     id: 'auto',
     label: 'Otomatik',
-    description: 'Fashn modeli en uygun kadrajı kendisi seçer',
+    description: 'AI modeli en uygun kadrajı kendisi seçer',
     prompt: '',
   },
   {
@@ -50,12 +50,12 @@ const FRAMINGS: Array<{ id: Framing; label: string; description: string; prompt:
 ];
 
 /**
- * Fashn try-on tabanlı çok adımlı ürün görseli üretici.
+ * Fal virtual try-on tabanlı çok adımlı ürün görseli üretici.
  *  Step 1: Model fotoğrafı (manken veya kişi)
  *  Step 2: Ürün/elbise fotoğrafı
- *  Step 3: Kadraj seçimi → fashn-ai/tryon-max çağrısı
+ *  Step 3: Kadraj seçimi → fal-ai/kling/v1-5/kolors-virtual-try-on çağrısı
  *
- * Backend `generateImageRaw` → fashn `tryon-max` modelini çağırır;
+ * Backend `generateImageRaw` → Fal `kolors-virtual-try-on` modelini çağırır;
  * `imageUrls[0]` = model_image, `imageUrls[1]` = product_image olarak map'lenir.
  * Kadraj seçimi prompt'a yansıtılır (model türetir).
  */
@@ -140,7 +140,7 @@ export function ProductAiImageModal({
       const result = await generateImageRaw(companyId, {
         prompt: promptParts.join(', '),
         imageUrls: [modelImage, productImage],
-        model: 'fashn-ai/tryon-max',
+        model: 'fal-ai/kling/v1-5/kolors-virtual-try-on',
       });
       if (!result.url) {
         toast.danger(result.error || 'Görsel üretilemedi');
@@ -356,7 +356,7 @@ function StepFraming({
       <div className="flex flex-col gap-1">
         <h4 className="text-sm font-medium text-foreground">3. Kadraj seç</h4>
         <p className="text-xs text-muted">
-          Üretilen görseldeki çekim açısı/mesafe — Fashn modeli buna göre
+          Üretilen görseldeki çekim açısı/mesafe — AI modeli buna göre
           kompozisyon yapar.
         </p>
       </div>

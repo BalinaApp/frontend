@@ -25,7 +25,11 @@ import {
   buildVideoPrompt,
   type ChatMode,
 } from '@/stores/aiCreatorStore';
-import { useAiStore, MODEL_CATALOG } from '@/stores/aiStore';
+import {
+  useAiStore,
+  MODEL_CATALOG,
+  DEFAULT_IMAGE_MODEL,
+} from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
 import { applySkuOverlayToImage } from '@/lib/sku-overlay';
@@ -48,7 +52,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   /** Eksik entegrasyon → /stores'a yönlendir, ilgili tile'ı highlight et.
    *  Stores sayfası `?highlight=<id>` query'sini okuyup scale animasyonu uygular. */
   const redirectToIntegration = (
-    integrationId: 'OPENAI' | 'FASHN_AI' | 'FAL_AI',
+    integrationId: 'OPENAI' | 'FAL_AI',
     label: string,
   ) => {
     if (!currentCompany?.slug) return;
@@ -110,11 +114,11 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     null,
   );
 
-  // Sabit eşleme (kullanıcı kararı): metin = OpenAI, görsel = Fashn, video = Fal Kling.
+  // Sabit eşleme (kullanıcı kararı): metin = OpenAI, görsel = Fal, video = Fal Kling.
   const textIntegration =
     integrations.find((i) => i.provider === 'openai' && i.isActive) ?? null;
   const imageIntegration =
-    integrations.find((i) => i.provider === 'fashn' && i.isActive) ?? null;
+    integrations.find((i) => i.provider === 'fal' && i.isActive) ?? null;
   const videoIntegration =
     integrations.find((i) => i.provider === 'fal' && i.isActive) ?? null;
   // Text default mode olduğu için en azından bir entegrasyon yeterli — empty
@@ -123,7 +127,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     !!textIntegration || !!imageIntegration || !!videoIntegration;
   // Aktif modeller — composer'daki Model dropdown'undan seçilmişse onu
   // kullan, yoksa provider'a göre default'a düş.
-  const selectedImageModel = selectedImageModelId ?? 'fashn-ai/tryon-max';
+  const selectedImageModel = selectedImageModelId ?? DEFAULT_IMAGE_MODEL;
   // Composer'da explicit seçim varsa onu kullan; yoksa Fal entegrasyonunda
   // kayıtlı varsayılan video modeline, o da yoksa Veo 3.1 Fast I2V'ye düş.
   const selectedVideoModel =
@@ -497,7 +501,7 @@ KURALLAR:
   ) => {
     if (!currentCompany?.id) return;
     if (!imageIntegration) {
-      redirectToIntegration('FASHN_AI', 'Fashn.ai');
+      redirectToIntegration('FAL_AI', 'Fal.ai');
       return;
     }
     if (files.length < 2) {
@@ -1061,7 +1065,7 @@ function ModeDropdown({
             <Dropdown.Item id="image" textValue="Görsel">
               <Dropdown.ItemIndicator />
               <Picture className="size-4 shrink-0 text-muted" />
-              <Label>Görsel (Fashn)</Label>
+              <Label>Görsel (Fal)</Label>
             </Dropdown.Item>
           ) : null}
           {hasVideoIntegration ? (
@@ -1141,13 +1145,13 @@ function SendButton({
   );
 }
 
-/** Model dropdown item önündeki provider rozeti — Fashn mor gradient,
+/** Model dropdown item önündeki provider rozeti —
  *  Fal image kırmızı F, Fal video mavi play. */
 function ProviderIcon({
   provider,
   kind,
 }: {
-  provider: 'fal' | 'fashn' | 'openai';
+  provider: 'fal' | 'openai';
   kind: 'image' | 'video';
 }) {
   if (provider === 'openai') {
@@ -1159,19 +1163,6 @@ function ProviderIcon({
         className="h-4 w-4 shrink-0 rounded-full"
         aria-hidden="true"
       />
-    );
-  }
-  if (provider === 'fashn') {
-    return (
-      <span
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white"
-        style={{
-          background: 'linear-gradient(135deg, #f0abfc, #a78bfa)',
-        }}
-        aria-hidden="true"
-      >
-        Fn
-      </span>
     );
   }
   if (kind === 'video') {

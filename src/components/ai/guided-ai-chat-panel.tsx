@@ -127,7 +127,9 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     !!textIntegration || !!imageIntegration || !!videoIntegration;
   // Aktif modeller — composer'daki Model dropdown'undan seçilmişse onu
   // kullan, yoksa provider'a göre default'a düş.
-  const selectedImageModel = selectedImageModelId ?? DEFAULT_IMAGE_MODEL;
+  // Öncelik: composer'da elle seçilen > entegrasyon ayarındaki varsayılan > genel default.
+  const selectedImageModel =
+    selectedImageModelId ?? imageIntegration?.imageModel ?? DEFAULT_IMAGE_MODEL;
   // Composer'da explicit seçim varsa onu kullan; yoksa Fal entegrasyonunda
   // kayıtlı varsayılan video modeline, o da yoksa Veo 3.1 Fast I2V'ye düş.
   const selectedVideoModel =
@@ -234,21 +236,29 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
   /* ---------------- Image attach ---------------- */
 
-  const handleAttachFile = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
+  // nano-banana-2 tek istekte 14 referans görsele kadar destekler.
+  const MAX_ATTACHED_IMAGES = 14;
+
+  const handleAttachFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    if (list.length === 0) {
       toast.danger('Lütfen bir görsel dosyası seçin');
       return;
     }
-    if (attachedImages.length >= 2) {
-      toast.danger('En fazla 2 görsel ekleyebilirsiniz (model + ürün)');
+    const remaining = MAX_ATTACHED_IMAGES - attachedImages.length;
+    if (remaining <= 0) {
+      toast.danger(`En fazla ${MAX_ATTACHED_IMAGES} görsel ekleyebilirsiniz`);
       return;
     }
-    const url = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
-      reader.readAsDataURL(file);
-    });
-    addAttachedImage(url);
+    const accepted = list.slice(0, remaining);
+    for (const file of accepted) {
+      const url = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(file);
+      });
+      addAttachedImage(url);
+    }
   };
 
   /* ---------------- SKU helper ---------------- */
@@ -332,17 +342,15 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       !codeInProductState &&
       !codeFromText &&
       resolvedMode === 'image' &&
-      attachedImages.length >= 2;
+      attachedImages.length >= 1;
     if (needsCodePrompt) {
-      attachedImages.forEach((url, i) => {
-        const name =
-          attachedImages.length >= 2 ? (i === 0 ? 'model' : 'urun') : 'gorsel';
+      attachedImages.forEach((url) => {
         appendMessage({
           id: '',
           kind: 'user-image',
           url,
           createdAt: Date.now(),
-          name,
+          name: 'gorsel',
           ext: extFromUrl(url),
         });
       });
@@ -364,15 +372,13 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
     // Mesaj akışına user girdisini ekle.
     if (attachedImages.length > 0) {
-      attachedImages.forEach((url, i) => {
-        const name =
-          attachedImages.length >= 2 ? (i === 0 ? 'model' : 'urun') : 'gorsel';
+      attachedImages.forEach((url) => {
         appendMessage({
           id: '',
           kind: 'user-image',
           url,
           createdAt: Date.now(),
-          name,
+          name: 'gorsel',
           ext: extFromUrl(url),
         });
       });
@@ -504,15 +510,14 @@ KURALLAR:
       redirectToIntegration('FAL_AI', 'Fal.ai');
       return;
     }
-    if (files.length < 2) {
+    if (files.length < 1) {
       pushBotError(
-        'Görsel üretimi için 2 görsel gerekli: 1) model (insan), 2) ürün (kıyafet). Lütfen önce iki görseli ekleyip tekrar deneyin.',
+        'Görsel üretimi için en az 1 referans görsel ekleyin (14 görsele kadar).',
       );
       return;
     }
     const prompt =
-      promptText ||
-      'Apply the garment from IMAGE 2 onto the model in IMAGE 1.';
+      promptText || 'Bu referans görsel(ler)den yüksek kaliteli bir ürün görseli üret.';
     const result = await generateImageRaw(currentCompany.id, {
       prompt,
       model: selectedImageModel,
@@ -819,8 +824,9 @@ KURALLAR:
             if (mode === 'text') return;
             e.preventDefault();
             setIsDragging(false);
-            const file = e.dataTransfer.files?.[0];
-            if (file) void handleAttachFile(file);
+            if (e.dataTransfer.files?.length) {
+              void handleAttachFiles(e.dataTransfer.files);
+            }
           }}
         >
           {isDragging && (
@@ -857,7 +863,7 @@ KURALLAR:
                     className="text-[13px] font-medium"
                     style={{ color: 'var(--balinaos-text-shout)' }}
                   >
-                    {i === 0 ? 'Model' : i === 1 ? 'Ürün' : `Görsel ${i + 1}`}
+                    {`Görsel ${i + 1}`}
                   </span>
                   <button
                     type="button"
@@ -892,10 +898,12 @@ KURALLAR:
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
               className="hidden"
               onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) void handleAttachFile(file);
+                if (e.target.files?.length) {
+                  void handleAttachFiles(e.target.files);
+                }
                 e.target.value = '';
               }}
             />
@@ -921,7 +929,7 @@ KURALLAR:
                 const file = item?.getAsFile();
                 if (file) {
                   e.preventDefault();
-                  void handleAttachFile(file);
+                  void handleAttachFiles([file]);
                 }
               }}
               onFocus={() => setIsComposerFocused(true)}
@@ -1706,7 +1714,7 @@ function AiMediaCard({
           )}
           {showSkuOverlay && sku && (
             <span
-              className="pointer-events-none absolute bottom-4 left-4 text-black"
+              className="pointer-events-none absolute right-[6%] top-1/2 -translate-y-1/2 text-right text-black"
               style={{
                 fontFamily: 'Arial, sans-serif',
                 fontSize: '48px',

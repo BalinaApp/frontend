@@ -77,6 +77,9 @@ export interface FalIntegration {
   videoResolution?: string;
   /** Ses üretimi (yalnızca Veo). */
   videoGenerateAudio?: boolean;
+  /** ===== Görsel üretim varsayılanı ===== */
+  /** Varsayılan görsel modeli (Fal id). Boşsa nano-banana-2. Çıktı her zaman 2K. */
+  imageModel?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -510,6 +513,7 @@ interface AiState {
       videoDuration?: string;
       videoResolution?: string;
       videoGenerateAudio?: boolean;
+      imageModel?: string;
     }
   ) => Promise<AiIntegration | null>;
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -545,6 +549,7 @@ interface AiState {
       videoDuration?: string;
       videoResolution?: string;
       videoGenerateAudio?: boolean;
+      imageModel?: string;
     }
   ) => Promise<FalIntegration | null>;
   removeFalIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -645,6 +650,16 @@ function writeSelection(key: string, id: string | null) {
   }
 }
 
+/** localStorage'dan model id okur ama mevcut katalogda yoksa yok sayar (ve
+ *  temizler). Eski/kaldırılmış modeller (ör. `fashn-ai/tryon-max`) kalıcı
+ *  seçim olarak üretime gitmesin — yoksa Fal "Application not found" döner. */
+function readModelSelection(key: string): string | null {
+  const id = readSelection(key);
+  if (id && MODEL_CATALOG.some((m) => m.id === id)) return id;
+  if (id) writeSelection(key, null);
+  return null;
+}
+
 function falsOnly(list: AiIntegration[]): FalIntegration[] {
   // FalIntegration ile AiIntegration aynı shape — provider field'ı sade
   // structural type için artık fazlalık. Strip etmeden döndürmek güvenli.
@@ -657,8 +672,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   isSavingIntegration: false,
   selectedImageIntegrationId: readSelection(SELECTED_IMAGE_KEY),
   selectedVideoIntegrationId: readSelection(SELECTED_VIDEO_KEY),
-  selectedImageModelId: readSelection(SELECTED_IMAGE_MODEL_KEY),
-  selectedVideoModelId: readSelection(SELECTED_VIDEO_MODEL_KEY),
+  selectedImageModelId: readModelSelection(SELECTED_IMAGE_MODEL_KEY),
+  selectedVideoModelId: readModelSelection(SELECTED_VIDEO_MODEL_KEY),
 
   fals: [],
   isLoadingFals: false,
@@ -1042,6 +1057,9 @@ export const useAiStore = create<AiState>((set, get) => ({
             args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined,
           imageUrls: args.imageUrls,
         },
+        // Backend Fal queue'yu 3dk'ya kadar yoklayabiliyor; isteği son anda
+        // kesmemek için 10sn tampon.
+        { timeout: 190_000 },
       );
       const url = data.images?.[0]?.url;
       return url ? { url } : { url: '', error: 'Backend görsel döndürmedi' };

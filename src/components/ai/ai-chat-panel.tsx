@@ -363,7 +363,7 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
         <div
           className="flex flex-col gap-0 rounded-xl bg-gradient-to-b from-black/[0.04] to-black/[0.06] p-0.5"
         >
-          {/* Reference frames row — multi-image input (max 4) */}
+          {/* Reference frames row — multi-image input (max 14, nano-banana-2) */}
           <div className="flex flex-wrap items-center gap-2 px-3.5 py-3.5">
             <input
               ref={startInputRef}

@@ -23,9 +23,13 @@ import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
 
 // ===== Fal video üretim varsayılanları (Yönet modalı) =====
-const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/standard/image-to-video';
+const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/pro/image-to-video';
 /** Modaldaki "Varsayılan video modeli" Select'i için video katalogu. */
 const VIDEO_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'video');
+// ===== Fal görsel üretim varsayılanı (Yönet modalı) =====
+const DEFAULT_FAL_IMAGE_MODEL = 'fal-ai/nano-banana-2';
+/** Modaldaki "Varsayılan görsel modeli" Select'i için görsel katalogu. */
+const IMAGE_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'image');
 // Kling 2.1: aspect 16:9|9:16|1:1, süre 5|10 sn. (Veo modelleri ek olarak
 // auto/720p/1080p/ses kullanır — bu seçenekler aşağıda korunur.)
 const VEO_ASPECT_OPTIONS = ['9:16', '16:9', '1:1', 'auto'] as const;
@@ -409,6 +413,9 @@ export default function StoresPage() {
   );
   const [manageFalAspectRatio, setManageFalAspectRatio] = useState('9:16');
   const [manageFalDuration, setManageFalDuration] = useState('10');
+  const [manageFalImageModel, setManageFalImageModel] = useState(
+    DEFAULT_FAL_IMAGE_MODEL,
+  );
   const [isManageSaving, setIsManageSaving] = useState(false);
   // Anahtar değiştirme alt-modalı — Yönet modalı içindeki butondan açılır.
   const [isChangeKeyOpen, setIsChangeKeyOpen] = useState(false);
@@ -1214,6 +1221,7 @@ export default function StoresPage() {
     setManageFalVideoModel(DEFAULT_FAL_VIDEO_MODEL);
     setManageFalAspectRatio('9:16');
     setManageFalDuration('10');
+    setManageFalImageModel(DEFAULT_FAL_IMAGE_MODEL);
     setIsManageSaving(false);
   };
 
@@ -1262,9 +1270,22 @@ export default function StoresPage() {
   // AlertDialog onay sonrası çağrılır — confirmation prompt'u dialog yapıyor.
   const handleManageRemove = async () => {
     if (!currentCompany?.id || !manageFalId) return;
-    await removeFalIntegration(currentCompany.id, manageFalId);
-    toast.success('Hesap kaldırıldı');
-    handleManageClose();
+    setIsManageSaving(true);
+    try {
+      await removeFalIntegration(currentCompany.id, manageFalId);
+      toast.success('Hesap kaldırıldı');
+      handleManageClose();
+    } catch (error: unknown) {
+      const err = error as {
+        response?: { data?: { message?: string | string[] } };
+        message?: string;
+      };
+      const raw = err.response?.data?.message;
+      const message = Array.isArray(raw) ? raw.join(', ') : raw;
+      toast.danger(message || err.message || 'Hesap kaldırılamadı');
+    } finally {
+      setIsManageSaving(false);
+    }
   };
 
   const handleManageSettingsSave = async () => {
@@ -1275,10 +1296,21 @@ export default function StoresPage() {
         return;
       }
       setIsManageSaving(true);
-      await removeFalIntegration(currentCompany.id, manageFal.id);
-      setIsManageSaving(false);
-      toast.success('Hesap kaldırıldı');
-      handleManageClose();
+      try {
+        await removeFalIntegration(currentCompany.id, manageFal.id);
+        toast.success('Hesap kaldırıldı');
+        handleManageClose();
+      } catch (error: unknown) {
+        const err = error as {
+          response?: { data?: { message?: string | string[] } };
+          message?: string;
+        };
+        const raw = err.response?.data?.message;
+        const message = Array.isArray(raw) ? raw.join(', ') : raw;
+        toast.danger(message || err.message || 'Hesap kaldırılamadı');
+      } finally {
+        setIsManageSaving(false);
+      }
       return;
     }
     // Switch veya video ayarları (model/oran/süre) değiştiyse tek istekte yolla.
@@ -1289,14 +1321,17 @@ export default function StoresPage() {
       (manageFal.videoAspectRatio ?? '9:16') !== manageFalAspectRatio;
     const durationChanged =
       (manageFal.videoDuration ?? '10') !== manageFalDuration;
+    const imageModelChanged =
+      (manageFal.imageModel ?? DEFAULT_FAL_IMAGE_MODEL) !== manageFalImageModel;
     const anyVideoChanged = videoModelChanged || aspectChanged || durationChanged;
-    if (activeChanged || anyVideoChanged) {
+    if (activeChanged || anyVideoChanged || imageModelChanged) {
       setIsManageSaving(true);
       const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
         ...(activeChanged ? { isActive: manageFalActive } : {}),
         ...(videoModelChanged ? { videoModel: manageFalVideoModel } : {}),
         ...(aspectChanged ? { videoAspectRatio: manageFalAspectRatio } : {}),
         ...(durationChanged ? { videoDuration: manageFalDuration } : {}),
+        ...(imageModelChanged ? { imageModel: manageFalImageModel } : {}),
       });
       setIsManageSaving(false);
       if (updated) {
@@ -2464,6 +2499,9 @@ export default function StoresPage() {
                         );
                         setManageFalAspectRatio(fal.videoAspectRatio ?? '9:16');
                         setManageFalDuration(fal.videoDuration ?? '10');
+                        setManageFalImageModel(
+                          fal.imageModel ?? DEFAULT_FAL_IMAGE_MODEL,
+                        );
                       }}
                       className={pillBtnClass}
                     >
@@ -3510,6 +3548,66 @@ export default function StoresPage() {
                           </Select>
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {/* ===== Fotoğraf ayarları — sadece Fal. Sohbette model seçilmezse
+                      buradaki varsayılan kullanılır. Çıktı her zaman 2K. ===== */}
+                  {manageFal && manageProvider === 'fal' && (
+                    <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-surface-secondary/30 p-3">
+                      <div className="flex flex-col gap-0.5">
+                        <Label className="text-sm font-semibold">
+                          Fotoğraf ayarları
+                        </Label>
+                        <p className="text-[11px] text-muted">
+                          Varsayılan görsel modeli. Çözünürlük her zaman 2K.
+                        </p>
+                      </div>
+
+                      {/* Varsayılan görsel modeli */}
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Varsayılan görsel modeli</Label>
+                        <Select
+                          selectedKey={manageFalImageModel}
+                          onSelectionChange={(key) =>
+                            setManageFalImageModel(
+                              String(key) || DEFAULT_FAL_IMAGE_MODEL,
+                            )
+                          }
+                          aria-label="Varsayılan görsel modeli"
+                          className="w-full"
+                        >
+                          <Select.Trigger>
+                            <Select.Value />
+                            <Select.Indicator />
+                          </Select.Trigger>
+                          <Select.Popover>
+                            <ListBox>
+                              {IMAGE_MODEL_OPTIONS.map((m) => (
+                                <ListBox.Item
+                                  key={m.id}
+                                  id={m.id}
+                                  textValue={m.label}
+                                >
+                                  <div className="flex flex-col">
+                                    <span>{m.label}</span>
+                                    <span className="text-[11px] text-muted">
+                                      {m.description}
+                                    </span>
+                                  </div>
+                                  <ListBox.ItemIndicator />
+                                </ListBox.Item>
+                              ))}
+                            </ListBox>
+                          </Select.Popover>
+                        </Select>
+                      </div>
+
+                      <p className="text-[11px] text-muted">
+                        Çıktı çözünürlüğü:{' '}
+                        <span className="font-medium text-foreground">2K</span>{' '}
+                        (sabit).
+                      </p>
                     </div>
                   )}
 

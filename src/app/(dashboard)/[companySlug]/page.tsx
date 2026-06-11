@@ -20,7 +20,7 @@ import {
   Tooltip,
   YAxis,
 } from 'recharts';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useProfitStore } from '@/stores/profitStore';

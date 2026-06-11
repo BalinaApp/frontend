@@ -10,7 +10,7 @@ import {
   Globe,
   Key,
 } from '@gravity-ui/icons';
-import { toast } from '@heroui/react';
+import { toast } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 

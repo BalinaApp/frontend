@@ -6,7 +6,7 @@ import {
   Input,
   Label,
   TextField,
-} from '@heroui/react';
+} from '@/components/ui';
 import { Plus, TrashBin } from '@gravity-ui/icons';
 import {
   type BlockStyle,

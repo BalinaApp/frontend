@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Check, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
-import { Input, TextField } from '@heroui/react';
+import { Input, TextField } from '@/components/ui';
 
 interface EditablePriceCellProps {
   value: number | null;

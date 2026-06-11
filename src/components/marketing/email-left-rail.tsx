@@ -10,7 +10,7 @@ import {
   Plus,
   TrashBin,
 } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import {
   BLOCK_LABELS,
   makeDefaultBlock,

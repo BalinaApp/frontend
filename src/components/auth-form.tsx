@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Button, Input, TextField, toast } from '@heroui/react';
+import { Button, Input, TextField, toast } from '@/components/ui';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Modal } from '@heroui/react';
+import { Modal } from '@/components/ui';
 
 interface LemonCheckoutModalProps {
   /** Backend'den dönen LemonSqueezy checkout veya customer-portal URL'i. */

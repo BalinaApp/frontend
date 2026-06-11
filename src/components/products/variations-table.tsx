@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus } from '@gravity-ui/icons';
-import { Checkbox, Dropdown, Input, TextField } from '@heroui/react';
+import { Checkbox, Dropdown, Input, TextField } from '@/components/ui';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 /**

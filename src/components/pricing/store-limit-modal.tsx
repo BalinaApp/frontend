@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { ShoppingBag as Store, ArrowUpRight } from '@gravity-ui/icons';
-import { Button, Modal } from '@heroui/react';
+import { Button, Modal } from '@/components/ui';
 import { UpgradePlanModal } from './upgrade-plan-modal';
 
 interface StoreLimitModalProps {

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ChevronDown, Plus, Pencil, Copy, TrashBin } from '@gravity-ui/icons';
-import { Button, Modal, TextField, Label, Input, FieldError, Dropdown } from '@heroui/react';
+import { Button, Modal, TextField, Label, Input, FieldError, Dropdown } from '@/components/ui';
 import { useSavedFilterStore, type SavedFilter } from '@/stores/savedFilterStore';
 import {
   FilterDef,

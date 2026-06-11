@@ -24,7 +24,7 @@ import {
   TextArea,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useAiStore } from '@/stores/aiStore';

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Sparkles, Thunderbolt as Zap, CrownDiamond as Crown } from '@gravity-ui/icons';
-import { Button, Modal } from '@heroui/react';
+import { Button, Modal } from '@/components/ui';
 import { usePricingStore, PlanFeatures } from '@/stores/pricingStore';
 import { UpgradePlanModal } from './upgrade-plan-modal';
 

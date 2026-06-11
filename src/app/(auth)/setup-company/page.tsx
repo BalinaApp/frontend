@@ -11,7 +11,7 @@ import {
   Label,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';

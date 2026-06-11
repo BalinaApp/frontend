@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { ClockArrowRotateLeft, TrashBin } from '@gravity-ui/icons';
-import { Dropdown } from '@heroui/react';
+import { Dropdown } from '@/components/ui';
 import {
   useAiCreatorHistoryStore,
   restoreSession,

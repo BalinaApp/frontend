@@ -13,7 +13,7 @@ import {
   Tag,
   TrashBin,
 } from '@gravity-ui/icons';
-import { AlertDialog, Button, Checkbox, toast } from '@heroui/react';
+import { AlertDialog, Button, Checkbox, toast } from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -730,7 +730,7 @@ export default function MarketingContactsPage() {
           {selected.size > 0 && (
             <div className="pointer-events-none fixed bottom-6 left-20 right-1 z-30 flex justify-center">
               <div
-                className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 p-2 backdrop-blur-xl"
+                className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-surface/60 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl bar-blur-in"
                 role="toolbar"
                 aria-label={`${selected.size} kontak için işlemler`}
               >

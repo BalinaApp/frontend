@@ -11,7 +11,7 @@ import {
   Clock,
   ChevronRight,
 } from '@gravity-ui/icons';
-import { Avatar, Button } from '@heroui/react';
+import { Avatar, Button } from '@/components/ui';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';

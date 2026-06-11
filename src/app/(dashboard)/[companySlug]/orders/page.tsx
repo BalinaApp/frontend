@@ -26,7 +26,7 @@ import {
   Modal,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { api } from '@/services/api';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -126,7 +126,7 @@ const labelaryCache = new Map<string, string>();
 // için GET path yerine POST. 429 alınca exponential backoff'la 3 deneme.
 async function zplToDataUrl(
   zpl: string,
-  template: '4x4' | '4x6' = '4x4',
+  template: string = '4x4',
 ): Promise<string | null> {
   const cacheKey = `${template}::${zpl}`;
   const cached = labelaryCache.get(cacheKey);
@@ -251,9 +251,28 @@ async function buildProductInfoPage(
   };
   const zpl = d.productInfoLabel58mm?.zpl;
   if (typeof zpl === 'string' && zpl.trim().startsWith('^XA')) {
-    const dataUrl = await zplToDataUrl(zpl, '4x6');
+    // Etiketi GERÇEK oranında render et. Backend `^PW<genişlik>^LL<yükseklik>`
+    // (8dpmm/203dpi nokta cinsinden) üretiyor; bu geniş bir tablo (≈4 inç
+    // genişlik, kısa yükseklik). Sabit 4x6 template'i içeriği büyük beyaz
+    // tuvalin üst köşesine sıkıştırıp minik bırakıyordu. Gerçek oranda
+    // render edince içerik tüm görseli doldurur; print CSS'i 90° döndürerek
+    // (`.product-info-img`) etiketin uzun kenarına yayar → 1. barkod gibi yan.
+    const DPI = 203.2; // 8 nokta/mm
+    const pwMatch = zpl.match(/\^PW(\d+)/);
+    const llMatch = zpl.match(/\^LL(\d+)/);
+    const clamp = (n: number, lo: number, hi: number) =>
+      Math.min(hi, Math.max(lo, n));
+    const template =
+      pwMatch && llMatch
+        ? `${clamp(Number(pwMatch[1]) / DPI, 1, 6).toFixed(2)}x${clamp(
+            Number(llMatch[1]) / DPI,
+            1,
+            9,
+          ).toFixed(2)}`
+        : '4x6';
+    const dataUrl = await zplToDataUrl(zpl, template);
     if (dataUrl) {
-      return `<img src="${dataUrl}" alt="Ürün listesi etiketi" class="mng-label-img" />`;
+      return `<img src="${dataUrl}" alt="Ürün listesi etiketi" class="product-info-img" />`;
     }
   }
   const lines = d.productInfoLabel58mm?.lines;
@@ -371,6 +390,18 @@ async function printCargoLabels(
   }
   .mng-label-img { display: block; width: 100%; height: 100%; object-fit: contain; }
   .mng-label-embed { width: 100%; height: 100%; border: 0; }
+  /* Ürün listesi etiketi: geniş/yatay tablo 90° döndürülüp etiketin uzun
+     kenarına yayılır (1. barkod gibi yan). Kutu 15cm x 10cm (sayfanın
+     döndürülmüş hâli); object-fit:contain orantıyı bozmadan en büyük boyuta
+     ölçekler. */
+  .product-info-img {
+    display: block;
+    flex: 0 0 auto; /* flex container içinde 15cm genişlik daralmasın */
+    width: 15cm;
+    height: 10cm;
+    object-fit: contain;
+    transform: rotate(90deg);
+  }
   .products-fallback { padding: 6mm; width: 100%; height: 100%; overflow: hidden; }
   .products-order { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12pt; font-weight: 600; margin-bottom: 4mm; }
   .product-line { font-size: 9pt; line-height: 1.45; padding: 1mm 0; border-bottom: 0.5pt dashed #C7C7C7; word-break: break-word; }
@@ -2309,7 +2340,7 @@ function OrdersBulkActionsBar({
   return (
     <div className="pointer-events-none fixed bottom-6 left-20 right-1 z-30 flex justify-center">
       <div
-        className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 p-2 backdrop-blur-xl"
+        className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-surface/60 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl bar-blur-in"
         role="toolbar"
         aria-label={`${count} sipariş için işlemler`}
       >

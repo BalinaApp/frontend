@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ChevronDown, Check } from '@gravity-ui/icons';
-import { Dropdown } from '@heroui/react';
+import { Dropdown } from '@/components/ui';
 
 interface Option {
   value: string;

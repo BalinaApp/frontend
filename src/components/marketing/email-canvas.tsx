@@ -9,7 +9,7 @@ import {
   Copy as CopyIcon,
   TrashBin,
 } from '@gravity-ui/icons';
-import { Dropdown as HDropdown } from '@heroui/react';
+import { Dropdown as HDropdown } from '@/components/ui';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import {

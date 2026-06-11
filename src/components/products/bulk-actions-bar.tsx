@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ArrowRightArrowLeft, Box, Check, TrashBin } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 
 interface BulkActionsBarProps {
   count: number;
@@ -37,7 +37,7 @@ export function BulkActionsBar({
   return (
     <div className="pointer-events-none fixed bottom-6 left-20 right-1 z-30 flex justify-center">
       <div
-        className="pointer-events-auto inline-flex items-center gap-1 rounded-full border border-border bg-surface/60 p-2 backdrop-blur-xl"
+        className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-surface/60 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl bar-blur-in"
         role="toolbar"
         aria-label={`${count} ürün için işlemler`}
       >

@@ -22,7 +22,7 @@ import {
   TextArea,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';

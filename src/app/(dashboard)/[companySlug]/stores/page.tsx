@@ -5,7 +5,7 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 import { ArrowsRotateRight as Loader2, TrashBin as Trash2, ArrowUpRightFromSquare as ExternalLink, Check, Sparkles, Gear as Settings, Key } from '@gravity-ui/icons';
 import { ArrowsRotateRight as Loader, ArrowsRotateRight as RefreshCw, CircleExclamation as AlertCircle, Link as LinkIcon, PlugConnection as Plug, Copy, Eye, EyeSlash as EyeOff } from '@gravity-ui/icons';
-import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, ListBox, Modal, SearchField, Select, Switch, Tabs, TextArea, TextField, toast } from '@heroui/react';
+import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, ListBox, Modal, SearchField, Select, Switch, Tabs, TextArea, TextField, toast } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useProductMappingStore } from '@/stores/productMappingStore';

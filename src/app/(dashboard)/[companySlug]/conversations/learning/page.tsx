@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Xmark } from '@gravity-ui/icons';
-import { Button, Input, Label, Modal, TextArea, TextField, toast } from '@heroui/react';
+import { Button, Input, Label, Modal, TextArea, TextField, toast } from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
 import { useCompanyStore } from '@/stores/companyStore';

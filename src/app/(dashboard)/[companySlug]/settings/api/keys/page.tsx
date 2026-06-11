@@ -22,7 +22,7 @@ import {
   Modal,
   Switch,
   TextField,
-} from '@heroui/react';
+} from '@/components/ui';
 import { ApiKey, useApiKeyStore } from '@/stores/apiKeyStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';

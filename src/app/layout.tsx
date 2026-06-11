@@ -6,7 +6,7 @@ import { AuthGuard } from '@/components/providers/AuthGuard';
 import { SuppressBenignErrors } from '@/components/providers/SuppressBenignErrors';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
-import { Toast } from '@heroui/react';
+import { Toast } from '@/components/ui';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -58,7 +58,7 @@ export default function RootLayout({
         <ThemeProvider>
           <QueryProvider>
             <AuthGuard>{children}</AuthGuard>
-            <Toast.Provider />
+            <Toast />
           </QueryProvider>
         </ThemeProvider>
       </body>

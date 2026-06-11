@@ -1,15 +1,12 @@
 'use client';
 
-import { DateField, DateRangePicker, RangeCalendar } from '@heroui/react';
-import {
-  CalendarDate,
-  getLocalTimeZone,
-  parseDate,
-  today,
-  type DateValue,
-} from '@internationalized/date';
-
-type RangeValue = { start: DateValue; end: DateValue } | null;
+import * as React from 'react';
+import * as Popover from '@radix-ui/react-popover';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import { Calendar as CalendarIcon } from '@gravity-ui/icons';
+import { Calendar } from '@/components/ui';
+import { cn } from '@/components/ui/cn';
 
 export interface DateRange {
   from: Date;
@@ -25,21 +22,8 @@ interface DateRangeInputProps {
   maxDate?: Date;
   /** Popover'da yan yana görünecek ay sayısı (1 veya 2). */
   visibleMonths?: 1 | 2;
-  /**
-   * Görsel ton — `default` ile beyaz/border'lı (varsayılan, raporlar/ödemeler);
-   * `muted` ile entegrasyonlar sayfasındaki SearchField `variant="secondary"`
-   * eşdeğeri gri zemin. DateRangePicker'ın native variant prop'u olmadığı için
-   * BEM elementlerine className override'ı ile uygulanır.
-   */
+  /** Görsel ton — default beyaz/border'lı; muted gri zemin. */
   tone?: 'default' | 'muted';
-}
-
-function dateToCalendarDate(date: Date): CalendarDate {
-  return parseDate(date.toISOString().slice(0, 10));
-}
-
-function calendarDateToDate(value: CalendarDate): Date {
-  return value.toDate(getLocalTimeZone());
 }
 
 export function DateRangeInput({
@@ -47,84 +31,62 @@ export function DateRangeInput({
   onChange,
   isDisabled,
   className,
+  placeholder = 'Tarih aralığı',
   maxDate,
   visibleMonths = 1,
   tone = 'default',
 }: DateRangeInputProps) {
+  const [open, setOpen] = React.useState(false);
   const groupClassName =
     tone === 'muted'
-      ? 'rounded-xl border-transparent bg-black/[0.04] hover:bg-black/[0.06] focus-within:bg-black/[0.06]'
-      : undefined;
-  const heroValue = value
-    ? {
-        start: dateToCalendarDate(value.from),
-        end: dateToCalendarDate(value.to),
-      }
-    : null;
-
-  const maxValue = maxDate ? dateToCalendarDate(maxDate) : today(getLocalTimeZone());
-
-  const handleChange = (range: RangeValue) => {
-    if (!range) {
-      onChange?.(null);
-      return;
-    }
-    onChange?.({
-      from: calendarDateToDate(range.start as CalendarDate),
-      to: calendarDateToDate(range.end as CalendarDate),
-    });
-  };
+      ? 'border-transparent bg-black/[0.04] hover:bg-black/[0.06]'
+      : 'border-field-border bg-field shadow-field';
+  const label = value
+    ? `${format(value.from, 'd MMM yyyy', { locale: tr })} – ${format(
+        value.to,
+        'd MMM yyyy',
+        { locale: tr },
+      )}`
+    : placeholder;
 
   return (
-    <DateRangePicker
-      value={heroValue}
-      onChange={handleChange}
-      isDisabled={isDisabled}
-      maxValue={maxValue}
-      className={className}
-    >
-      <DateField.Group fullWidth className={groupClassName}>
-        <DateField.Input slot="start">
-          {(segment) => <DateField.Segment segment={segment} />}
-        </DateField.Input>
-        <DateRangePicker.RangeSeparator />
-        <DateField.Input slot="end">
-          {(segment) => <DateField.Segment segment={segment} />}
-        </DateField.Input>
-        <DateField.Suffix>
-          <DateRangePicker.Trigger>
-            <DateRangePicker.TriggerIndicator />
-          </DateRangePicker.Trigger>
-        </DateField.Suffix>
-      </DateField.Group>
-      <DateRangePicker.Popover>
-        <RangeCalendar
-          aria-label="Tarih aralığı"
-          visibleDuration={{ months: visibleMonths }}
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          disabled={isDisabled}
+          className={cn(
+            'flex h-9 w-full items-center gap-2 rounded-xl border px-3 text-sm text-field-foreground outline-none transition-colors disabled:opacity-50',
+            !value && 'text-field-placeholder',
+            groupClassName,
+            className,
+          )}
         >
-          <RangeCalendar.Header>
-            <RangeCalendar.YearPickerTrigger>
-              <RangeCalendar.YearPickerTriggerHeading />
-              <RangeCalendar.YearPickerTriggerIndicator />
-            </RangeCalendar.YearPickerTrigger>
-            <RangeCalendar.NavButton slot="previous" />
-            <RangeCalendar.NavButton slot="next" />
-          </RangeCalendar.Header>
-          <RangeCalendar.Grid>
-            <RangeCalendar.GridHeader>
-              {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
-            </RangeCalendar.GridHeader>
-            <RangeCalendar.GridBody>
-              {(date) => <RangeCalendar.Cell date={date} />}
-            </RangeCalendar.GridBody>
-          </RangeCalendar.Grid>
-          <RangeCalendar.YearPickerGrid>
-            <RangeCalendar.YearPickerGridBody>
-              {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
-            </RangeCalendar.YearPickerGridBody>
-          </RangeCalendar.YearPickerGrid>
-        </RangeCalendar>
-      </DateRangePicker.Popover>
-    </DateRangePicker>
+          <CalendarIcon className="h-4 w-4 shrink-0 text-muted" />
+          <span className="flex-1 truncate text-left">{label}</span>
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          align="start"
+          sideOffset={6}
+          className="select__popover z-50 outline-none"
+        >
+          <Calendar
+            mode="range"
+            numberOfMonths={visibleMonths}
+            defaultMonth={value?.from}
+            selected={value ? { from: value.from, to: value.to } : undefined}
+            disabled={maxDate ? { after: maxDate } : undefined}
+            onSelect={(range) => {
+              if (range?.from && range?.to) {
+                onChange?.({ from: range.from, to: range.to });
+                setOpen(false);
+              }
+            }}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }

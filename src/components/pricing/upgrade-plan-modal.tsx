@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check } from '@gravity-ui/icons';
-import { Button, Modal, toast } from '@heroui/react';
+import { Button, Modal, toast } from '@/components/ui';
 import { usePricingStore, type Plan } from '@/stores/pricingStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { LemonCheckoutModal } from './lemon-checkout-modal';

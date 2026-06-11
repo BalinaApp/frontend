@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { Gear, AbbrApi } from '@gravity-ui/icons';
-import { Avatar } from '@heroui/react';
+import { Avatar } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { userDisplayName } from '@/lib/user-display';

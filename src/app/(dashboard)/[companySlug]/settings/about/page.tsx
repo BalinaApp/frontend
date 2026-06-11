@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ChevronRight } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 

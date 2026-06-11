@@ -8,7 +8,7 @@ import {
   Button,
   Select,
   ListBox,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   useAiStore,
   MODEL_CATALOG,

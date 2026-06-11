@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, Copy, Pencil, TrashBin } from '@gravity-ui/icons';
-import { Dropdown } from '@heroui/react';
+import { Dropdown } from '@/components/ui';
 
 interface SavedTabProps {
   name: string;

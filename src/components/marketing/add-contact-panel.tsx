@@ -9,7 +9,7 @@ import {
   Label,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useMarketingStore } from '@/stores/marketingStore';
 

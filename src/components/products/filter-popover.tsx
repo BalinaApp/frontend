@@ -6,13 +6,7 @@ import {
   ChevronLeft,
   Plus,
 } from '@gravity-ui/icons';
-import { Dropdown, RangeCalendar, TextField } from '@heroui/react';
-import {
-  CalendarDate,
-  getLocalTimeZone,
-  parseDate,
-  today,
-} from '@internationalized/date';
+import { Calendar, Dropdown, TextField } from '@/components/ui';
 import { FilterDef, isFilterActive } from './filter-types';
 import { type DateRange } from '../date-range-input';
 
@@ -471,58 +465,26 @@ function TextBody({
   // parse eder).
   if (def.widget === 'date-range') {
     const parsed = parseDateRangeString(def.value);
-    const heroValue = parsed
-      ? {
-          start: dateToCalendarDate(parsed.from),
-          end: dateToCalendarDate(parsed.to),
-        }
-      : null;
-    const maxValue = today(getLocalTimeZone());
     return (
       <div className="p-2">
-        <RangeCalendar
-          aria-label="Tarih aralığı"
-          value={heroValue}
-          maxValue={maxValue}
-          visibleDuration={{ months: 1 }}
-          // Default w-63 (252px) yerine daha kompakt — hücreler de
-          // aspect-square w-full olduğundan otomatik küçülür.
+        <Calendar
+          mode="range"
+          numberOfMonths={1}
           className="w-56"
-          onChange={(range) => {
-            if (!range) {
-              def.onChange('');
-              return;
+          defaultMonth={parsed?.from}
+          selected={parsed ? { from: parsed.from, to: parsed.to } : undefined}
+          disabled={{ after: new Date() }}
+          onSelect={(range) => {
+            if (range?.from && range?.to) {
+              def.onChange(
+                `${range.from.toISOString().slice(0, 10)}..${range.to
+                  .toISOString()
+                  .slice(0, 10)}`,
+              );
+              onCommit?.();
             }
-            const from = (range.start as CalendarDate).toDate(getLocalTimeZone());
-            const to = (range.end as CalendarDate).toDate(getLocalTimeZone());
-            def.onChange(
-              `${from.toISOString().slice(0, 10)}..${to.toISOString().slice(0, 10)}`,
-            );
-            onCommit?.();
           }}
-        >
-          <RangeCalendar.Header>
-            <RangeCalendar.YearPickerTrigger>
-              <RangeCalendar.YearPickerTriggerHeading />
-              <RangeCalendar.YearPickerTriggerIndicator />
-            </RangeCalendar.YearPickerTrigger>
-            <RangeCalendar.NavButton slot="previous" />
-            <RangeCalendar.NavButton slot="next" />
-          </RangeCalendar.Header>
-          <RangeCalendar.Grid>
-            <RangeCalendar.GridHeader>
-              {(day) => <RangeCalendar.HeaderCell>{day}</RangeCalendar.HeaderCell>}
-            </RangeCalendar.GridHeader>
-            <RangeCalendar.GridBody>
-              {(date) => <RangeCalendar.Cell date={date} />}
-            </RangeCalendar.GridBody>
-          </RangeCalendar.Grid>
-          <RangeCalendar.YearPickerGrid>
-            <RangeCalendar.YearPickerGridBody>
-              {({ year }) => <RangeCalendar.YearPickerCell year={year} />}
-            </RangeCalendar.YearPickerGridBody>
-          </RangeCalendar.YearPickerGrid>
-        </RangeCalendar>
+        />
       </div>
     );
   }
@@ -551,10 +513,6 @@ function TextBody({
 }
 
 /** "YYYY-MM-DD..YYYY-MM-DD" → DateRange | null */
-function dateToCalendarDate(date: Date): CalendarDate {
-  return parseDate(date.toISOString().slice(0, 10));
-}
-
 function parseDateRangeString(s: string): DateRange | null {
   if (!s.trim()) return null;
   const [fromStr, toStr] = s.split('..').map((x) => x.trim());

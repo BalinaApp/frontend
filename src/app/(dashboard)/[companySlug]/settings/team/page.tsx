@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Persons as Users, ChevronLeft, TrashBin as Trash2, ArrowsRotateRight as Loader2, CrownDiamond as Crown, Box as Package, ArrowUpFromSquare as Upload } from '@gravity-ui/icons';
 import { Envelope as Mail, Shield, Clock, CircleCheckFill as CheckCircle2 } from '@gravity-ui/icons';
-import { AlertDialog, Button, Input, Label, ListBox, Modal, Select, TextField, toast } from '@heroui/react';
+import { AlertDialog, Button, Input, Label, ListBox, Modal, Select, TextField, toast } from '@/components/ui';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';

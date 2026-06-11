@@ -10,7 +10,7 @@ import {
   Plus,
   Picture,
 } from '@gravity-ui/icons';
-import { Button, Dropdown, ListBox, Select } from '@heroui/react';
+import { Button, Dropdown, ListBox, Select } from '@/components/ui';
 import {
   useAiStore,
   type FalImageSize,

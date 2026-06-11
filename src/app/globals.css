@@ -1,5 +1,18 @@
 @import "tailwindcss";
-@import "@heroui/styles";
+@import "tw-animate-css";
+/* Vendor'lanan tema — renk token'ları + Tailwind @theme renk kayıtları.
+   Arayüz token'ları (text-foreground, bg-surface, bg-field, …) buradan gelir. */
+@import "../styles/theme/variables.css";
+@import "../styles/theme/theme.css";
+
+/* OTP caret animasyonu (tw-animate-css'te yoksa). */
+@keyframes caret-blink {
+  0%, 70%, 100% { opacity: 1; }
+  20%, 50% { opacity: 0; }
+}
+.animate-caret-blink {
+  animation: caret-blink 1.25s ease-out infinite;
+}
 
 /* ------------------------------------------------------------------
    Page background — neutral grey by default, soft 28%-alpha gradient
@@ -8,8 +21,22 @@
    panel layered above it.
    ------------------------------------------------------------------ */
 :root {
-  --page-base: oklch(93% 0 0);
+  /* Figma genel background (fill_LF22S8): #D7D7D7 %96 + #FFFFFF %100.
+     Tema accent'leri bunun üstüne katman bindirir (aşağıdaki .theme-* blokları). */
+  --page-base:
+    linear-gradient(0deg, rgba(215, 215, 215, 0.96), rgba(215, 215, 215, 0.96)),
+    #ffffff;
   --page-bg: var(--page-base);
+  /* Tek gölge sistemi — Figma Dropdown/Shadow. Tüm yüzeyler (content, input,
+     dropdown, select, modal) bunu kullanır. */
+  --shadow-elevated:
+    0px 0px 0px 1px rgba(47, 46, 49, 0.04),
+    0px 4px 2px 0px rgba(47, 46, 49, 0.04),
+    0px 4px 6px -2px rgba(47, 46, 49, 0.04),
+    0px 8px 16px -4px rgba(47, 46, 49, 0.02),
+    0px 16px 24px -8px rgba(47, 46, 49, 0.02),
+    0px 24px 40px -10px rgba(47, 46, 49, 0.04),
+    0px 48px 64px -20px rgba(47, 46, 49, 0.1);
 }
 html,
 body {
@@ -22,6 +49,20 @@ body {
 }
 .bg-page {
   background: var(--page-bg);
+}
+
+/* ------------------------------------------------------------------
+   Content yüzeyi — Figma (node 12334-11451 · fill_6UR2GL + effect_AR7Q0U /
+   node 12334-8147 · effect_AQDE01) birebir: çok katmanlı radial+linear
+   gradient (#F8F8F8/90 taban, kenarlarda hafif #D7D7D7/40 vinyet) +
+   yumuşak 3-katman gölge. Content card ve side panel bunu kullanır.
+   ------------------------------------------------------------------ */
+.content-surface {
+  /* Düz renk — gradient farklı genişlikteki content + side panel'de farklı
+     göründüğü için (radial gradient kutu boyutuna göre çizilir). İki panel de
+     birebir aynı yüzeyi alsın diye Figma taban rengi (#F8F8F8 / %90) kullanılır. */
+  background-color: rgba(248, 248, 248, 0.9);
+  box-shadow: var(--shadow-elevated);
 }
 
 /* Default-mode menu pills (no theme accent active) blend into the
@@ -59,12 +100,9 @@ body:not([class*="theme-"]) .menu-pill {
   .alert-dialog__dialog {
     border-radius: 12px;
     border: 1px solid rgba(0, 0, 0, 0.08);
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(245, 245, 245, 0.6)),
-      oklch(0.97 0 0 / 0.92);
-    box-shadow:
-      0 12px 32px -8px rgba(0, 0, 0, 0.16),
-      0 4px 12px -4px rgba(0, 0, 0, 0.08);
+    /* Dropdown ile aynı: beyaz %95 yüzey + tek gölge sistemi + blur(24px). */
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: var(--shadow-elevated);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     padding: 0;
@@ -83,8 +121,8 @@ body:not([class*="theme-"]) .menu-pill {
   .modal__header,
   .alert-dialog__header {
     flex-direction: column;
-    gap: 0;
-    padding: 12px;
+    gap: 4px;
+    padding: 20px 20px 8px;
     margin-bottom: 0;
   }
 
@@ -103,17 +141,26 @@ body:not([class*="theme-"]) .menu-pill {
     border-radius: 0;
   }
 
-  .modal__heading,
+  /* Modal başlığı — referans tasarımdaki gibi büyük & belirgin (light tema). */
+  .modal__heading {
+    padding: 0;
+    font-size: 20px;
+    line-height: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--foreground);
+  }
+  /* AlertDialog (onay) — kompakt kalsın, satır-içi ikon + başlık. */
   .alert-dialog__heading {
     padding: 0;
-    font-size: 14px;
+    font-size: 15px;
     line-height: 20px;
-    font-weight: 500;
+    font-weight: 600;
     color: var(--foreground);
   }
 
   .modal__body {
-    padding: 12px;
+    padding: 12px 20px;
     gap: 20px;
     display: flex;
     flex-direction: column;
@@ -134,7 +181,7 @@ body:not([class*="theme-"]) .menu-pill {
 
   .modal__footer,
   .alert-dialog__footer {
-    padding: 16px;
+    padding: 16px 20px 20px;
     gap: 8px;
     justify-content: space-between;
     margin-top: 0;
@@ -304,6 +351,27 @@ body[class*="theme-"] .integrations-blob {
   --number-field-group-bg-focus: rgba(0, 0, 0, 0.10);
 }
 
+/* ------------------------------------------------------------------
+   Input & Textarea (default varyant) — Figma (node 12334-8839):
+   ince rgba(35,35,35,0.04) border + yumuşak katmanlı elevation gölgesi.
+   Modal'daki filled (--secondary) varyant hariç tutulur (düz kalır).
+   ------------------------------------------------------------------ */
+/* Sadece arama/number alanları — Input/TextArea HARİÇ. Ürün düzenleme gibi
+   yerlerde Input/TextArea bilerek saydam (inline edit) olduğu için onlara
+   dokunma; yalnızca SearchField/NumberField group'una beyaz %95 + gölge. */
+.search-field__group,
+.number-field__group {
+  border-color: rgba(35, 35, 35, 0.04);
+  box-shadow: var(--shadow-elevated);
+  --search-field-group-bg: rgba(255, 255, 255, 0.95);
+  --search-field-group-bg-hover: rgba(255, 255, 255, 0.98);
+  --search-field-group-bg-focus: #ffffff;
+  --number-field-group-bg: rgba(255, 255, 255, 0.95);
+  --number-field-group-bg-hover: rgba(255, 255, 255, 0.98);
+  --number-field-group-bg-focus: #ffffff;
+  background-color: rgba(255, 255, 255, 0.95);
+}
+
 /* Hidden scrollbar utility — kullanıldığı kapsayıcıda scroll çubuğu gizlenir,
    içerik hâlâ scroll edilebilir. */
 .scrollbar-none {
@@ -312,6 +380,29 @@ body[class*="theme-"] .integrations-blob {
 }
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* Floating bar / toolbar giriş animasyonu — alttan kayarak + fade + blur
+   (içerik bulanık gelip netleşir). Toplu-işlem bar'larında kullanılır. */
+@keyframes bar-blur-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+.bar-blur-in {
+  animation: bar-blur-in 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-blur-in {
+    animation: none;
+  }
 }
 
 /* Auth screens: suppress HeroUI default blue focus ring + border tone change.
@@ -593,4 +684,36 @@ body[class*="theme-"] .integrations-blob {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   animation: ai-text-shimmer 2.4s linear infinite;
+}
+
+/* ------------------------------------------------------------------
+   Dropdown & Select popover — Figma (node 12334-12131): beyaz %95 yüzey,
+   16px radius, katmanlı yumuşak gölge + 24px backdrop blur. Item radius 10px.
+   ------------------------------------------------------------------ */
+.dropdown__popover,
+.select__popover {
+  border-radius: 16px;
+  background-color: rgba(255, 255, 255, 0.95);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow: var(--shadow-elevated);
+}
+.dropdown__popover [data-slot="dropdown-menu"],
+.dropdown__menu,
+.select__popover [data-slot="list-box"] {
+  padding: 4px;
+}
+.dropdown__popover [data-slot="menu-item"],
+.select__popover [data-slot="list-box-item"] {
+  border-radius: 10px;
+}
+/* Hover/selection geçişleri animasyonlu olsun — HeroUI item'ları yalnızca
+   transform+box-shadow geçiriyor; background-color ve color'ı da ekle. */
+.list-box-item,
+.menu-item {
+  transition:
+    transform 250ms var(--ease-out-quart),
+    box-shadow 150ms var(--ease-out),
+    background-color 150ms var(--ease-out),
+    color 150ms var(--ease-out);
 }

@@ -21,7 +21,7 @@ import {
   Switch,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useCompanyStore } from '@/stores/companyStore';
 import { api } from '@/services/api';

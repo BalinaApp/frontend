@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { toast } from '@heroui/react';
+import { toast } from '@/components/ui';
 import { api } from '@/services/api';
 
 export interface ApiKeyPermissions {

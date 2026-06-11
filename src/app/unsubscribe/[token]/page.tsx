@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { api } from '@/services/api';
 

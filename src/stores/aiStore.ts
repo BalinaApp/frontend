@@ -734,7 +734,7 @@ export const useAiStore = create<AiState>((set, get) => ({
       console.error('[createIntegration] failed', e.response?.status, msg, err);
       // Globally publish via toast so the user sees the real reason.
       try {
-        const { toast } = await import('@heroui/react');
+        const { toast } = await import('@/components/ui/toast');
         toast.danger(msg);
       } catch {
         /* ignore */

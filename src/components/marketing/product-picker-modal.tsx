@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Magnifier } from '@gravity-ui/icons';
-import { Button, Modal } from '@heroui/react';
+import { Button, Modal } from '@/components/ui';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useInventoryStore } from '@/stores/inventoryStore';

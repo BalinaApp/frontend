@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ArrowUpFromLine, ArrowLeft, ArrowRight, Check } from '@gravity-ui/icons';
-import { Button, Modal, toast } from '@heroui/react';
+import { Button, Modal, toast } from '@/components/ui';
 import { useAiStore } from '@/stores/aiStore';
 import { api } from '@/services/api';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';

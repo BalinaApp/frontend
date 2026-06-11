@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Bell, ChevronLeft } from '@gravity-ui/icons';
-import { Button, Switch, toast } from '@heroui/react';
+import { Button, Switch, toast } from '@/components/ui';
 import {
   useNotificationStore,
   NotificationType,

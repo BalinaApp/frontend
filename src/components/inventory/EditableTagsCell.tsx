@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Plus, Xmark, Check } from '@gravity-ui/icons';
-import { Dropdown, Input, TextField, Checkbox } from '@heroui/react';
+import { Dropdown, Input, TextField, Checkbox } from '@/components/ui';
 
 interface EditableTagsCellProps {
   value: string[];

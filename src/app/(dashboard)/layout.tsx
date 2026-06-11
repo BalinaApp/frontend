@@ -29,7 +29,7 @@ function SidePanelCard({ children }: { children: React.ReactNode }) {
   return (
     <aside
       key={idRef.current}
-      className="flex w-[360px] shrink-0 flex-col overflow-hidden rounded-lg bg-white/[0.56] shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]"
+      className="flex w-[360px] shrink-0 flex-col overflow-hidden content-surface rounded-lg"
       style={{
         animation:
           'side-panel-enter 280ms cubic-bezier(0.32, 0.72, 0, 1) both',
@@ -193,7 +193,7 @@ function DashboardLayoutInner({
               Side panel translucent white card, content kart ile aynı stil. */}
           <div className="flex min-h-0 flex-1 gap-1">
             <div
-              className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg bg-white/[0.56] shadow-[0_0_8px_-2px_rgba(0,0,0,0.04)]"
+              className="flex min-w-0 flex-1 flex-col overflow-hidden content-surface rounded-lg"
               style={{
                 transform: isAiDrawerExpanded ? 'scale(0.98)' : 'scale(1)',
                 transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)',

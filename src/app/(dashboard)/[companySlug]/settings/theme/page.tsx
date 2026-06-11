@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, Palette } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { AccentTheme, useThemeStore } from '@/stores/themeStore';
 import { usePageTitle } from '@/hooks/use-page-title';

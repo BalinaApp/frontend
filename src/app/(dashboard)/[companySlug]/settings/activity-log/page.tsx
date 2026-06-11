@@ -15,7 +15,7 @@ import {
   CircleCheckFill,
   CircleXmark,
 } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useAuditLogStore, AuditLogItem } from '@/stores/auditLogStore';
 import { usePageTitle } from '@/hooks/use-page-title';

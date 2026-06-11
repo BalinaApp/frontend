@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
-import { Button, InputOTP, REGEXP_ONLY_DIGITS, toast } from '@heroui/react';
+import { Button, InputOTP, REGEXP_ONLY_DIGITS, toast } from '@/components/ui';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
 import { usePageTitle } from '@/hooks/use-page-title';

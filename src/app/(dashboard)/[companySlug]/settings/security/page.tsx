@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft } from '@gravity-ui/icons';
-import { Avatar, Button, Switch, toast } from '@heroui/react';
+import { Avatar, Button, Switch, toast } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';

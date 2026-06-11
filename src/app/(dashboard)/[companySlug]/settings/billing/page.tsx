@@ -9,7 +9,7 @@ import {
   Receipt,
   Star,
 } from '@gravity-ui/icons';
-import { AlertDialog, Avatar, Button, toast } from '@heroui/react';
+import { AlertDialog, Avatar, Button, toast } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';

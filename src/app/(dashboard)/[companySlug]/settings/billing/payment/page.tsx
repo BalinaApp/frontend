@@ -7,7 +7,7 @@ import {
   ChevronLeft,
   CreditCard,
 } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { usePageTitle } from '@/hooks/use-page-title';

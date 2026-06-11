@@ -12,7 +12,7 @@ import {
   Envelope,
   Plus,
 } from '@gravity-ui/icons';
-import { AlertDialog, Button, Modal, toast } from '@heroui/react';
+import { AlertDialog, Button, Modal, toast } from '@/components/ui';
 import {
   compileBlocksToHtml,
   collectProductIds,

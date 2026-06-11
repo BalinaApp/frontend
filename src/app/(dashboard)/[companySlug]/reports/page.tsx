@@ -34,7 +34,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ListBox, Select, Tooltip as UITooltip } from '@heroui/react';
+import { ListBox, Select, Tooltip as UITooltip } from '@/components/ui';
 import { Globe } from '@gravity-ui/icons';
 import { DateRangeInput, type DateRange } from '@/components/date-range-input';
 import { useCompanyStore } from '@/stores/companyStore';

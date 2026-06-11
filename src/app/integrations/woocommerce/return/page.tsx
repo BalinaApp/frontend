@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Alert, Button } from '@heroui/react';
+import { Alert, Button } from '@/components/ui';
 import {
   ArrowsRotateRight as Loader2,
   Check,

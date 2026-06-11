@@ -28,7 +28,7 @@ import {
   TextArea,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useAiStore } from '@/stores/aiStore';

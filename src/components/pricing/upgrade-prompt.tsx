@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Lock, ArrowRight } from '@gravity-ui/icons';
-import { Button } from '@heroui/react';
+import { Button } from '@/components/ui';
 import { PlanFeatures } from '@/stores/pricingStore';
 import { UpgradeModal } from './upgrade-modal';
 

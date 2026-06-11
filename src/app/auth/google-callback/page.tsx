@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { toast } from '@heroui/react';
+import { toast } from '@/components/ui';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
 import { usePageTitle } from '@/hooks/use-page-title';

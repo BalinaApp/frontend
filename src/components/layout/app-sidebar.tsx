@@ -14,7 +14,7 @@ import {
   Envelope,
   Gear,
 } from '@gravity-ui/icons';
-import { Avatar } from '@heroui/react';
+import { Avatar } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';

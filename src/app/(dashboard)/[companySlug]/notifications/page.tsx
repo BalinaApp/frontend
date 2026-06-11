@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, Box as Package, TriangleExclamation as AlertTriangle, TrashBin as Trash2, Check, ChevronLeft } from '@gravity-ui/icons';
 import { ShoppingCart, ChartLine as TrendingDown, CircleCheckFill as CheckCircle2, Clock, ArrowsRotateRight as RefreshCw, CircleXmark as XCircle, ChevronRight, Calendar, Calendar as CalendarDays } from '@gravity-ui/icons';
-import { Button, ListBox, Select } from '@heroui/react';
+import { Button, ListBox, Select } from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useNotificationStore, NotificationType } from '@/stores/notificationStore';
 import { usePageTitle } from '@/hooks/use-page-title';

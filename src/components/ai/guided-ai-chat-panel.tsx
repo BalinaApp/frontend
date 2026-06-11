@@ -17,7 +17,7 @@ import {
   Xmark,
 } from '@gravity-ui/icons';
 
-import { Button, Dropdown, Label, toast } from '@heroui/react';
+import { Button, Dropdown, Label, toast } from '@/components/ui';
 import {
   useAiCreatorStore,
   useAiCreatorHistoryStore,

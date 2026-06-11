@@ -11,7 +11,7 @@ import {
   Modal,
   TextField,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import {
   arePayloadsEqual,
   captureFilterPayload,

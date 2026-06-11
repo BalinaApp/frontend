@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Switch } from '@heroui/react';
+import { Switch } from '@/components/ui';
 
 interface EditableSwitchCellProps {
   value: boolean;

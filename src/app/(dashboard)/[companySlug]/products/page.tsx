@@ -32,7 +32,7 @@ import {
   TextField,
   Tooltip as UITooltip,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useInventoryStore } from '@/stores/inventoryStore';

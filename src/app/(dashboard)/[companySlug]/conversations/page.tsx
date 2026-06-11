@@ -19,7 +19,7 @@ import {
   SearchField,
   Tooltip,
   toast,
-} from '@heroui/react';
+} from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';

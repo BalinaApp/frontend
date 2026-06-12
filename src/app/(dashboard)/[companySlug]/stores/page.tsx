@@ -44,7 +44,7 @@ type Marketplace = {
   // Backend `platform` enum — `id` is the UI-only identifier (e.g. legacy
   // 'WORDPRESS' for WooCommerce), so we keep `platform` separate to map
   // straight onto `/stores/marketplace/:platform/...` endpoints.
-  platform?: 'WOOCOMMERCE' | 'SHOPIFY' | 'TRENDYOL' | 'HEPSIBURADA';
+  platform?: 'WOOCOMMERCE' | 'SHOPIFY' | 'TRENDYOL' | 'HEPSIBURADA' | 'ETSY';
   steps?: Array<{
     key: string;
     label: string;
@@ -93,6 +93,22 @@ const shopify: Marketplace = {
   helpUrl: 'https://shopify.dev/docs/api/admin-rest',
 };
 
+const etsy: Marketplace = {
+  id: 'ETSY',
+  name: 'Etsy',
+  description: 'El yapımı ve vintage ürün pazaryeri.',
+  logo: '/figma/integrations/etsy.png',
+  comingSoon: false,
+  platform: 'ETSY',
+  // One-click OAuth (PKCE): kullanıcı sadece isim girer, sonraki adım Etsy'ye
+  // yönlendirip Approve almak. Token swap + mağaza kaydı callback'te otomatik —
+  // bkz. handleEtsyStart + /integrations/etsy/return.
+  steps: [
+    { key: 'name', label: 'Mağaza Adı', placeholder: 'Mağaza adınız', description: 'Mağazanızı tanıyacağınız bir isim girin.' },
+  ],
+  helpUrl: 'https://developers.etsy.com/documentation/',
+};
+
 const hepsiburada: Marketplace = {
   id: 'HEPSIBURADA',
   name: 'Hepsiburada',
@@ -132,6 +148,7 @@ const integrationCategories: IntegrationCategory[] = [
     items: [
       woocommerce,
       shopify,
+      etsy,
       { id: 'IKAS', name: 'ikas', description: 'Yerel e-ticaret altyapısı.', logo: '/figma/integrations/ikas.png', comingSoon: true },
     ],
   },
@@ -2210,6 +2227,40 @@ export default function StoresPage() {
     }
   };
 
+  const handleEtsyStart = async () => {
+    if (!currentCompany?.id) return;
+    setIsSubmitting(true);
+    try {
+      const response = await api.post(
+        `/company/${currentCompany.id}/stores/etsy/auth/start`,
+        { name: formData.name }
+      );
+      const { authorizeUrl, state } = response.data as {
+        authorizeUrl: string;
+        state: string;
+        expiresAt: string;
+      };
+      // Return sayfası companyId + state'i buradan okur — Etsy roundtrip'i
+      // sırasında currentCompany değişse bile akış doğru şirkete bağlı kalır.
+      sessionStorage.setItem('etsyAuthCompanyId', currentCompany.id);
+      sessionStorage.setItem('etsyAuthState', state);
+      window.location.href = authorizeUrl;
+      // Redirect başlattık — sayfa unmount olacak; setIsSubmitting(false) gerekmiyor.
+    } catch (error: any) {
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        'Etsy bağlantısı başlatılamadı';
+      if (errorMessage.includes('limit') || errorMessage.includes('Limit')) {
+        handleDialogClose();
+        setShowUpgradeDialog(true);
+      } else {
+        toast.danger(errorMessage);
+      }
+      setIsSubmitting(false);
+    }
+  };
+
   const handleAutoMatch = async () => {
     if (!currentCompany?.id) return;
     setIsAutoMatching(true);
@@ -2885,6 +2936,39 @@ export default function StoresPage() {
                                 </>
                               ) : (
                                 "WooCommerce'a Git"
+                              )}
+                            </Button>
+                          </div>
+                        ) : selectedMarketplace?.platform === 'ETSY' ? (
+                          <div className="flex flex-col gap-3">
+                            <Label>Etsy'ye Yönlendir</Label>
+                            <p className="text-sm text-muted">
+                              Sonraki adımda Etsy'ye gideceksiniz. Etsy
+                              hesabınızla giriş yapıp izinleri{' '}
+                              <strong>onayladıktan</strong> sonra otomatik olarak
+                              geri döneceksiniz.
+                            </p>
+                            <Card>
+                              <Card.Content className="flex flex-col gap-1 text-sm">
+                                <p>
+                                  <span className="text-muted">Mağaza:</span>{' '}
+                                  {formData.name}
+                                </p>
+                              </Card.Content>
+                            </Card>
+                            <Button
+                              onPress={handleEtsyStart}
+                              isDisabled={isSubmitting}
+                              isPending={isSubmitting}
+                              fullWidth
+                            >
+                              {isSubmitting ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                  Yönlendiriliyor...
+                                </>
+                              ) : (
+                                "Etsy'ye Git"
                               )}
                             </Button>
                           </div>

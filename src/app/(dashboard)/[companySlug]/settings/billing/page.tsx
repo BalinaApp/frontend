@@ -3,13 +3,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronLeft,
   ChevronRight,
   CreditCard,
   Receipt,
   Star,
 } from '@gravity-ui/icons';
-import { AlertDialog, Avatar, Button, toast } from '@/components/ui';
+import {
+  BalinaAvatar,
+  BalinaButton,
+  BalinaConfirmDialog,
+  toast,
+} from '@/components/balina';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -125,29 +129,13 @@ export default function BillingSettingsPage() {
 
   return (
     <>
-      {/* Section header */}
-      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
-          aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-sm font-medium text-foreground">Abonelik</h2>
-      </div>
-
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col items-center gap-6 px-3">
           {/* Avatar */}
-          <Avatar className="h-[116px] w-[116px] rounded-full">
-            <Avatar.Fallback className="rounded-full bg-zinc-500 text-3xl font-semibold text-white">
-              {userInitial}
-            </Avatar.Fallback>
-          </Avatar>
+          <BalinaAvatar
+            className="h-[116px] w-[116px] rounded-full bg-zinc-500 text-3xl font-semibold text-white"
+            fallback={userInitial}
+          />
 
           {/* Name + email */}
           <div className="flex w-full flex-col items-center gap-1">
@@ -241,24 +229,24 @@ export default function BillingSettingsPage() {
           {(showCancel || showResume) && (
             <div className="flex w-full justify-center gap-2">
               {showCancel && (
-                <Button
-                  variant="tertiary"
-                  onPress={() => setIsCancelDialogOpen(true)}
-                  isDisabled={isMutating}
-                  className="h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+                <BalinaButton
+                  variant="soft"
+                  onClick={() => setIsCancelDialogOpen(true)}
+                  disabled={isMutating}
+                  className="h-8 cursor-pointer bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
                 >
                   Aboneliği iptal et
-                </Button>
+                </BalinaButton>
               )}
               {showResume && (
-                <Button
+                <BalinaButton
                   variant="primary"
-                  onPress={handleResume}
-                  isDisabled={isMutating}
-                  className="h-8 cursor-pointer rounded-full px-3"
+                  onClick={handleResume}
+                  disabled={isMutating}
+                  className="h-8 cursor-pointer px-3"
                 >
                   İptali geri al
-                </Button>
+                </BalinaButton>
               )}
             </div>
           )}
@@ -270,39 +258,17 @@ export default function BillingSettingsPage() {
         onOpenChange={setIsUpgradeOpen}
       />
 
-      <AlertDialog
-        isOpen={isCancelDialogOpen}
+      <BalinaConfirmDialog
+        open={isCancelDialogOpen}
         onOpenChange={setIsCancelDialogOpen}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="warning" />
-                <AlertDialog.Heading>Aboneliği iptal et</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body>
-                <p>
-                  Aboneliği iptal etmek istediğinize emin misiniz? Dönem sonuna
-                  kadar tam erişim devam eder, sonrasında plan FREE&apos;ye düşer.
-                </p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isMutating}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleCancelConfirm}
-                  isPending={isMutating}
-                >
-                  Aboneliği iptal et
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Aboneliği iptal et"
+        description="Aboneliği iptal etmek istediğinize emin misiniz? Dönem sonuna kadar tam erişim devam eder, sonrasında plan FREE'ye düşer."
+        confirmLabel="Aboneliği iptal et"
+        cancelLabel="Vazgeç"
+        onConfirm={handleCancelConfirm}
+        danger
+        loading={isMutating}
+      />
     </>
   );
 }

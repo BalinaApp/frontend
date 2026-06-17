@@ -2,14 +2,7 @@
 
 import { useState } from 'react';
 import { Xmark } from '@gravity-ui/icons';
-import {
-  Button,
-  FieldError,
-  Input,
-  Label,
-  TextField,
-  toast,
-} from '@/components/ui';
+import { BalinaButton, BalinaTextField, toast } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useMarketingStore } from '@/stores/marketingStore';
 
@@ -67,44 +60,45 @@ export function AddContactPanel({ onClose }: { onClose: () => void }) {
 
       {/* Body — form alanları. */}
       <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-        <TextField
+        <BalinaTextField
+          label="E-posta"
           value={email}
           onChange={(v) => {
             setEmail(v);
             if (error) setError(null);
           }}
-          isInvalid={!!error}
-          isRequired
+          error={error || undefined}
+          placeholder="ornek@adres.com"
           autoFocus
-        >
-          <Label>E-posta</Label>
-          <Input
-            placeholder="ornek@adres.com"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                submit();
-              }
-            }}
-          />
-          {error && <FieldError>{error}</FieldError>}
-        </TextField>
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            }
+          }}
+        />
 
         <div className="grid grid-cols-2 gap-2">
-          <TextField value={firstName} onChange={setFirstName}>
-            <Label>Ad</Label>
-            <Input placeholder="Ad" />
-          </TextField>
-          <TextField value={lastName} onChange={setLastName}>
-            <Label>Soyad</Label>
-            <Input placeholder="Soyad" />
-          </TextField>
+          <BalinaTextField
+            label="Ad"
+            value={firstName}
+            onChange={setFirstName}
+            placeholder="Ad"
+          />
+          <BalinaTextField
+            label="Soyad"
+            value={lastName}
+            onChange={setLastName}
+            placeholder="Soyad"
+          />
         </div>
 
-        <TextField value={phone} onChange={setPhone}>
-          <Label>Telefon (opsiyonel)</Label>
-          <Input placeholder="+90 ..." />
-        </TextField>
+        <BalinaTextField
+          label="Telefon (opsiyonel)"
+          value={phone}
+          onChange={setPhone}
+          placeholder="+90 ..."
+        />
 
         <p className="text-xs text-muted">
           Manuel eklenen kontaklar <code>source=&quot;manual&quot;</code>{' '}
@@ -115,17 +109,22 @@ export function AddContactPanel({ onClose }: { onClose: () => void }) {
 
       {/* Sticky footer */}
       <div className="flex shrink-0 items-center justify-end gap-2 border-t border-foreground/[0.06] px-4 py-3">
-        <Button variant="tertiary" onPress={onClose} isDisabled={isSaving}>
+        <BalinaButton
+          variant="soft"
+          size="large"
+          onClick={onClose}
+          disabled={isSaving}
+        >
           Vazgeç
-        </Button>
-        <Button
+        </BalinaButton>
+        <BalinaButton
           variant="primary"
-          onPress={submit}
-          isPending={isSaving}
-          isDisabled={isSaving || !email.trim()}
+          size="large"
+          onClick={submit}
+          disabled={isSaving || !email.trim()}
         >
           Ekle
-        </Button>
+        </BalinaButton>
       </div>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Plus, Xmark, Check } from '@gravity-ui/icons';
-import { Dropdown, Input, TextField, Checkbox } from '@/components/ui';
+import { BalinaPopover, BalinaTextField, BalinaCheckbox } from '@/components/balina';
 
 interface EditableTagsCellProps {
   value: string[];
@@ -67,100 +67,94 @@ export function EditableTagsCell({
   };
 
   return (
-    <Dropdown
-      isOpen={open}
+    <BalinaPopover
+      open={open}
       onOpenChange={(o) => {
         setOpen(o);
         if (!o) void persist(draft);
       }}
-    >
-      <Dropdown.Trigger
-        isDisabled={disabled}
-        className={[
-          'inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-1 py-1 text-left transition-colors',
-          disabled ? 'cursor-default' : 'hover:bg-surface-secondary/60',
-          className ?? '',
-        ].join(' ')}
-      >
-        {value.length === 0 ? (
-          <span className="inline-flex items-center gap-1 text-xs text-muted">
-            <Plus className="h-3 w-3" /> Ekle
-          </span>
-        ) : (
-          value.map((t) => (
-            <span
-              key={t}
-              className="inline-flex h-5 items-center rounded-full bg-foreground/[0.06] px-2 text-[11px] font-medium text-foreground"
-            >
-              {t}
+      className="w-[260px] max-w-none overflow-hidden p-0"
+      trigger={
+        <button
+          type="button"
+          disabled={disabled}
+          className={[
+            'inline-flex max-w-full flex-wrap items-center gap-1 rounded-md px-1 py-1 text-left transition-colors',
+            disabled ? 'cursor-default' : 'hover:bg-surface-secondary/60',
+            className ?? '',
+          ].join(' ')}
+        >
+          {value.length === 0 ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted">
+              <Plus className="h-3 w-3" /> Ekle
             </span>
-          ))
-        )}
-      </Dropdown.Trigger>
-      <Dropdown.Popover className="w-[260px] overflow-hidden rounded-lg border border-border bg-surface/95 shadow-lg backdrop-blur-xl">
-        <div className="flex flex-col">
-          <div className="border-b border-border/60 p-2">
-            <TextField
-              value={newTag}
-              onChange={setNewTag}
-              aria-label="Yeni etiket"
-            >
-              <Input
-                placeholder="Yeni etiket…"
-                className="h-8 rounded-md border-transparent bg-transparent px-2 text-sm shadow-none"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addNewTag();
-                  }
-                }}
-              />
-            </TextField>
-          </div>
-          <div className="flex max-h-[240px] flex-col overflow-auto py-1">
-            {allOptions.length === 0 ? (
-              <div className="px-3 py-3 text-center text-xs text-muted">
-                Henüz etiket yok — yukarıdan ekle
-              </div>
-            ) : (
-              allOptions.map((tag) => {
-                const isOn = draft.has(tag);
-                return (
-                  <label
-                    key={tag}
-                    className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary"
-                  >
-                    <Checkbox
-                      isSelected={isOn}
-                      onChange={(next) => toggle(tag, next)}
-                    >
-                      <Checkbox.Control>
-                        <Checkbox.Indicator />
-                      </Checkbox.Control>
-                    </Checkbox>
-                    <span className="flex-1 truncate text-foreground">{tag}</span>
-                    {isOn && <Check className="h-3 w-3 text-accent" />}
-                  </label>
-                );
-              })
-            )}
-          </div>
-          {draft.size > 0 && (
-            <div className="flex items-center justify-between border-t border-border/60 px-2 py-2 text-xs">
-              <span className="text-muted">
-                {draft.size} seçili
-              </span>
-              <button
-                type="button"
-                onClick={() => setDraft(new Set())}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-secondary hover:text-foreground"
+          ) : (
+            value.map((t) => (
+              <span
+                key={t}
+                className="inline-flex h-5 items-center rounded-full bg-foreground/[0.06] px-2 text-[11px] font-medium text-foreground"
               >
-                <Xmark className="h-3 w-3" /> Temizle
-              </button>
+                {t}
+              </span>
+            ))
+          )}
+        </button>
+      }
+    >
+      <div className="flex flex-col">
+        <div className="border-b border-border/60 p-2">
+          <BalinaTextField
+            value={newTag}
+            onChange={setNewTag}
+            aria-label="Yeni etiket"
+            placeholder="Yeni etiket…"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                addNewTag();
+              }
+            }}
+          />
+        </div>
+        <div className="flex max-h-[240px] flex-col overflow-auto py-1">
+          {allOptions.length === 0 ? (
+            <div className="px-3 py-3 text-center text-xs text-muted">
+              Henüz etiket yok — yukarıdan ekle
             </div>
+          ) : (
+            allOptions.map((tag) => {
+              const isOn = draft.has(tag);
+              return (
+                <label
+                  key={tag}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm transition-colors hover:bg-surface-secondary"
+                >
+                  <BalinaCheckbox
+                    checked={isOn}
+                    onCheckedChange={(next) => toggle(tag, next)}
+                  />
+                  <span className="flex-1 truncate text-foreground">{tag}</span>
+                  {isOn && <Check className="h-3 w-3 text-accent" />}
+                </label>
+              );
+            })
           )}
         </div>
-      </Dropdown.Popover>
-    </Dropdown>
+        {draft.size > 0 && (
+          <div className="flex items-center justify-between border-t border-border/60 px-2 py-2 text-xs">
+            <span className="text-muted">
+              {draft.size} seçili
+            </span>
+            <button
+              type="button"
+              onClick={() => setDraft(new Set())}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-muted hover:bg-surface-secondary hover:text-foreground"
+            >
+              <Xmark className="h-3 w-3" /> Temizle
+            </button>
+          </div>
+        )}
+      </div>
+    </BalinaPopover>
   );
 }

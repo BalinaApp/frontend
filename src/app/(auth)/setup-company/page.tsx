@@ -1,44 +1,30 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ArrowsRotateRight as Loader2, TrashBin as Trash2 } from '@gravity-ui/icons';
+import { ArrowsRotateRight as Loader2, TrashBin as Trash2 } from '@gravity-ui/icons';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import {
-  Avatar,
-  Button,
-  Dropdown,
-  Input,
-  Label,
-  TextField,
+  BalinaAvatar,
+  BalinaButton,
+  BalinaSelect,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 
-import { INVITABLE_ROLES, ROLE_LABELS, type InvitableRoleId } from '@/lib/roles';
+import { INVITABLE_ROLES, type InvitableRoleId } from '@/lib/roles';
 
 type MemberRole = InvitableRoleId;
-
-const ROLE_LABEL = ROLE_LABELS;
 
 interface TeamMember {
   email: string;
   role: MemberRole;
 }
 
-const PRIMARY_BUTTON_CLASS =
-  'w-full rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
-const SECONDARY_BUTTON_CLASS =
-  'rounded-3xl bg-[#EBEBEC] text-[#0485F7] hover:bg-[#dcdcde] data-[hovered=true]:bg-[#dcdcde]';
-const ROLE_BUTTON_CLASS =
-  'rounded-3xl bg-[#EBEBEC] text-[#18181B] hover:bg-[#dcdcde] data-[hovered=true]:bg-[#dcdcde]';
-const DANGER_ICON_BUTTON_CLASS =
-  'h-9 w-9 rounded-3xl bg-[#FF383C]/15 text-[#FF383C] hover:bg-[#FF383C]/25 data-[hovered=true]:bg-[#FF383C]/25';
-
-const FIELD_INPUT_CLASS =
-  'auth-field-input h-9 rounded-xl px-3 text-sm placeholder:text-[#71717A]';
+const PRIMARY_BUTTON_CLASS = 'w-full';
 
 function getInitial(email: string) {
   return email.charAt(0).toUpperCase();
@@ -157,150 +143,117 @@ export default function SetupCompanyPage() {
           onSubmit={handleSubmit}
           className="flex w-full flex-col gap-4"
         >
-          <TextField
+          <BalinaTextField
             name="companyName"
             value={companyName}
             onChange={setCompanyName}
-            isRequired
-            isDisabled={isLoading}
+            required
+            disabled={isLoading}
             autoFocus
             aria-label="Şirket adı"
-          >
-            <Input placeholder="Şirket adı" className={FIELD_INPUT_CLASS} />
-          </TextField>
+            placeholder="Şirket adı"
+          />
 
           <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium text-[#18181B]">
+            <span className="text-sm font-medium text-[#18181B]">
               Takım üyeleri
-            </Label>
+            </span>
             <div className="flex gap-2">
-              <TextField
+              <BalinaTextField
                 name="inviteEmail"
                 type="email"
                 value={inviteEmail}
                 onChange={setInviteEmail}
-                isDisabled={isLoading}
+                disabled={isLoading}
                 aria-label="E-posta adresi"
-                className="flex-1"
-              >
-                <Input
-                  placeholder="E-posta adresi"
-                  className={FIELD_INPUT_CLASS}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      // Adding an invitee is the natural action when there's
-                      // text in the field; only let the form submit fire
-                      // (Tamamla) when the field is empty.
-                      if (inviteEmail.trim()) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleAddMember();
-                      }
+                placeholder="E-posta adresi"
+                containerClassName="flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    // Adding an invitee is the natural action when there's
+                    // text in the field; only let the form submit fire
+                    // (Tamamla) when the field is empty.
+                    if (inviteEmail.trim()) {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleAddMember();
                     }
-                  }}
-                />
-              </TextField>
-              <Button
+                  }
+                }}
+              />
+              <BalinaButton
                 type="button"
-                variant="secondary"
-                onPress={handleAddMember}
-                isDisabled={isLoading || !inviteEmail.trim()}
-                className={SECONDARY_BUTTON_CLASS}
+                variant="soft"
+                onClick={handleAddMember}
+                disabled={isLoading || !inviteEmail.trim()}
               >
                 Davet gönder
-              </Button>
+              </BalinaButton>
             </div>
           </div>
 
           {teamMembers.length > 0 && (
             <div className="flex flex-col gap-2">
-              <Label className="text-sm font-medium text-[#18181B]">
+              <span className="text-sm font-medium text-[#18181B]">
                 Eklenen üyeler
-              </Label>
+              </span>
               <div className="flex flex-col gap-2">
                 {teamMembers.map((member) => (
                   <div
                     key={member.email}
                     className="flex items-center gap-2"
                   >
-                    <Avatar className="size-6 shrink-0 rounded-full bg-[#EBEBEC]">
-                      <Avatar.Fallback className="text-xs font-medium text-[#18181B]">
-                        {getInitial(member.email)}
-                      </Avatar.Fallback>
-                    </Avatar>
+                    <BalinaAvatar
+                      size="large"
+                      fallback={getInitial(member.email)}
+                      className="shrink-0"
+                    />
                     <span className="flex-1 truncate text-sm text-[#18181B]">
                       {member.email}
                     </span>
-                    <Dropdown>
-                      <Button
-                        type="button"
-                        variant="tertiary"
-                        size="sm"
-                        className={ROLE_BUTTON_CLASS}
-                      >
-                        {ROLE_LABEL[member.role]}
-                        <ChevronDown className="h-4 w-4" />
-                      </Button>
-                      <Dropdown.Popover placement="bottom end">
-                        <Dropdown.Menu
-                          selectionMode="single"
-                          selectedKeys={[member.role]}
-                          onAction={(key) =>
-                            handleChangeRole(member.email, key as MemberRole)
-                          }
-                        >
-                          {INVITABLE_ROLES.map((r) => (
-                            <Dropdown.Item
-                              key={r.id}
-                              id={r.id}
-                              textValue={r.label}
-                            >
-                              <Label>{r.label}</Label>
-                              <Dropdown.ItemIndicator />
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Menu>
-                      </Dropdown.Popover>
-                    </Dropdown>
-                    <Button
+                    <BalinaSelect
+                      value={member.role}
+                      onValueChange={(key) =>
+                        handleChangeRole(member.email, key as MemberRole)
+                      }
+                      options={INVITABLE_ROLES.map((r) => ({
+                        value: r.id,
+                        label: r.label,
+                      }))}
+                      disabled={isLoading}
+                    />
+                    <BalinaButton
                       type="button"
                       variant="danger"
-                      size="sm"
-                      isIconOnly
+                      size="small"
                       aria-label="Üyeyi sil"
-                      onPress={() => handleRemoveMember(member.email)}
-                      isDisabled={isLoading}
-                      className={DANGER_ICON_BUTTON_CLASS}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                      onClick={() => handleRemoveMember(member.email)}
+                      disabled={isLoading}
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                    />
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <Button
+          <BalinaButton
             type="submit"
-            isPending={isLoading}
+            variant="primary"
             // Disable while there's a half-typed invite — user has to either
             // add it via "Davet gönder" / Enter or clear the field before the
             // form will accept submission. Prevents accidentally finalising
             // the company without the invitee they were typing.
-            isDisabled={
+            disabled={
               isLoading || !companyName.trim() || !!inviteEmail.trim()
             }
             className={PRIMARY_BUTTON_CLASS}
+            leftIcon={
+              isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined
+            }
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Oluşturuluyor...
-              </>
-            ) : (
-              'Tamamla'
-            )}
-          </Button>
+            {isLoading ? 'Oluşturuluyor...' : 'Tamamla'}
+          </BalinaButton>
         </form>
       </div>
     </div>

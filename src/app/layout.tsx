@@ -6,7 +6,7 @@ import { AuthGuard } from '@/components/providers/AuthGuard';
 import { SuppressBenignErrors } from '@/components/providers/SuppressBenignErrors';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { ServiceWorkerRegister } from '@/components/providers/ServiceWorkerRegister';
-import { Toast } from '@/components/ui';
+import { Toast } from '@/components/balina';
 
 const inter = Inter({
   subsets: ['latin'],

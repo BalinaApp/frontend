@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { ArrowUpFromLine, ArrowLeft, ArrowRight, Check } from '@gravity-ui/icons';
-import { Button, Modal, toast } from '@/components/ui';
+import { BalinaButton, BalinaModal, toast } from '@/components/balina';
 import { useAiStore } from '@/stores/aiStore';
 import { api } from '@/services/api';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
@@ -160,20 +160,49 @@ export function ProductAiImageModal({
     step === 3;
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={handleClose}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[560px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <div className="flex items-center gap-2">
-                <BalinaOsMark className="h-5 w-5 text-foreground" />
-                <Modal.Heading>balinaOS AI ile Görsel Üret</Modal.Heading>
-              </div>
-              <StepBar step={step} />
-            </Modal.Header>
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={handleClose}
+      className="sm:max-w-[560px]"
+      titleIcon={<BalinaOsMark className="h-5 w-5 text-foreground" />}
+      title="balinaOS AI ile Görsel Üret"
+      footer={
+        <>
+          {step > 1 && (
+            <BalinaButton
+              variant="soft"
+              onClick={() => setStep((s) => (s - 1) as Step)}
+              disabled={isGenerating}
+              leftIcon={<ArrowLeft className="h-3.5 w-3.5" />}
+            >
+              Geri
+            </BalinaButton>
+          )}
+          {step < 3 ? (
+            <BalinaButton
+              variant="primary"
+              onClick={() => setStep((s) => (s + 1) as Step)}
+              disabled={!canGoNext}
+              rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+            >
+              İleri
+            </BalinaButton>
+          ) : (
+            <BalinaButton
+              variant="primary"
+              onClick={handleGenerate}
+              disabled={isGenerating || !modelImage || !productImage}
+              leftIcon={<Check className="h-3.5 w-3.5" />}
+            >
+              Üret
+            </BalinaButton>
+          )}
+        </>
+      }
+    >
+      <StepBar step={step} />
 
-            <Modal.Body className="px-4 pb-4">
+      <div className="px-4 pb-4">
               {step === 1 && (
                 <StepUpload
                   title="1. Model fotoğrafı"
@@ -222,44 +251,8 @@ export function ProductAiImageModal({
                   if (f) await handleUpload('product', f);
                 }}
               />
-            </Modal.Body>
-
-            <Modal.Footer>
-              {step > 1 && (
-                <Button
-                  variant="tertiary"
-                  onPress={() => setStep((s) => (s - 1) as Step)}
-                  isDisabled={isGenerating}
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  Geri
-                </Button>
-              )}
-              {step < 3 ? (
-                <Button
-                  variant="primary"
-                  onPress={() => setStep((s) => (s + 1) as Step)}
-                  isDisabled={!canGoNext}
-                >
-                  İleri
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  onPress={handleGenerate}
-                  isPending={isGenerating}
-                  isDisabled={isGenerating || !modelImage || !productImage}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Üret
-                </Button>
-              )}
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+      </div>
+    </BalinaModal>
   );
 }
 
@@ -305,25 +298,24 @@ function StepUpload({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={imageUrl} alt="" className="h-full w-full object-cover" />
           <div className="absolute bottom-2 right-2 flex gap-1.5">
-            <Button
-              variant="tertiary"
-              size="sm"
-              onPress={onPick}
-              isPending={isUploading}
-              isDisabled={isUploading}
-              className="h-8 rounded-full bg-background/90 px-3 text-xs"
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={onPick}
+              disabled={isUploading}
+              className="h-8 bg-background/90 px-3 text-xs"
             >
               Değiştir
-            </Button>
-            <Button
-              variant="tertiary"
-              size="sm"
-              onPress={onClear}
-              isDisabled={isUploading}
-              className="h-8 rounded-full bg-background/90 px-3 text-xs text-danger"
+            </BalinaButton>
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={onClear}
+              disabled={isUploading}
+              className="h-8 bg-background/90 px-3 text-xs text-danger"
             >
               Kaldır
-            </Button>
+            </BalinaButton>
           </div>
         </div>
       ) : (

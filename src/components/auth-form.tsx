@@ -3,16 +3,12 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Button, Input, TextField, toast } from '@/components/ui';
+import { BalinaButton, BalinaTextField, toast } from '@/components/balina';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
 
-const SOCIAL_BUTTON_CLASS =
-  'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
-const PRIMARY_BUTTON_CLASS =
-  'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
-const FIELD_INPUT_CLASS =
-  'auth-field-input h-9 w-[332px] rounded-xl px-3 text-sm placeholder:text-[#71717A]';
+const SOCIAL_BUTTON_CLASS = 'w-[332px]';
+const PRIMARY_BUTTON_CLASS = 'w-[332px]';
 
 export function AuthForm() {
   const router = useRouter();
@@ -58,14 +54,16 @@ export function AuthForm() {
       title="balinaOS'a hoş geldiniz"
       subtitle="Başlamak için lütfen aşağıdaki seçeneklerden birini seçin!"
     >
-      <Button
-        variant="tertiary"
-        onPress={handleGoogle}
+      <BalinaButton
+        variant="soft"
+        onClick={handleGoogle}
         className={SOCIAL_BUTTON_CLASS}
+        leftIcon={
+          <Image src="/figma/logo-google.svg" alt="" width={16} height={16} />
+        }
       >
-        <Image src="/figma/logo-google.svg" alt="" width={16} height={16} />
         Google ile giriş
-      </Button>
+      </BalinaButton>
 
       <hr className="w-8 border-t border-black/[0.12]" aria-hidden="true" />
 
@@ -73,28 +71,26 @@ export function AuthForm() {
         onSubmit={handleSubmit}
         className="flex w-full flex-col items-center gap-2"
       >
-        <TextField
+        <BalinaTextField
           name="email"
           type="email"
           value={email}
           onChange={setEmail}
-          isRequired
-          isDisabled={isLoading}
+          required
+          disabled={isLoading}
           autoFocus
           aria-label="E-posta adresiniz"
-        >
-          <Input
-            placeholder="E-posta Adresiniz"
-            className={FIELD_INPUT_CLASS}
-          />
-        </TextField>
-        <Button
+          placeholder="E-posta Adresiniz"
+          containerClassName="w-[332px]"
+        />
+        <BalinaButton
           type="submit"
-          isDisabled={isLoading || !email}
+          variant="primary"
+          disabled={isLoading || !email}
           className={PRIMARY_BUTTON_CLASS}
         >
           E-posta ile ilerle
-        </Button>
+        </BalinaButton>
       </form>
     </AuthShell>
   );

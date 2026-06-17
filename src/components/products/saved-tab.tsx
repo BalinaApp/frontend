@@ -1,7 +1,7 @@
 'use client';
 
 import { ChevronDown, Copy, Pencil, TrashBin } from '@gravity-ui/icons';
-import { Dropdown } from '@/components/ui';
+import { BalinaDropdown, BalinaDropdownItem } from '@/components/balina';
 
 interface SavedTabProps {
   name: string;
@@ -40,57 +40,37 @@ export function SavedTab({
         {name}
       </button>
       {isActive && (
-        <Dropdown>
-          <Dropdown.Trigger
-            aria-label="Filtre seti aksiyonları"
-            className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-muted transition-colors hover:bg-foreground/[0.10] hover:text-foreground"
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Dropdown.Trigger>
-          <Dropdown.Popover
-            className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-            style={{
-              border: '1px solid var(--border)',
-              boxShadow:
-                '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-            }}
-          >
-            <Dropdown.Menu
+        <BalinaDropdown
+          trigger={
+            <button
+              type="button"
               aria-label="Filtre seti aksiyonları"
-              onAction={(key) => {
-                if (key === 'rename') onRename();
-                else if (key === 'duplicate') onDuplicate();
-                else if (key === 'delete') onDelete();
-              }}
-              className="flex flex-col gap-0 py-1 outline-none"
+              className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-muted transition-colors hover:bg-foreground/[0.10] hover:text-foreground"
             >
-              <Dropdown.Item
-                id="rename"
-                textValue="Düzenle"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-              >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="flex-1">Düzenle</span>
-              </Dropdown.Item>
-              <Dropdown.Item
-                id="duplicate"
-                textValue="Kopyala"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-              >
-                <Copy className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="flex-1">Kopyala</span>
-              </Dropdown.Item>
-              <Dropdown.Item
-                id="delete"
-                textValue="Sil"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-danger outline-none transition-colors data-[hovered=true]:bg-danger/10 data-[focused=true]:bg-danger/10"
-              >
-                <TrashBin className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1">Sil</span>
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          }
+        >
+          <BalinaDropdownItem
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            onSelect={onRename}
+          >
+            Düzenle
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<Copy className="h-3.5 w-3.5" />}
+            onSelect={onDuplicate}
+          >
+            Kopyala
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<TrashBin className="h-3.5 w-3.5" />}
+            onSelect={onDelete}
+            danger
+          >
+            Sil
+          </BalinaDropdownItem>
+        </BalinaDropdown>
       )}
     </div>
   );

@@ -4,11 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Picture, Video } from '@gravity-ui/icons';
 import {
-  Modal,
-  Button,
-  Select,
-  ListBox,
-} from '@/components/ui';
+  BalinaModal,
+  BalinaButton,
+  BalinaModalClose,
+  BalinaSelect,
+} from '@/components/balina';
 import {
   useAiStore,
   MODEL_CATALOG,
@@ -129,82 +129,77 @@ export function AiSetupModal({ isOpen, onClose }: AiSetupModalProps) {
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-md">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>AI üretim ayarları</Modal.Heading>
-              <p className="mt-1 text-sm text-muted">
-                Görsel ve video için hangi sağlayıcı ve modeli kullanacağını seç.
-              </p>
-            </Modal.Header>
-            <Modal.Body className="space-y-4">
-              {/* Segmented toggle — Görüntü / Video */}
-              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-secondary p-1">
-                <SegButton
-                  active={tab === 'image'}
-                  onPress={() => setTab('image')}
-                  icon={<Picture className="h-4 w-4" />}
-                  label="Görüntü"
-                />
-                <SegButton
-                  active={tab === 'video'}
-                  onPress={() => setTab('video')}
-                  icon={<Video className="h-4 w-4" />}
-                  label="Video"
-                />
-              </div>
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={(open) => !open && onClose()}
+      title="AI üretim ayarları"
+      description="Görsel ve video için hangi sağlayıcı ve modeli kullanacağını seç."
+      className="sm:max-w-md"
+      footer={
+        <>
+          <BalinaModalClose asChild>
+            <BalinaButton variant="ghost">İptal</BalinaButton>
+          </BalinaModalClose>
+          <BalinaButton
+            variant="primary"
+            onClick={handleConfirm}
+            disabled={!canConfirm}
+          >
+            Kaydet
+          </BalinaButton>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/* Segmented toggle — Görüntü / Video */}
+        <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-secondary p-1">
+          <SegButton
+            active={tab === 'image'}
+            onPress={() => setTab('image')}
+            icon={<Picture className="h-4 w-4" />}
+            label="Görüntü"
+          />
+          <SegButton
+            active={tab === 'video'}
+            onPress={() => setTab('video')}
+            icon={<Video className="h-4 w-4" />}
+            label="Video"
+          />
+        </div>
 
-              {tab === 'image' ? (
-                <SettingsBlock
-                  providers={imageProviders}
-                  providerId={imageIntegrationId}
-                  onProviderChange={setImageIntegrationId}
-                  models={imageModels.map((m) => ({
-                    id: m.id,
-                    label: m.label,
-                    description: m.description,
-                  }))}
-                  modelId={imageModelId}
-                  onModelChange={setImageModelId}
-                  emptyKind="image"
-                  companySlug={currentCompany?.slug}
-                />
-              ) : (
-                <SettingsBlock
-                  providers={videoProviders}
-                  providerId={videoIntegrationId}
-                  onProviderChange={setVideoIntegrationId}
-                  models={videoModels.map((m) => ({
-                    id: m.id,
-                    label: m.label,
-                    description: m.description,
-                  }))}
-                  modelId={videoModelId}
-                  onModelChange={setVideoModelId}
-                  emptyKind="video"
-                  companySlug={currentCompany?.slug}
-                />
-              )}
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" slot="close">
-                İptal
-              </Button>
-              <Button
-                variant="primary"
-                onPress={handleConfirm}
-                isDisabled={!canConfirm}
-              >
-                Kaydet
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+        {tab === 'image' ? (
+          <SettingsBlock
+            providers={imageProviders}
+            providerId={imageIntegrationId}
+            onProviderChange={setImageIntegrationId}
+            models={imageModels.map((m) => ({
+              id: m.id,
+              label: m.label,
+              description: m.description,
+            }))}
+            modelId={imageModelId}
+            onModelChange={setImageModelId}
+            emptyKind="image"
+            companySlug={currentCompany?.slug}
+          />
+        ) : (
+          <SettingsBlock
+            providers={videoProviders}
+            providerId={videoIntegrationId}
+            onProviderChange={setVideoIntegrationId}
+            models={videoModels.map((m) => ({
+              id: m.id,
+              label: m.label,
+              description: m.description,
+            }))}
+            modelId={videoModelId}
+            onModelChange={setVideoModelId}
+            emptyKind="video"
+            companySlug={currentCompany?.slug}
+          />
+        )}
+      </div>
+    </BalinaModal>
   );
 }
 
@@ -290,30 +285,20 @@ function SettingsBlock({
             Bu sağlayıcıda kullanılabilir model yok.
           </p>
         ) : (
-          <Select
-            selectedKey={modelId ?? ''}
-            onSelectionChange={(key) => onModelChange(String(key) || null)}
-            aria-label="Model"
-            className="w-full"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {models.map((m) => (
-                  <ListBox.Item key={m.id} id={m.id} textValue={m.label}>
-                    <div className="flex flex-col">
-                      <span>{m.label}</span>
-                      <span className="text-[11px] text-muted">{m.description}</span>
-                    </div>
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <BalinaSelect
+            value={modelId ?? ''}
+            onValueChange={(key) => onModelChange(key || null)}
+            className="w-full max-w-none"
+            options={models.map((m) => ({
+              value: m.id,
+              label: (
+                <div className="flex flex-col">
+                  <span>{m.label}</span>
+                  <span className="text-[11px] text-muted">{m.description}</span>
+                </div>
+              ),
+            }))}
+          />
         )}
         {activeModel && (
           <p className="text-[11px] text-muted">{activeModel.description}</p>

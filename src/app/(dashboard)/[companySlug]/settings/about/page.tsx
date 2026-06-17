@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { ChevronRight } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 
@@ -105,20 +105,22 @@ export default function AboutSettingsPage() {
 
           {/* Legal buttons */}
           <div className="flex justify-end gap-1">
-            <Button
-              variant="tertiary"
-              onPress={() => openLegal('terms')}
-              className="h-8 cursor-pointer rounded-2xl bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={() => openLegal('terms')}
+              className="h-8 px-3"
             >
               Hizmet Şartları
-            </Button>
-            <Button
-              variant="tertiary"
-              onPress={() => openLegal('privacy')}
-              className="h-8 cursor-pointer rounded-2xl bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+            </BalinaButton>
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={() => openLegal('privacy')}
+              className="h-8 px-3"
             >
               Gizlilik Politikası
-            </Button>
+            </BalinaButton>
           </div>
         </div>
       </div>

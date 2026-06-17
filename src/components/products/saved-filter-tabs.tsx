@@ -2,7 +2,13 @@
 
 import * as React from 'react';
 import { ChevronDown, Plus, Pencil, Copy, TrashBin } from '@gravity-ui/icons';
-import { Button, Modal, TextField, Label, Input, FieldError, Dropdown } from '@/components/ui';
+import {
+  BalinaButton,
+  BalinaModal,
+  BalinaTextField,
+  BalinaDropdown,
+  BalinaDropdownItem,
+} from '@/components/balina';
 import { useSavedFilterStore, type SavedFilter } from '@/stores/savedFilterStore';
 import {
   FilterDef,
@@ -248,36 +254,36 @@ function SavedTabButton({
         {tab.name}
       </button>
       {isActive && (
-        <Dropdown>
-          <Dropdown.Trigger
-            aria-label="Filtre menüsü"
-            className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded text-foreground/60 transition-colors hover:bg-foreground/[0.08] hover:text-foreground"
-          >
-            <ChevronDown className="h-3 w-3" />
-          </Dropdown.Trigger>
-          <Dropdown.Popover className="min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface/95 shadow-lg backdrop-blur-xl">
-            <Dropdown.Menu
-              onAction={(key) => {
-                if (key === 'rename') onRename();
-                else if (key === 'duplicate') onDuplicate();
-                else if (key === 'delete') onDelete();
-              }}
+        <BalinaDropdown
+          trigger={
+            <button
+              type="button"
+              aria-label="Filtre menüsü"
+              className="mr-1.5 inline-flex h-5 w-5 items-center justify-center rounded text-foreground/60 transition-colors hover:bg-foreground/[0.08] hover:text-foreground"
             >
-              <Dropdown.Item id="rename" textValue="Adı Değiştir">
-                <Pencil className="h-3.5 w-3.5" />
-                <Label>Adı Değiştir</Label>
-              </Dropdown.Item>
-              <Dropdown.Item id="duplicate" textValue="Çoğalt">
-                <Copy className="h-3.5 w-3.5" />
-                <Label>Çoğalt</Label>
-              </Dropdown.Item>
-              <Dropdown.Item id="delete" textValue="Sil">
-                <TrashBin className="h-3.5 w-3.5" />
-                <Label>Sil</Label>
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          }
+        >
+          <BalinaDropdownItem
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            onSelect={onRename}
+          >
+            Adı Değiştir
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<Copy className="h-3.5 w-3.5" />}
+            onSelect={onDuplicate}
+          >
+            Çoğalt
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<TrashBin className="h-3.5 w-3.5" />}
+            onSelect={onDelete}
+          >
+            Sil
+          </BalinaDropdownItem>
+        </BalinaDropdown>
       )}
     </div>
   );
@@ -318,48 +324,39 @@ function NamePromptModal({
   };
 
   return (
-    <Modal isOpen={open} onOpenChange={(o) => !o && onCancel()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[420px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>{title}</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <TextField
-                value={value}
-                onChange={(v) => {
-                  setValue(v);
-                  if (error) setError(null);
-                }}
-                isInvalid={!!error}
-              >
-                <Label>İsim</Label>
-                <Input
-                  placeholder="Örn. Stoğu bitenler"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleSubmit();
-                    }
-                  }}
-                />
-                {error && <FieldError>{error}</FieldError>}
-              </TextField>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onPress={onCancel} slot="close">
-                Vazgeç
-              </Button>
-              <Button variant="primary" onPress={handleSubmit}>
-                Kaydet
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <BalinaModal
+      open={open}
+      onOpenChange={(o) => !o && onCancel()}
+      className="sm:max-w-[420px]"
+      title={title}
+      footer={
+        <>
+          <BalinaButton variant="ghost" size="large" onClick={onCancel}>
+            Vazgeç
+          </BalinaButton>
+          <BalinaButton variant="primary" size="large" onClick={handleSubmit}>
+            Kaydet
+          </BalinaButton>
+        </>
+      }
+    >
+      <BalinaTextField
+        label="İsim"
+        value={value}
+        onChange={(v) => {
+          setValue(v);
+          if (error) setError(null);
+        }}
+        error={error ?? undefined}
+        placeholder="Örn. Stoğu bitenler"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
+      />
+    </BalinaModal>
   );
 }

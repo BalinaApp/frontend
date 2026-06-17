@@ -13,6 +13,15 @@ interface UIState {
   isAiDrawerExpanded: boolean;
   setAiDrawerExpanded: (expanded: boolean) => void;
   toggleAiDrawerExpanded: () => void;
+
+  // balinaOS AI paneli (sidebar AI butonundan sağda açılan BalinaChat paneli).
+  isBalinaAiOpen: boolean;
+  setBalinaAiOpen: (open: boolean) => void;
+  toggleBalinaAi: () => void;
+  // AI paneli "yüzen" mod — sayfa üzerinde serbest sürüklenebilir pencere.
+  isBalinaAiFloating: boolean;
+  setBalinaAiFloating: (floating: boolean) => void;
+  toggleBalinaAiFloating: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -33,4 +42,11 @@ export const useUIStore = create<UIState>((set) => ({
   setAiDrawerExpanded: (expanded) => set({ isAiDrawerExpanded: expanded }),
   toggleAiDrawerExpanded: () =>
     set((s) => ({ isAiDrawerExpanded: !s.isAiDrawerExpanded })),
+
+  isBalinaAiOpen: false,
+  setBalinaAiOpen: (open) => set({ isBalinaAiOpen: open }),
+  toggleBalinaAi: () => set((s) => ({ isBalinaAiOpen: !s.isBalinaAiOpen })),
+  isBalinaAiFloating: false,
+  setBalinaAiFloating: (floating) => set({ isBalinaAiFloating: floating }),
+  toggleBalinaAiFloating: () => set((s) => ({ isBalinaAiFloating: !s.isBalinaAiFloating })),
 }));

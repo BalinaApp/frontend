@@ -1,7 +1,12 @@
 'use client';
 
 import { Plus } from '@gravity-ui/icons';
-import { Checkbox, Dropdown, Input, TextField } from '@/components/ui';
+import {
+  BalinaCheckbox,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaTextField,
+} from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 /**
@@ -57,11 +62,12 @@ export function VariationsTable({
         <div key={group.key} className="flex flex-col">
           {/* Master row */}
           <div className="flex items-center gap-3 border-b border-black/[0.04] p-4">
-            <Checkbox
-              isSelected={allSelected(group)}
-              onChange={() => onToggleGroupSelect(group)}
-              aria-label={`${group.label} grubunu seç`}
-            />
+            <BalinaCheckbox
+              checked={allSelected(group)}
+              onCheckedChange={() => onToggleGroupSelect(group)}
+            >
+              <span className="sr-only">{`${group.label} grubunu seç`}</span>
+            </BalinaCheckbox>
             <ImagePlaceholder
               onAi={onImageAi ? () => onImageAi(group.key) : undefined}
               onFile={onImageFile ? () => onImageFile(group.key) : undefined}
@@ -82,11 +88,12 @@ export function VariationsTable({
               key={row.key}
               className="flex items-center gap-3 border-b border-black/[0.04] py-4 pl-11 pr-4 last:border-b-0"
             >
-              <Checkbox
-                isSelected={selectedKeys.has(row.key)}
-                onChange={() => onToggleSelect(row.key)}
-                aria-label={`${row.label} seç`}
-              />
+              <BalinaCheckbox
+                checked={selectedKeys.has(row.key)}
+                onCheckedChange={() => onToggleSelect(row.key)}
+              >
+                <span className="sr-only">{`${row.label} seç`}</span>
+              </BalinaCheckbox>
               <ImagePlaceholder
                 imageUrl={row.imageUrl}
                 onAi={onImageAi ? () => onImageAi(row.key) : undefined}
@@ -98,23 +105,18 @@ export function VariationsTable({
                 </span>
               </div>
               <div className="w-[180px]">
-                <TextField
+                {/* Alış Fiyatı stiliyle aynı — base bg saydam, hover/focus'ta
+                    hafif gri tonu. */}
+                <BalinaTextField
                   value={String(row.stock ?? '')}
                   onChange={(v) => onStockChange(row.key, v)}
                   aria-label={`${row.label} stoğu`}
-                >
-                  {/* Alış Fiyatı stiliyle aynı — base bg saydam, hover/focus'ta
-                      hafif gri tonu. HeroUI secondary variant focus bg'sini
-                      override etmiyoruz; bg-transparent ile base'i bastırıyoruz. */}
-                  <Input
-                    fullWidth
-                    variant="secondary"
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Stok"
-                    className="bg-transparent placeholder:text-zinc-500"
-                  />
-                </TextField>
+                  variant="ghost"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Stok"
+                  className="placeholder:text-zinc-500"
+                />
               </div>
             </div>
           ))}
@@ -145,48 +147,31 @@ function ImagePlaceholder({
   }
   if (onAi || onFile) {
     return (
-      <Dropdown>
-        <Dropdown.Trigger
-          aria-label="Görsel ekle"
-          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-black/[0.08] text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
-        >
-          <Plus className="h-5 w-5" />
-        </Dropdown.Trigger>
-        <Dropdown.Popover
-          className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-          style={{
-            border: '1px solid var(--border)',
-            boxShadow:
-              '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-          }}
-        >
-          <Dropdown.Menu
-            aria-label="Görsel kaynağı"
-            onAction={(key) => {
-              if (key === 'ai') onAi?.();
-              else if (key === 'file') onFile?.();
-            }}
-            className="flex flex-col gap-0 py-1 outline-none"
+      <BalinaDropdown
+        align="start"
+        trigger={
+          <button
+            type="button"
+            aria-label="Görsel ekle"
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-dashed border-black/[0.08] text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
           >
-            <Dropdown.Item
-              id="ai"
-              textValue="AI ile üret"
-              className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-            >
-              <BalinaOsMark className="h-3.5 w-3.5 shrink-0 text-foreground" />
-              <span className="flex-1">AI ile üret</span>
-            </Dropdown.Item>
-            <Dropdown.Item
-              id="file"
-              textValue="Dosyalardan seç"
-              className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0 text-foreground/70" />
-              <span className="flex-1">Dosyalardan seç</span>
-            </Dropdown.Item>
-          </Dropdown.Menu>
-        </Dropdown.Popover>
-      </Dropdown>
+            <Plus className="h-5 w-5" />
+          </button>
+        }
+      >
+        <BalinaDropdownItem
+          icon={<BalinaOsMark className="h-3.5 w-3.5" />}
+          onSelect={() => onAi?.()}
+        >
+          AI ile üret
+        </BalinaDropdownItem>
+        <BalinaDropdownItem
+          icon={<Plus className="h-3.5 w-3.5" />}
+          onSelect={() => onFile?.()}
+        >
+          Dosyalardan seç
+        </BalinaDropdownItem>
+      </BalinaDropdown>
     );
   }
   return (

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { api } from '@/services/api';
 
@@ -97,22 +97,21 @@ export default function UnsubscribePage() {
               adresine pazarlama maili gönderilmeyecek.
             </p>
             <div className="mt-4 flex w-full flex-col gap-2">
-              <Button
+              <BalinaButton
                 variant="primary"
-                onPress={confirm}
-                isPending={submitting}
-                isDisabled={submitting}
+                onClick={confirm}
+                disabled={submitting}
                 fullWidth
               >
                 Evet, aboneliği iptal et
-              </Button>
-              <Button
-                variant="tertiary"
-                onPress={() => window.close()}
+              </BalinaButton>
+              <BalinaButton
+                variant="soft"
+                onClick={() => window.close()}
                 fullWidth
               >
                 Vazgeç
-              </Button>
+              </BalinaButton>
             </div>
           </div>
         )}

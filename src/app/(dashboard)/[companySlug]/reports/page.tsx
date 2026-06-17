@@ -34,7 +34,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ListBox, Select, Tooltip as UITooltip } from '@/components/ui';
+import { BalinaSelect, BalinaTooltip } from '@/components/balina';
 import { Globe } from '@gravity-ui/icons';
 import { DateRangeInput, type DateRange } from '@/components/date-range-input';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -816,7 +816,7 @@ function FilterChip({
   children: React.ReactNode;
 }) {
   return (
-    <UITooltip delay={0}>
+    <BalinaTooltip content={tooltip} delay={0}>
       <button
         type="button"
         onClick={onSelect}
@@ -829,8 +829,7 @@ function FilterChip({
       >
         {children}
       </button>
-      <UITooltip.Content>{tooltip}</UITooltip.Content>
-    </UITooltip>
+    </BalinaTooltip>
   );
 }
 
@@ -1219,35 +1218,14 @@ export default function ReportsPage() {
     }
   }, [period]);
 
-  // Seçili dönemin label'ı (dropdown trigger'da kısa gösterim için).
-  const periodLabel = useMemo(
-    () => periodOptions.find((p) => p.value === period)?.label ?? '',
-    [period]
-  );
-
   const periodFilter = (
     <>
-      <Select
-        selectedKey={period}
-        onSelectionChange={(key) => handlePeriodChange(String(key))}
-        aria-label="Dönem"
-        className="w-36"
-      >
-        <Select.Trigger>
-          <Select.Value>{periodLabel}</Select.Value>
-          <Select.Indicator />
-        </Select.Trigger>
-        <Select.Popover className="border border-border bg-surface/70 shadow-lg backdrop-blur-xl">
-          <ListBox>
-            {periodOptions.map((opt) => (
-              <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
-                {opt.label}
-                <ListBox.ItemIndicator />
-              </ListBox.Item>
-            ))}
-          </ListBox>
-        </Select.Popover>
-      </Select>
+      <BalinaSelect
+        value={period}
+        onValueChange={handlePeriodChange}
+        options={periodOptions}
+        className="w-36 max-w-none"
+      />
       {period === 'custom' && (
         <DateRangeInput
           value={dateRange}
@@ -1263,6 +1241,7 @@ export default function ReportsPage() {
     <>
       <PageHeader
         title="Raporlar"
+        icon={<ChartColumn className="h-4 w-4" />}
         action={
           <div className="flex items-center gap-2">
             <StoreFilterChips

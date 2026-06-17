@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDownToLine, ChevronLeft, Receipt } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSubscriptionStore, type InvoiceRow } from '@/stores/subscriptionStore';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -50,16 +50,15 @@ export default function InvoicesSettingsPage() {
     <>
       {/* Section header */}
       <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
+        <BalinaButton
+          variant="soft"
+          size="small"
           aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings/billing`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+          onClick={() => router.push(`/${slug}/settings/billing`)}
+          className="h-8 w-8 cursor-pointer bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
         >
           <ChevronLeft className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
         <h2 className="text-sm font-medium text-foreground">Faturalar</h2>
       </div>
 
@@ -103,16 +102,16 @@ export default function InvoicesSettingsPage() {
                         </span>
                       </div>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      isDisabled={!invoice.invoiceUrl}
-                      onPress={() => handleDownload(invoice)}
-                      className="h-8 cursor-pointer gap-1 rounded-full bg-black/[0.06] px-3 text-xs font-medium text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      disabled={!invoice.invoiceUrl}
+                      onClick={() => handleDownload(invoice)}
+                      leftIcon={<ArrowDownToLine className="h-3.5 w-3.5" />}
+                      className="h-8 cursor-pointer gap-1 bg-black/[0.06] px-3 text-xs font-medium text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
                     >
-                      <ArrowDownToLine className="h-3.5 w-3.5" />
                       İndir
-                    </Button>
+                    </BalinaButton>
                   </div>
                 );
               })}

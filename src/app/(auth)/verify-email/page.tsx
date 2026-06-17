@@ -3,15 +3,13 @@
 import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
-import { Button, InputOTP, REGEXP_ONLY_DIGITS, toast } from '@/components/ui';
+import { BalinaButton, BalinaInputOTP, toast } from '@/components/balina';
 import { AuthShell } from '@/components/auth-shell';
 import { useAuthStore } from '@/stores/authStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 
-const PRIMARY_BUTTON_CLASS =
-  'w-[332px] rounded-3xl bg-[#0485F7] text-[#FCFCFC] hover:bg-[#0376dd] data-[hovered=true]:bg-[#0376dd]';
-const TERTIARY_BUTTON_CLASS =
-  'w-[332px] rounded-3xl bg-black/[0.04] text-[#18181B] hover:bg-black/[0.08] data-[hovered=true]:bg-black/[0.08]';
+const PRIMARY_BUTTON_CLASS = 'w-[332px]';
+const TERTIARY_BUTTON_CLASS = 'w-[332px]';
 
 type View = 'check-email' | 'otp';
 
@@ -176,78 +174,57 @@ function VerifyEmailInner() {
     >
       {view === 'check-email' ? (
         <>
-          <Button
-            variant="tertiary"
-            onPress={() => setView('otp')}
+          <BalinaButton
+            variant="soft"
+            onClick={() => setView('otp')}
             className={TERTIARY_BUTTON_CLASS}
           >
             Manuel kod gir
-          </Button>
+          </BalinaButton>
 
           <hr className="w-8 border-t border-black/[0.12]" aria-hidden="true" />
 
-          <Button
-            variant="tertiary"
-            onPress={handleResend}
-            isDisabled={isResending || resendCooldown > 0}
-            isPending={isResending}
+          <BalinaButton
+            variant="soft"
+            onClick={handleResend}
+            disabled={isResending || resendCooldown > 0}
             className={TERTIARY_BUTTON_CLASS}
           >
             {resendLabel}
-          </Button>
+          </BalinaButton>
         </>
       ) : (
         <form onSubmit={handleSubmit} className="flex flex-col items-center gap-2">
-          <InputOTP
-            maxLength={6}
+          <BalinaInputOTP
+            length={6}
             value={code}
             onChange={setCode}
-            isDisabled={isLoading}
-            pattern={REGEXP_ONLY_DIGITS}
-            inputMode="numeric"
-            autoFocus
-          >
-            <InputOTP.Group>
-              <InputOTP.Slot index={0} />
-              <InputOTP.Slot index={1} />
-              <InputOTP.Slot index={2} />
-            </InputOTP.Group>
-            <InputOTP.Separator />
-            <InputOTP.Group>
-              <InputOTP.Slot index={3} />
-              <InputOTP.Slot index={4} />
-              <InputOTP.Slot index={5} />
-            </InputOTP.Group>
-          </InputOTP>
+            disabled={isLoading}
+          />
 
-          <Button
+          <BalinaButton
             type="submit"
-            isPending={isLoading}
-            isDisabled={isLoading || code.length !== 6}
+            variant="primary"
+            disabled={isLoading || code.length !== 6}
             className={PRIMARY_BUTTON_CLASS}
+            leftIcon={
+              isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : undefined
+            }
           >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Doğrulanıyor...
-              </>
-            ) : (
-              'Kodu onayla'
-            )}
-          </Button>
+            {isLoading ? 'Doğrulanıyor...' : 'Kodu onayla'}
+          </BalinaButton>
 
           <hr className="my-2 w-8 border-t border-black/[0.12]" aria-hidden="true" />
 
-          <Button
+          <BalinaButton
             type="button"
-            variant="tertiary"
-            onPress={handleResend}
-            isDisabled={isResending || resendCooldown > 0}
-            isPending={isResending}
+            variant="soft"
+            onClick={handleResend}
+            disabled={isResending || resendCooldown > 0}
             className={TERTIARY_BUTTON_CLASS}
           >
             {resendLabel}
-          </Button>
+          </BalinaButton>
         </form>
       )}
     </AuthShell>

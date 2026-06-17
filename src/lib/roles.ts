@@ -1,7 +1,7 @@
 /**
  * Şirket içi roller — backend Prisma `CompanyRole` enum'uyla 1-1 eşleşir.
- * Frontend'de tek kaynak: setup-company, invite, settings/team,
- * settings/company sayfaları + sidebar/RoleGuard buradan okur. Yeni rol
+ * Frontend'de tek kaynak: setup-company, invite, settings/company
+ * sayfaları + sidebar/RoleGuard buradan okur. Yeni rol
  * eklemek için backend `CompanyRole` enum'unu ve aşağıdaki haritayı eş
  * zamanlı güncelleyin.
  */

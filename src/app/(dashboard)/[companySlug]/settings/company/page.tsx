@@ -1,27 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Pencil, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
 import {
-  ChevronLeft,
-  ChevronDown,
-  Pencil,
-  Plus,
-  ArrowsRotateRight as Loader2,
-} from '@gravity-ui/icons';
-import {
-  Avatar,
-  Button,
-  Dropdown,
-  Input,
-  Label,
-  ListBox,
-  Modal,
-  Select,
-  Switch,
-  TextField,
+  BalinaAvatar,
+  BalinaButton,
+  BalinaSwitch,
+  BalinaPlusIcon,
+  BalinaModal,
+  BalinaTextField,
+  BalinaSelect,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { useCompany } from '@/components/providers/CompanyProvider';
 import { useCompanyStore } from '@/stores/companyStore';
 import { api } from '@/services/api';
@@ -60,7 +50,6 @@ function memberInitial(member: Member): string {
 export default function CompanySettingsPage() {
   usePageTitle('Şirket');
 
-  const router = useRouter();
   const { company, refreshCompany } = useCompany();
   const { updateCompany, isLoading: isUpdatingCompany } = useCompanyStore();
 
@@ -79,7 +68,6 @@ export default function CompanySettingsPage() {
   const [inviteRole, setInviteRole] = useState<AssignableRole>('ADMIN');
   const [isInviting, setIsInviting] = useState(false);
 
-  const slug = company?.slug ?? '';
   const companyInitial = (company?.name ?? '?').charAt(0).toUpperCase();
 
   const fetchMembers = async () => {
@@ -219,45 +207,27 @@ export default function CompanySettingsPage() {
 
   return (
     <>
-      {/* Section header */}
-      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
-          aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-sm font-medium text-foreground">Şirket</h2>
-      </div>
-
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col items-center gap-6 px-3">
           {/* Company avatar */}
-          <Avatar className="h-[116px] w-[116px] rounded-full">
-            <Avatar.Fallback className="rounded-full bg-zinc-500 text-3xl font-semibold text-white">
-              {companyInitial}
-            </Avatar.Fallback>
-          </Avatar>
+          <BalinaAvatar
+            fallback={companyInitial}
+            alt={company?.name ?? 'Şirket'}
+            className="h-[116px] w-[116px] text-3xl font-semibold"
+          />
 
           {/* Name + edit */}
           <div className="flex items-center justify-center gap-2">
             <h3 className="text-xl font-semibold text-foreground">
               {company?.name ?? 'Şirket Adı'}
             </h3>
-            <Button
-              variant="tertiary"
-              size="sm"
-              isIconOnly
+            <BalinaButton
+              variant="soft"
+              size="large"
               aria-label="Şirket adını düzenle"
-              onPress={openRename}
-              className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
+              onClick={openRename}
+              leftIcon={<Pencil className="h-4 w-4" />}
+            />
           </div>
 
           {/* Members */}
@@ -274,12 +244,12 @@ export default function CompanySettingsPage() {
                   }`}
                 >
                   <div className="flex flex-1 items-center gap-3">
-                    <Avatar className="h-6 w-6 shrink-0 rounded-full">
-                      <Avatar.Fallback className="rounded-full bg-zinc-500 text-[10px] font-medium text-white">
-                        {memberInitial(member)}
-                      </Avatar.Fallback>
-                    </Avatar>
-                    <span className="truncate text-sm font-medium text-foreground/85">
+                    <BalinaAvatar
+                      size="medium"
+                      fallback={memberInitial(member)}
+                      className="h-6 w-6 shrink-0"
+                    />
+                    <span className="truncate text-body-small-one-liner-medium text-foreground/85">
                       {display}
                     </span>
                   </div>
@@ -290,51 +260,27 @@ export default function CompanySettingsPage() {
                         {ROLE_LABELS.OWNER}
                       </span>
                     ) : (
-                      <Dropdown>
-                        <Button
-                          variant="tertiary"
-                          size="sm"
-                          aria-label="Rol seç"
-                          className="h-8 cursor-pointer rounded-2xl bg-transparent px-2 text-default-foreground hover:bg-default data-[hovered=true]:bg-default"
-                        >
-                          <span className="text-xs font-medium">
-                            {ROLE_LABELS[member.role]}
-                          </span>
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                        <Dropdown.Popover>
-                          <Dropdown.Menu
-                            selectionMode="single"
-                            selectedKeys={[member.role]}
-                            onAction={(key) =>
-                              handleChangeRole(member, key as AssignableRole)
-                            }
-                          >
-                            {ASSIGNABLE_ROLES.map((role) => (
-                              <Dropdown.Item key={role} id={role} textValue={ROLE_LABELS[role]}>
-                                <Label>{ROLE_LABELS[role]}</Label>
-                                <Dropdown.ItemIndicator />
-                              </Dropdown.Item>
-                            ))}
-                          </Dropdown.Menu>
-                        </Dropdown.Popover>
-                      </Dropdown>
+                      <BalinaSelect
+                        value={member.role}
+                        onValueChange={(key) =>
+                          handleChangeRole(member, key as AssignableRole)
+                        }
+                        options={ASSIGNABLE_ROLES.map((role) => ({
+                          value: role,
+                          label: ROLE_LABELS[role],
+                        }))}
+                      />
                     )}
                     {/* Switch off → takımdan çıkar (DELETE). On no-op. */}
-                    <Switch
-                      isSelected={member.inviteStatus === 'ACCEPTED'}
-                      isDisabled={
+                    <BalinaSwitch
+                      checked={member.inviteStatus === 'ACCEPTED'}
+                      disabled={
                         isOwner ||
                         member.inviteStatus !== 'ACCEPTED' ||
                         pendingMemberIds.has(member.id)
                       }
-                      onChange={(value) => handleToggleActive(member, value)}
-                      aria-label={`${display} takımdan çıkar`}
-                    >
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch>
+                      onCheckedChange={(value) => handleToggleActive(member, value)}
+                    />
                   </div>
                 </div>
               );
@@ -349,113 +295,107 @@ export default function CompanySettingsPage() {
               } hover:bg-default/40`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center text-default-foreground">
-                <Plus className="h-3.5 w-3.5" />
+                <BalinaPlusIcon className="h-4 w-4" />
               </span>
-              <span className="text-sm font-medium text-foreground/85">Yeni ekle</span>
+              <span className="text-body-small-one-liner-medium text-foreground/85">Yeni ekle</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Rename modal */}
-      <Modal isOpen={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Şirket adı</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <TextField
-                  value={draftName}
-                  onChange={setDraftName}
-                  isDisabled={isUpdatingCompany}
-                  autoFocus
-                >
-                  <Label>Şirket adı</Label>
-                  <Input placeholder="Şirket adını girin" />
-                </TextField>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button slot="close" variant="tertiary" isDisabled={isUpdatingCompany}>
-                  Vazgeç
-                </Button>
-                <Button onPress={handleRename} isPending={isUpdatingCompany}>
-                  Kaydet
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <BalinaModal
+        open={isRenameOpen}
+        onOpenChange={setIsRenameOpen}
+        title="Şirket adı"
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setIsRenameOpen(false)}
+              disabled={isUpdatingCompany}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={handleRename}
+              disabled={isUpdatingCompany}
+            >
+              Kaydet
+            </BalinaButton>
+          </>
+        }
+      >
+        <BalinaTextField
+          label="Şirket adı"
+          value={draftName}
+          onChange={setDraftName}
+          disabled={isUpdatingCompany}
+          autoFocus
+          placeholder="Şirket adını girin"
+        />
+      </BalinaModal>
 
       {/* Invite modal */}
-      <Modal isOpen={isInviteOpen} onOpenChange={setIsInviteOpen}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Yeni üye davet et</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="flex flex-col gap-4">
-                <TextField
-                  value={inviteEmail}
-                  onChange={setInviteEmail}
-                  type="email"
-                  isDisabled={isInviting}
-                  autoFocus
-                >
-                  <Label>E-posta adresi</Label>
-                  <Input placeholder="ornek@email.com" />
-                </TextField>
-                <Select
-                  selectedKey={inviteRole}
-                  onSelectionChange={(key) => setInviteRole(key as AssignableRole)}
-                  isDisabled={isInviting}
-                  aria-label="Rol"
-                >
-                  <Label>Rol</Label>
-                  <Select.Trigger>
-                    <Select.Value />
-                    <Select.Indicator />
-                  </Select.Trigger>
-                  <Select.Popover>
-                    <ListBox>
-                      {ASSIGNABLE_ROLES.map((role) => (
-                        <ListBox.Item key={role} id={role} textValue={ROLE_LABELS[role]}>
-                          {ROLE_LABELS[role]}
-                          <ListBox.ItemIndicator />
-                        </ListBox.Item>
-                      ))}
-                    </ListBox>
-                  </Select.Popover>
-                </Select>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button slot="close" variant="tertiary" isDisabled={isInviting}>
-                  Vazgeç
-                </Button>
-                <Button
-                  onPress={handleInvite}
-                  isDisabled={!inviteEmail.trim() || isInviting}
-                  isPending={isInviting}
-                >
-                  {isInviting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Gönderiliyor...
-                    </>
-                  ) : (
-                    'Davet gönder'
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      <BalinaModal
+        open={isInviteOpen}
+        onOpenChange={setIsInviteOpen}
+        title="Yeni üye davet et"
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setIsInviteOpen(false)}
+              disabled={isInviting}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={handleInvite}
+              disabled={!inviteEmail.trim() || isInviting}
+              leftIcon={
+                isInviting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : undefined
+              }
+            >
+              {isInviting ? 'Gönderiliyor...' : 'Davet gönder'}
+            </BalinaButton>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <BalinaTextField
+            label="E-posta adresi"
+            value={inviteEmail}
+            onChange={setInviteEmail}
+            type="email"
+            disabled={isInviting}
+            autoFocus
+            placeholder="ornek@email.com"
+          />
+          <div className="flex flex-col gap-1">
+            <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+              Rol
+            </label>
+            <BalinaSelect
+              value={inviteRole}
+              onValueChange={(key) => setInviteRole(key as AssignableRole)}
+              disabled={isInviting}
+              options={ASSIGNABLE_ROLES.map((role) => ({
+                value: role,
+                label: ROLE_LABELS[role],
+              }))}
+            />
+          </div>
+        </div>
+      </BalinaModal>
     </>
   );
 }

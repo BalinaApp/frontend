@@ -10,7 +10,12 @@ import {
   Plus,
   Picture,
 } from '@gravity-ui/icons';
-import { Button, Dropdown, ListBox, Select } from '@/components/ui';
+import {
+  BalinaButton,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaSelect,
+} from '@/components/balina';
 import {
   useAiStore,
   type FalImageSize,
@@ -230,40 +235,34 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
           <span className="rounded-md bg-black/[0.06] px-1.5 py-0.5 text-[11px] font-medium text-foreground/70">
             Beta
           </span>
-          <Dropdown>
-            <Dropdown.Trigger className="flex cursor-pointer items-center gap-1 rounded-md text-sm font-medium leading-[1.43] text-foreground hover:opacity-80">
-              <span>Yeni sohbet</span>
-            </Dropdown.Trigger>
-            <Dropdown.Popover className="w-56 border border-border bg-surface shadow-lg">
-              <Dropdown.Menu>
-                <Dropdown.Item
-                  id="new"
-                  textValue="Yeni sohbet"
-                  onAction={() => resetChat()}
-                >
-                  Yeni sohbet
-                </Dropdown.Item>
-                <Dropdown.Item
-                  id="settings"
-                  textValue="AI ayarları"
-                  onAction={() => setSetupOpen(true)}
-                >
-                  AI ayarları…
-                </Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown.Popover>
-          </Dropdown>
+          <BalinaDropdown
+            align="start"
+            trigger={
+              <button
+                type="button"
+                className="flex cursor-pointer items-center gap-1 rounded-md text-sm font-medium leading-[1.43] text-foreground hover:opacity-80"
+              >
+                <span>Yeni sohbet</span>
+              </button>
+            }
+          >
+            <BalinaDropdownItem onSelect={() => resetChat()}>
+              Yeni sohbet
+            </BalinaDropdownItem>
+            <BalinaDropdownItem onSelect={() => setSetupOpen(true)}>
+              AI ayarları…
+            </BalinaDropdownItem>
+          </BalinaDropdown>
         </div>
 
         {/* Sağ: minimize / expand-toggle / close — HeroUI ghost icon-only butonlar */}
         <div className="flex items-center gap-0.5 text-foreground/70">
           {isDrawer && (
-            <Button
+            <BalinaButton
               variant="ghost"
-              size="sm"
-              isIconOnly
+              size="small"
               aria-label="Sohbeti küçült"
-              onPress={onClose}
+              onClick={onClose}
             >
               {/* horizontal line — minimize */}
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -273,33 +272,31 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
                   d="M3.25 12C3.25 11.5858 3.58579 11.25 4 11.25H12C12.4142 11.25 12.75 11.5858 12.75 12C12.75 12.4142 12.4142 12.75 12 12.75H4C3.58579 12.75 3.25 12.4142 3.25 12Z"
                 />
               </svg>
-            </Button>
+            </BalinaButton>
           )}
           {isDrawer && (
-            <Button
+            <BalinaButton
               variant="ghost"
-              size="sm"
-              isIconOnly
+              size="small"
               aria-label={isAiDrawerExpanded ? 'Daralt' : 'Genişlet'}
-              onPress={() => toggleAiDrawerExpanded()}
+              onClick={() => toggleAiDrawerExpanded()}
             >
               {/* diagonal corner arrows — expand */}
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
                 <path d="M6.2168 8.72266C6.50798 8.42824 6.98279 8.4257 7.27734 8.7168C7.57154 9.00799 7.57423 9.48287 7.2832 9.77734L4.59863 12.5H6.2998C6.71402 12.5 7.0498 12.8358 7.0498 13.25C7.04964 13.6641 6.71392 14 6.2998 14H2.75C2.55116 14 2.36036 13.9208 2.21973 13.7803C2.07915 13.6397 2.00008 13.4488 2 13.25V9.75C2 9.33579 2.33579 9 2.75 9C3.16421 9 3.5 9.33579 3.5 9.75V11.4775L6.2168 8.72266Z" />
                 <path d="M13.25 2C13.4488 2.00006 13.6397 2.07917 13.7803 2.21973C13.9208 2.36033 14 2.55119 14 2.75V6.25C14 6.66414 13.6641 6.99988 13.25 7C12.8358 7 12.5 6.66421 12.5 6.25V4.52246L9.7832 7.27734C9.49206 7.57173 9.01721 7.57419 8.72266 7.2832C8.42838 6.99201 8.42575 6.51716 8.7168 6.22266L11.4014 3.5H9.7002C9.28598 3.5 8.9502 3.16421 8.9502 2.75C8.95028 2.33586 9.28603 2 9.7002 2H13.25Z" />
               </svg>
-            </Button>
+            </BalinaButton>
           )}
           {isDrawer && onClose && (
-            <Button
+            <BalinaButton
               variant="ghost"
-              size="sm"
-              isIconOnly
+              size="small"
               aria-label="Kapat"
-              onPress={onClose}
+              onClick={onClose}
             >
               <Xmark className="h-3.5 w-3.5" />
-            </Button>
+            </BalinaButton>
           )}
         </div>
       </div>
@@ -329,34 +326,21 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
       <div className="flex flex-col gap-2 p-2">
         {/* Hesap seçici — seçili provider için 1'den fazla bağlı hesap varsa */}
         {integrationListForModel.length > 1 && (
-          <Select
-            selectedKey={selectedIntegration?.id ?? integrationListForModel[0]?.id ?? ''}
-            onSelectionChange={(k) => {
-              const id = String(k);
+          <BalinaSelect
+            value={selectedIntegration?.id ?? integrationListForModel[0]?.id ?? ''}
+            onValueChange={(id) => {
               if (currentKind === 'video') {
                 setSelectedVideoIntegrationId(id);
               } else {
                 setSelectedImageIntegrationId(id);
               }
             }}
-            aria-label="Fal hesabı"
-            className="w-full"
-          >
-            <Select.Trigger className="h-7 rounded-lg border border-border bg-surface px-2 text-[11px]">
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover className="border border-border bg-surface/85 shadow-lg backdrop-blur-xl">
-              <ListBox>
-                {integrationListForModel.map((f) => (
-                  <ListBox.Item key={f.id} id={f.id} textValue={f.name}>
-                    {f.name} {f.apiKeyTail && `(••••${f.apiKeyTail})`}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+            className="h-7 w-full max-w-none text-[11px]"
+            options={integrationListForModel.map((f) => ({
+              value: f.id,
+              label: `${f.name}${f.apiKeyTail ? ` (••••${f.apiKeyTail})` : ''}`,
+            }))}
+          />
         )}
 
         {/* Container — gradient bg, 12px radius, 2px inner padding (Figma 12203:4611) */}
@@ -442,65 +426,61 @@ OUTPUT: ONE photorealistic image, identical lighting and environment to IMAGE 1,
             {/* Action row — padding 8px, space-between (Figma 12203:5654) */}
             <div className="flex items-center justify-between gap-2 p-2">
               {/* Şablonlar chip — Figma 12203:5680 */}
-              <Dropdown>
-                <Dropdown.Trigger className="flex h-8 cursor-pointer items-center gap-1 rounded-2xl bg-[#EBEBEC] px-3 text-sm font-medium text-[#18181B] hover:bg-[#dedede]">
-                  <span>Şablonlar</span>
-                  <ChevronDown className="h-4 w-4 text-foreground/60" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover className="w-56 border border-border bg-surface/85 shadow-lg backdrop-blur-xl">
-                  <Dropdown.Menu>
-                    <Dropdown.Item
-                      id="template-product"
-                      textValue="Ürün fotoğrafı (yakında)"
-                      isDisabled
-                    >
-                      Ürün fotoğrafı (yakında)
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      id="template-lifestyle"
-                      textValue="Yaşam tarzı (yakında)"
-                      isDisabled
-                    >
-                      Yaşam tarzı (yakında)
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
+              <BalinaDropdown
+                align="start"
+                trigger={
+                  <button
+                    type="button"
+                    className="flex h-8 cursor-pointer items-center gap-1 rounded-2xl bg-[#EBEBEC] px-3 text-sm font-medium text-[#18181B] hover:bg-[#dedede]"
+                  >
+                    <span>Şablonlar</span>
+                    <ChevronDown className="h-4 w-4 text-foreground/60" />
+                  </button>
+                }
+              >
+                <BalinaDropdownItem disabled>
+                  Ürün fotoğrafı (yakında)
+                </BalinaDropdownItem>
+                <BalinaDropdownItem disabled>
+                  Yaşam tarzı (yakında)
+                </BalinaDropdownItem>
+              </BalinaDropdown>
 
               {/* Sağ taraf: mod chip + send (Figma 12203:5788) */}
               <div className="flex items-center gap-1">
                 {/* Mode chip — Image/Video etiketi, popover'da modelleri listeler */}
-                <Dropdown>
-                  <Dropdown.Trigger className="flex h-8 cursor-pointer items-center gap-1 rounded-2xl bg-[#EBEBEC] px-3 text-sm font-medium text-[#18181B] hover:bg-[#dedede]">
-                    <span>{currentKind === 'video' ? 'Video' : 'Image'}</span>
-                    <ChevronDown className="h-4 w-4 text-foreground/60" />
-                  </Dropdown.Trigger>
-                  <Dropdown.Popover className="w-64 border border-border bg-surface/85 shadow-lg backdrop-blur-xl">
-                    <Dropdown.Menu>
-                      {modelOptions.map((o) => (
-                        <Dropdown.Item
-                          key={o.value}
-                          id={o.value}
-                          textValue={o.label}
-                          onAction={() => setModel(o.value)}
+                <BalinaDropdown
+                  align="end"
+                  trigger={
+                    <button
+                      type="button"
+                      className="flex h-8 cursor-pointer items-center gap-1 rounded-2xl bg-[#EBEBEC] px-3 text-sm font-medium text-[#18181B] hover:bg-[#dedede]"
+                    >
+                      <span>{currentKind === 'video' ? 'Video' : 'Image'}</span>
+                      <ChevronDown className="h-4 w-4 text-foreground/60" />
+                    </button>
+                  }
+                >
+                  {modelOptions.map((o) => (
+                    <BalinaDropdownItem
+                      key={o.value}
+                      onSelect={() => setModel(o.value)}
+                    >
+                      <span className="flex flex-1 items-center gap-2">
+                        <span
+                          className={`inline-flex h-4 items-center rounded-full px-1.5 text-[9px] font-semibold uppercase tracking-wide ${
+                            o.kind === 'video'
+                              ? 'bg-violet-500/15 text-violet-700'
+                              : 'bg-emerald-500/15 text-emerald-700'
+                          }`}
                         >
-                          <span className="flex flex-1 items-center gap-2">
-                            <span
-                              className={`inline-flex h-4 items-center rounded-full px-1.5 text-[9px] font-semibold uppercase tracking-wide ${
-                                o.kind === 'video'
-                                  ? 'bg-violet-500/15 text-violet-700'
-                                  : 'bg-emerald-500/15 text-emerald-700'
-                              }`}
-                            >
-                              {o.kind}
-                            </span>
-                            {o.label}
-                          </span>
-                        </Dropdown.Item>
-                      ))}
-                    </Dropdown.Menu>
-                  </Dropdown.Popover>
-                </Dropdown>
+                          {o.kind}
+                        </span>
+                        {o.label}
+                      </span>
+                    </BalinaDropdownItem>
+                  ))}
+                </BalinaDropdown>
 
                 {/* Send button — 32×32, bg #EBEBEC, 16 radius, arrow-right (Figma 12203:5656) */}
                 <button

@@ -5,7 +5,7 @@ import * as Popover from '@radix-ui/react-popover';
 import { format } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { Calendar as CalendarIcon } from '@gravity-ui/icons';
-import { Calendar } from '@/components/ui';
+import { BalinaCalendar } from '@/components/balina';
 import { cn } from '@/components/ui/cn';
 
 export interface DateRange {
@@ -72,7 +72,7 @@ export function DateRangeInput({
           sideOffset={6}
           className="select__popover z-50 outline-none"
         >
-          <Calendar
+          <BalinaCalendar
             mode="range"
             numberOfMonths={visibleMonths}
             defaultMonth={value?.from}

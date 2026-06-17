@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo } from 'react';
 import { ClockArrowRotateLeft, TrashBin } from '@gravity-ui/icons';
-import { Dropdown } from '@/components/ui';
+import { BalinaDropdown, BalinaDropdownItem, BalinaDropdownLabel } from '@/components/balina';
 import {
   useAiCreatorHistoryStore,
   restoreSession,
@@ -96,62 +96,54 @@ export function AiChatHistoryButton() {
   };
 
   return (
-    <Dropdown>
-      <Dropdown.Trigger
-        aria-label="Sohbet geçmişi"
-        className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-foreground/70 hover:bg-black/[0.04] hover:text-foreground"
-        onPress={() => {
-          if (currentCompany?.id) fetchSessions(currentCompany.id);
-        }}
-      >
-        <ClockArrowRotateLeft className="h-4 w-4" />
-      </Dropdown.Trigger>
-      <Dropdown.Popover
-        placement="top end"
-        className="w-72 border border-border bg-surface shadow-lg"
-      >
-        {isEmpty ? (
-          <div className="px-3 py-4 text-center text-xs text-muted">
-            Henüz geçmiş sohbet yok.
-          </div>
-        ) : (
-          <Dropdown.Menu>
-            {groups.flatMap((group) => [
-              <div
-                key={`label-${group.label}`}
-                className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted"
-              >
-                {group.label}
-              </div>,
-              ...group.items.map((c) => (
-                <Dropdown.Item
-                  key={c.id}
-                  id={c.id}
-                  textValue={c.title}
-                  onAction={() => handlePick(c.id)}
+    <BalinaDropdown
+      side="top"
+      align="end"
+      size="large"
+      trigger={
+        <button
+          type="button"
+          aria-label="Sohbet geçmişi"
+          className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-foreground/70 hover:bg-black/[0.04] hover:text-foreground"
+          onClick={() => {
+            if (currentCompany?.id) fetchSessions(currentCompany.id);
+          }}
+        >
+          <ClockArrowRotateLeft className="h-4 w-4" />
+        </button>
+      }
+    >
+      {isEmpty ? (
+        <div className="px-3 py-4 text-center text-xs text-muted">
+          Henüz geçmiş sohbet yok.
+        </div>
+      ) : (
+        groups.flatMap((group) => [
+          <BalinaDropdownLabel key={`label-${group.label}`}>
+            {group.label}
+          </BalinaDropdownLabel>,
+          ...group.items.map((c) => (
+            <BalinaDropdownItem key={c.id} onSelect={() => handlePick(c.id)}>
+              <span className="group flex flex-1 items-center gap-2">
+                <span className="line-clamp-1 flex-1 text-sm text-foreground">
+                  {c.title}
+                </span>
+                <span className="shrink-0 text-[10px] text-muted">
+                  {relativeAge(c.updatedAt)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Geçmişten sil"
+                  onClick={(e) => handleDelete(e, c.id)}
+                  className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-black/[0.04] hover:text-danger group-hover:opacity-100"
                 >
-                  <span className="group flex flex-1 items-center gap-2">
-                    <span className="line-clamp-1 flex-1 text-sm text-foreground">
-                      {c.title}
-                    </span>
-                    <span className="shrink-0 text-[10px] text-muted">
-                      {relativeAge(c.updatedAt)}
-                    </span>
-                    <button
-                      type="button"
-                      aria-label="Geçmişten sil"
-                      onClick={(e) => handleDelete(e, c.id)}
-                      className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-black/[0.04] hover:text-danger group-hover:opacity-100"
-                    >
-                      <TrashBin className="h-3 w-3" />
-                    </button>
-                  </span>
-                </Dropdown.Item>
-              )),
-            ])}
-          </Dropdown.Menu>
-        )}
-      </Dropdown.Popover>
-    </Dropdown>
+                  <TrashBin className="h-3 w-3" />
+                </button>
+              </span>
+            </BalinaDropdownItem>
+          )),
+        ])
+      )}
+    </BalinaDropdown>
   );
 }

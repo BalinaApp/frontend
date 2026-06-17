@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Modal } from '@/components/ui';
+import { BalinaModal } from '@/components/balina';
 
 interface LemonCheckoutModalProps {
   /** Backend'den dönen LemonSqueezy checkout veya customer-portal URL'i. */
@@ -48,20 +48,17 @@ export function LemonCheckoutModal({
     : `${url}${url.includes('?') ? '&' : '?'}embed=1`;
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[560px] !rounded-[12px] !bg-white !p-0 !shadow-[0_8px_32px_-2px_rgba(0,0,0,0.16)]">
-            <Modal.CloseTrigger className="absolute right-3 top-3 z-10" />
-            <iframe
-              src={finalUrl}
-              title="Ödeme"
-              className="block h-[80vh] w-full rounded-[12px] border-0"
-              allow="payment *; clipboard-write"
-            />
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      className="w-[90vw] max-w-[560px] !p-0"
+    >
+      <iframe
+        src={finalUrl}
+        title="Ödeme"
+        className="block h-[80vh] w-full rounded-[12px] border-0"
+        allow="payment *; clipboard-write"
+      />
+    </BalinaModal>
   );
 }

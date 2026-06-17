@@ -24,13 +24,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const accent = useThemeStore((s) => s.accent);
   const hydrate = useThemeStore((s) => s.hydrate);
   const userThemeAccent = useAuthStore((s) => s.user?.themeAccent);
+  const userThemeColor = useAuthStore((s) => s.user?.themeColor);
 
   // Re-hydrate the local store whenever the authenticated user record
   // updates with theme prefs from the server.
   useEffect(() => {
-    if (userThemeAccent === undefined) return;
-    hydrate({ themeAccent: userThemeAccent });
-  }, [userThemeAccent, hydrate]);
+    if (userThemeAccent === undefined && userThemeColor === undefined) return;
+    hydrate({ themeAccent: userThemeAccent, themeColor: userThemeColor });
+  }, [userThemeAccent, userThemeColor, hydrate]);
 
   useEffect(() => {
     const body = document.body;

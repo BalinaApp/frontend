@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Check, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
-import { Input, TextField } from '@/components/ui';
+import { BalinaTextField } from '@/components/balina';
 
 interface EditableStockCellProps {
   value: number;
@@ -90,20 +90,17 @@ export function EditableStockCell({
   if (isEditing) {
     return (
       <div className={['flex items-center gap-1', className].filter(Boolean).join(' ')}>
-        <TextField
+        <BalinaTextField
+          ref={inputRef}
           value={editValue}
           onChange={setEditValue}
           type="number"
-          className="w-16"
-        >
-          <Input
-            ref={inputRef}
-            min={min}
-            onKeyDown={handleKeyDown}
-            onBlur={handleSave}
-            className="h-8 text-center"
-          />
-        </TextField>
+          min={min}
+          onKeyDown={handleKeyDown}
+          onBlur={handleSave}
+          containerClassName="w-16"
+          className="h-8 text-center"
+        />
       </div>
     );
   }

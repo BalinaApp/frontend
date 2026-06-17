@@ -15,18 +15,16 @@ import {
   LayoutSideContentRight,
   Printer,
   TriangleExclamation,
+  ShoppingBag,
 } from '@gravity-ui/icons';
 import {
-  AlertDialog,
-  Button,
-  Checkbox,
-  FieldError,
-  Input,
-  Label,
-  Modal,
-  TextField,
+  BalinaButton,
+  BalinaCheckbox,
+  BalinaConfirmDialog,
+  BalinaModal,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { api } from '@/services/api';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -1129,7 +1127,7 @@ export default function OrdersPage() {
 
   return (
     <>
-      <PageHeader title="Siparişler" />
+      <PageHeader title="Siparişler" icon={<ShoppingBag className="h-4 w-4" />} />
 
       {/* Sipariş detay paneli artık layout seviyesinde sibling card olarak
           render ediliyor — burada wrap edici flex split yok, sayfa düz. */}
@@ -1277,11 +1275,20 @@ export default function OrdersPage() {
                   >
                     {/* LEFT half — checkbox + icon + order/customer */}
                     <div className="flex flex-1 items-center gap-3">
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          isSelected={isChecked}
-                          isDisabled={!canSelect}
-                          onChange={(next) => {
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        aria-label={
+                          !isShippable
+                            ? `${order.orderNumber} — iptal/iade siparişler için kargo etiketi basılamaz`
+                            : addressInvalid
+                              ? `${order.orderNumber} — alıcı adresi MNG'ye uygun değil, önce "Adres hatalı" rozetine basıp düzeltin`
+                              : `${order.orderNumber} seç`
+                        }
+                      >
+                        <BalinaCheckbox
+                          checked={isChecked}
+                          disabled={!canSelect}
+                          onCheckedChange={(next) => {
                             setSelected((prev) => {
                               const updated = new Set(prev);
                               if (next) updated.add(order.id);
@@ -1289,18 +1296,7 @@ export default function OrdersPage() {
                               return updated;
                             });
                           }}
-                          aria-label={
-                            !isShippable
-                              ? `${order.orderNumber} — iptal/iade siparişler için kargo etiketi basılamaz`
-                              : addressInvalid
-                                ? `${order.orderNumber} — alıcı adresi MNG'ye uygun değil, önce "Adres hatalı" rozetine basıp düzeltin`
-                                : `${order.orderNumber} seç`
-                          }
-                        >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                        </Checkbox>
+                        />
                       </div>
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
                         <Image
@@ -1413,25 +1409,25 @@ export default function OrdersPage() {
                 Toplam {ordersTotal} sipariş
               </span>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  isDisabled={ordersPage === 1}
-                  onPress={() => handlePageChange(ordersPage - 1)}
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  disabled={ordersPage === 1}
+                  onClick={() => handlePageChange(ordersPage - 1)}
                 >
                   Önceki
-                </Button>
+                </BalinaButton>
                 <span className="text-xs text-muted">
                   {ordersPage} / {ordersTotalPages}
                 </span>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  isDisabled={ordersPage === ordersTotalPages}
-                  onPress={() => handlePageChange(ordersPage + 1)}
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  disabled={ordersPage === ordersTotalPages}
+                  onClick={() => handlePageChange(ordersPage + 1)}
                 >
                   Sonraki
-                </Button>
+                </BalinaButton>
               </div>
             </div>
           )}
@@ -1444,124 +1440,106 @@ export default function OrdersPage() {
       {/* Toplu kargo etiketi modal — desi/kg sor, submit'te seçili tüm
           siparişler için paralel /cargo/barcode isteği at, dönen MNG +
           ürün etiketlerini tek print iframe'inde bas. */}
-      <Modal
-        isOpen={bulkCargoOpen}
+      <BalinaModal
+        open={bulkCargoOpen}
         onOpenChange={(open) => {
           if (!open && !isCreatingBulkLabels) setBulkCargoOpen(false);
         }}
+        title={`Toplu kargo etiketi (${selected.size} sipariş)`}
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setBulkCargoOpen(false)}
+              disabled={isCreatingBulkLabels}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={() => void handleSubmitBulkCargo()}
+              disabled={isCreatingBulkLabels}
+            >
+              Oluştur ve yazdır
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
-                  Toplu kargo etiketi ({selected.size} sipariş)
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <div className="space-y-3">
-                  <p className="text-xs text-muted">
-                    Tüm seçili siparişlere aynı desi/kg uygulanır. İçerik her
-                    sipariş için müşteri adı + ürün sayısından otomatik üretilir.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <TextField
-                      value={bulkCargoDesi}
-                      onChange={(v) => {
-                        setBulkCargoDesi(v);
-                        if (bulkCargoErr) setBulkCargoErr(null);
-                      }}
-                      isInvalid={!!bulkCargoErr}
-                    >
-                      <Label>Desi</Label>
-                      <Input placeholder="1" inputMode="numeric" />
-                    </TextField>
-                    <TextField
-                      value={bulkCargoKg}
-                      onChange={(v) => {
-                        setBulkCargoKg(v);
-                        if (bulkCargoErr) setBulkCargoErr(null);
-                      }}
-                      isInvalid={!!bulkCargoErr}
-                    >
-                      <Label>Kg</Label>
-                      <Input placeholder="1" inputMode="numeric" />
-                    </TextField>
-                  </div>
-                  {bulkCargoErr && (
-                    <p className="text-xs text-danger">{bulkCargoErr}</p>
-                  )}
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={isCreatingBulkLabels}
-                >
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={() => void handleSubmitBulkCargo()}
-                  isPending={isCreatingBulkLabels}
-                  isDisabled={isCreatingBulkLabels}
-                >
-                  Oluştur ve yazdır
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Tüm seçili siparişlere aynı desi/kg uygulanır. İçerik her
+            sipariş için müşteri adı + ürün sayısından otomatik üretilir.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <BalinaTextField
+              label="Desi"
+              value={bulkCargoDesi}
+              onChange={(v) => {
+                setBulkCargoDesi(v);
+                if (bulkCargoErr) setBulkCargoErr(null);
+              }}
+              placeholder="1"
+              inputMode="numeric"
+            />
+            <BalinaTextField
+              label="Kg"
+              value={bulkCargoKg}
+              onChange={(v) => {
+                setBulkCargoKg(v);
+                if (bulkCargoErr) setBulkCargoErr(null);
+              }}
+              placeholder="1"
+              inputMode="numeric"
+            />
+          </div>
+          {bulkCargoErr && (
+            <p className="text-xs text-danger">{bulkCargoErr}</p>
+          )}
+        </div>
+      </BalinaModal>
 
       {/* Saved filter rename modal */}
-      <Modal
-        isOpen={renameId !== null}
+      <BalinaModal
+        open={renameId !== null}
         onOpenChange={(open) => {
           if (!open && !isRenaming) setRenameId(null);
         }}
+        title="Filtre setini yeniden adlandır"
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setRenameId(null)}
+              disabled={isRenaming}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={submitRename}
+              disabled={isRenaming}
+            >
+              Kaydet
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Filtre setini yeniden adlandır</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="px-3 pb-2">
-                <TextField
-                  value={renameValue}
-                  onChange={(v) => {
-                    setRenameValue(v);
-                    if (renameErr) setRenameErr(null);
-                  }}
-                  isInvalid={!!renameErr}
-                  autoFocus
-                >
-                  <Label>İsim</Label>
-                  <Input placeholder="Filtre seti adı" />
-                  {renameErr && <FieldError>{renameErr}</FieldError>}
-                </TextField>
-              </Modal.Body>
-              <Modal.Footer className="px-3 pb-3">
-                <Button variant="tertiary" slot="close" isDisabled={isRenaming}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={submitRename}
-                  isPending={isRenaming}
-                  isDisabled={isRenaming}
-                >
-                  Kaydet
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <BalinaTextField
+          label="İsim"
+          value={renameValue}
+          onChange={(v) => {
+            setRenameValue(v);
+            if (renameErr) setRenameErr(null);
+          }}
+          error={renameErr ?? undefined}
+          placeholder="Filtre seti adı"
+          autoFocus
+        />
+      </BalinaModal>
 
       {/* Adres düzeltme modal — Adres hatalı rozetinden açılır */}
       {recipientEditOrder && currentCompany?.id ? (
@@ -1581,80 +1559,37 @@ export default function OrdersPage() {
       ) : null}
 
       {/* Kargo iptali onay dialog'u */}
-      <AlertDialog
-        isOpen={cancelConfirmOpen}
+      <BalinaConfirmDialog
+        open={cancelConfirmOpen}
         onOpenChange={(open) => {
           if (!open && !isCancellingShipments) setCancelConfirmOpen(false);
         }}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[380px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="warning" />
-                <AlertDialog.Heading>
-                  Kargo etiketi iptal edilsin mi?
-                </AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Footer className="px-3 pb-3">
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={isCancellingShipments}
-                >
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={() => void confirmCancelShipments()}
-                  isPending={isCancellingShipments}
-                  isDisabled={isCancellingShipments}
-                >
-                  İptal et
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Kargo etiketi iptal edilsin mi?"
+        confirmLabel="İptal et"
+        cancelLabel="Vazgeç"
+        onConfirm={() => void confirmCancelShipments()}
+        danger
+        loading={isCancellingShipments}
+      />
 
       {/* Saved filter delete confirm */}
-      <AlertDialog
-        isOpen={deleteSavedId !== null}
+      <BalinaConfirmDialog
+        open={deleteSavedId !== null}
         onOpenChange={(open) => {
           if (!open && !isDeletingSaved) setDeleteSavedId(null);
         }}
+        title="Filtre setini sil"
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleConfirmDeleteSaved}
+        danger
+        loading={isDeletingSaved}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-3 pb-2">
-                <p>
-                  <strong>{deleteSavedName}</strong> filtre seti silinecek. Bu
-                  işlem geri alınamaz.
-                </p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="px-3 pb-3">
-                <Button variant="tertiary" slot="close" isDisabled={isDeletingSaved}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleConfirmDeleteSaved}
-                  isPending={isDeletingSaved}
-                  isDisabled={isDeletingSaved}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p className="text-body-default-regular text-[var(--balina-text-default)]">
+          <strong>{deleteSavedName}</strong> filtre seti silinecek. Bu işlem
+          geri alınamaz.
+        </p>
+      </BalinaConfirmDialog>
     </>
   );
 }
@@ -2056,83 +1991,81 @@ function OrderDetailDrawer({
 
       {/* Kargo etiketi modal — desi/kg/içerik al, backend MNG createBarcode
           endpoint'ine gönder, başarılı olunca print dialog'u aç. */}
-      <Modal
-        isOpen={cargoOpen}
+      <BalinaModal
+        open={cargoOpen}
         onOpenChange={(open) => {
           if (!isCreatingLabel && !open) setCargoOpen(false);
         }}
+        title="Kargo etiketi oluştur"
+        description={
+          <>
+            {formatOrderNo(order.orderNumber)} · MNG&apos;ye gönderilecek
+            paket bilgilerini girin.
+          </>
+        }
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setCargoOpen(false)}
+              disabled={isCreatingLabel}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={handleSubmitCargo}
+              disabled={isCreatingLabel}
+            >
+              Oluştur ve yazdır
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Kargo etiketi oluştur</Modal.Heading>
-                <p className="mt-1 text-sm text-muted">
-                  {formatOrderNo(order.orderNumber)} · MNG&apos;ye gönderilecek
-                  paket bilgilerini girin.
-                </p>
-              </Modal.Header>
-              <Modal.Body className="px-3 pb-3">
-                <div className="flex flex-col gap-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <TextField
-                      value={cargoDesi}
-                      onChange={(v) => {
-                        setCargoDesi(v);
-                        if (cargoErr) setCargoErr(null);
-                      }}
-                      type="number"
-                    >
-                      <Label>Desi</Label>
-                      <Input placeholder="1" min={0} max={99} />
-                    </TextField>
-                    <TextField
-                      value={cargoKg}
-                      onChange={(v) => {
-                        setCargoKg(v);
-                        if (cargoErr) setCargoErr(null);
-                      }}
-                      type="number"
-                    >
-                      <Label>Ağırlık (kg)</Label>
-                      <Input placeholder="1" min={0} max={99} />
-                    </TextField>
-                  </div>
-                  <TextField
-                    value={cargoContent}
-                    onChange={(v) => {
-                      setCargoContent(v);
-                      if (cargoErr) setCargoErr(null);
-                    }}
-                    isInvalid={!!cargoErr}
-                  >
-                    <Label>İçerik</Label>
-                    <Input placeholder="Paket içeriği (max 200 karakter)" />
-                    {cargoErr && <FieldError>{cargoErr}</FieldError>}
-                  </TextField>
-                  <p className="text-[11px] text-muted">
-                    Referans: <span className="font-mono">{mngReferenceId || '—'}</span>
-                  </p>
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isCreatingLabel}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={handleSubmitCargo}
-                  isPending={isCreatingLabel}
-                  isDisabled={isCreatingLabel}
-                >
-                  Oluştur ve yazdır
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-3">
+            <BalinaTextField
+              label="Desi"
+              value={cargoDesi}
+              onChange={(v) => {
+                setCargoDesi(v);
+                if (cargoErr) setCargoErr(null);
+              }}
+              type="number"
+              placeholder="1"
+              min={0}
+              max={99}
+            />
+            <BalinaTextField
+              label="Ağırlık (kg)"
+              value={cargoKg}
+              onChange={(v) => {
+                setCargoKg(v);
+                if (cargoErr) setCargoErr(null);
+              }}
+              type="number"
+              placeholder="1"
+              min={0}
+              max={99}
+            />
+          </div>
+          <BalinaTextField
+            label="İçerik"
+            value={cargoContent}
+            onChange={(v) => {
+              setCargoContent(v);
+              if (cargoErr) setCargoErr(null);
+            }}
+            error={cargoErr ?? undefined}
+            placeholder="Paket içeriği (max 200 karakter)"
+          />
+          <p className="text-[11px] text-muted">
+            Referans: <span className="font-mono">{mngReferenceId || '—'}</span>
+          </p>
+        </div>
+      </BalinaModal>
     </div>
   );
 }
@@ -2344,21 +2277,22 @@ function OrdersBulkActionsBar({
         role="toolbar"
         aria-label={`${count} sipariş için işlemler`}
       >
-        <Button variant="tertiary" size="md" onPress={onPrintLabels}>
-          <Printer className="h-4 w-4" />
+        <BalinaButton
+          variant="soft"
+          onClick={onPrintLabels}
+          leftIcon={<Printer className="h-4 w-4" />}
+        >
           Kargo Etiketi Bas ({count})
-        </Button>
+        </BalinaButton>
         {shippedCount > 0 && (
-          <Button
-            variant="tertiary"
-            size="md"
-            onPress={onCancelShipments}
-            isPending={isCancelling}
-            isDisabled={isCancelling}
+          <BalinaButton
+            variant="soft"
+            onClick={onCancelShipments}
+            disabled={isCancelling}
+            leftIcon={<CircleXmark className="h-4 w-4" />}
           >
-            <CircleXmark className="h-4 w-4" />
             Kargo İptal ({shippedCount})
-          </Button>
+          </BalinaButton>
         )}
       </div>
     </div>

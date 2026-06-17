@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  ChevronDown,
   ChevronLeft,
   CircleCheckFill,
   Copy,
@@ -14,15 +13,12 @@ import {
   TriangleExclamation,
 } from '@gravity-ui/icons';
 import {
-  Alert,
-  Button,
-  Dropdown,
-  Input,
-  Label,
-  Modal,
-  Switch,
-  TextField,
-} from '@/components/ui';
+  BalinaAlert,
+  BalinaButton,
+  BalinaModal,
+  BalinaSwitch,
+  BalinaTextField,
+} from '@/components/balina';
 import { ApiKey, useApiKeyStore } from '@/stores/apiKeyStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { usePricingStore } from '@/stores/pricingStore';
@@ -110,16 +106,15 @@ export default function ApiKeysListPage() {
     <>
       {/* Section header */}
       <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
+        <BalinaButton
+          variant="soft"
+          size="small"
           aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings/api`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+          onClick={() => router.push(`/${slug}/settings/api`)}
+          className="h-8 w-8 cursor-pointer bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
         >
           <ChevronLeft className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
         <h2 className="text-sm font-medium text-foreground">API&apos;ler</h2>
       </div>
 
@@ -141,14 +136,14 @@ export default function ApiKeysListPage() {
                   API anahtarı yönetimi Enterprise plan ile kullanılabilir.
                 </p>
               </div>
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={() => setIsUpgradeOpen(true)}
-                className="h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+              <BalinaButton
+                variant="soft"
+                size="small"
+                onClick={() => setIsUpgradeOpen(true)}
+                className="h-8 cursor-pointer bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
               >
                 Planı Yükselt
-              </Button>
+              </BalinaButton>
             </div>
           ) : (
             <div className="flex flex-col rounded-xl bg-surface">
@@ -184,130 +179,114 @@ export default function ApiKeysListPage() {
       </div>
 
       {/* Create modal */}
-      <Modal
-        isOpen={isCreateOpen}
+      <BalinaModal
+        open={isCreateOpen}
         onOpenChange={(open) => {
           if (!open) handleCloseCreate();
           else setIsCreateOpen(true);
         }}
+        className="sm:max-w-[460px]"
+        title={newKeySecret ? 'API Anahtarı Oluşturuldu' : 'Yeni API Anahtarı'}
+        footer={
+          newKeySecret ? (
+            <BalinaButton variant="primary" onClick={handleCloseCreate}>
+              Tamam
+            </BalinaButton>
+          ) : (
+            <>
+              <BalinaButton variant="soft" onClick={handleCloseCreate}>
+                İptal
+              </BalinaButton>
+              <BalinaButton
+                variant="primary"
+                onClick={handleCreate}
+                disabled={!newKeyName.trim() || isCreating}
+              >
+                {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
+              </BalinaButton>
+            </>
+          )
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[460px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>
-                  {newKeySecret ? 'API Anahtarı Oluşturuldu' : 'Yeni API Anahtarı'}
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="flex flex-col gap-4">
-                {newKeySecret ? (
-                  <>
-                    <Alert status="warning">
-                      <Alert.Indicator />
-                      <Alert.Content>
-                        <Alert.Title>Dikkat</Alert.Title>
-                        <Alert.Description>
-                          Bu anahtar yalnızca bir kez gösterilecektir. Lütfen
-                          güvenli bir yerde saklayın.
-                        </Alert.Description>
-                      </Alert.Content>
-                    </Alert>
-                    <div className="flex flex-col gap-2">
-                      <Label>API Anahtarı</Label>
-                      <div className="flex gap-2">
-                        <TextField
-                          value={newKeySecret}
-                          type={showSecret ? 'text' : 'password'}
-                          isReadOnly
-                          className="flex-1"
-                        >
-                          <Input className="font-mono text-sm" />
-                        </TextField>
-                        <Button
-                          variant="outline"
-                          size="md"
-                          isIconOnly
-                          aria-label={showSecret ? 'Gizle' : 'Göster'}
-                          onPress={() => setShowSecret(!showSecret)}
-                        >
-                          {showSecret ? (
-                            <EyeSlash className="h-4 w-4" />
-                          ) : (
-                            <Eye className="h-4 w-4" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="md"
-                          isIconOnly
-                          aria-label="Kopyala"
-                          onPress={handleCopySecret}
-                        >
-                          {copiedSecret ? (
-                            <CircleCheckFill className="h-4 w-4 text-success" />
-                          ) : (
-                            <Copy className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="modal-form-card">
-                      <TextField
-                        name="name"
-                        value={newKeyName}
-                        onChange={setNewKeyName}
-                        isRequired
-                      >
-                        <Label>Anahtar adı</Label>
-                        <Input placeholder="Örn: Üretim" />
-                      </TextField>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex flex-col gap-0.5">
-                        <Label>Yazma izni</Label>
-                        <p className="text-xs text-muted">
-                          Bu anahtar veri değişikliği yapabilsin mi?
-                        </p>
-                      </div>
-                      <Switch
-                        isSelected={newKeyWrite}
-                        onChange={setNewKeyWrite}
-                        aria-label="Yazma izni"
-                      >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch>
-                    </div>
-                  </>
-                )}
-              </Modal.Body>
-              <Modal.Footer>
-                {newKeySecret ? (
-                  <Button onPress={handleCloseCreate}>Tamam</Button>
-                ) : (
-                  <>
-                    <Button variant="tertiary" slot="close">
-                      İptal
-                    </Button>
-                    <Button
-                      onPress={handleCreate}
-                      isDisabled={!newKeyName.trim() || isCreating}
-                      isPending={isCreating}
-                    >
-                      {isCreating ? 'Oluşturuluyor...' : 'Oluştur'}
-                    </Button>
-                  </>
-                )}
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <div className="flex flex-col gap-4">
+          {newKeySecret ? (
+            <>
+              <BalinaAlert status="warning">
+                <BalinaAlert.Indicator />
+                <BalinaAlert.Content>
+                  <BalinaAlert.Title>Dikkat</BalinaAlert.Title>
+                  <BalinaAlert.Description>
+                    Bu anahtar yalnızca bir kez gösterilecektir. Lütfen
+                    güvenli bir yerde saklayın.
+                  </BalinaAlert.Description>
+                </BalinaAlert.Content>
+              </BalinaAlert>
+              <div className="flex flex-col gap-2">
+                <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+                  API Anahtarı
+                </label>
+                <div className="flex gap-2">
+                  <BalinaTextField
+                    value={newKeySecret}
+                    type={showSecret ? 'text' : 'password'}
+                    readOnly
+                    containerClassName="flex-1"
+                    className="font-mono text-sm"
+                  />
+                  <BalinaButton
+                    variant="soft"
+                    aria-label={showSecret ? 'Gizle' : 'Göster'}
+                    onClick={() => setShowSecret(!showSecret)}
+                  >
+                    {showSecret ? (
+                      <EyeSlash className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </BalinaButton>
+                  <BalinaButton
+                    variant="soft"
+                    aria-label="Kopyala"
+                    onClick={handleCopySecret}
+                  >
+                    {copiedSecret ? (
+                      <CircleCheckFill className="h-4 w-4 text-success" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </BalinaButton>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="modal-form-card">
+                <BalinaTextField
+                  name="name"
+                  label="Anahtar adı"
+                  value={newKeyName}
+                  onChange={setNewKeyName}
+                  placeholder="Örn: Üretim"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+                    Yazma izni
+                  </label>
+                  <p className="text-xs text-muted">
+                    Bu anahtar veri değişikliği yapabilsin mi?
+                  </p>
+                </div>
+                <BalinaSwitch
+                  checked={newKeyWrite}
+                  onCheckedChange={setNewKeyWrite}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </BalinaModal>
 
       <UpgradePlanModal
         isOpen={isUpgradeOpen}
@@ -363,15 +342,10 @@ function ApiKeyRow({
         {PERMISSION_LABEL[activePermission]}
       </span>
 
-      <Switch
-        isSelected={apiKey.isActive}
-        onChange={onToggleActive}
-        aria-label="Aktif"
-      >
-        <Switch.Control>
-          <Switch.Thumb />
-        </Switch.Control>
-      </Switch>
+      <BalinaSwitch
+        checked={apiKey.isActive}
+        onCheckedChange={onToggleActive}
+      />
     </div>
   );
 }

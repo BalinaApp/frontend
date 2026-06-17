@@ -2,21 +2,15 @@
 
 import { useState } from 'react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft } from '@gravity-ui/icons';
-import { Avatar, Button, Switch, toast } from '@/components/ui';
+import { toast, BalinaAvatar, BalinaSwitch } from '@/components/balina';
 import { useAuthStore } from '@/stores/authStore';
-import { useCompanyStore } from '@/stores/companyStore';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { userDisplayName } from '@/lib/user-display';
 
 export default function SecuritySettingsPage() {
   usePageTitle('Giriş ve güvenlik');
 
-  const router = useRouter();
   const { user, disconnectGoogle } = useAuthStore();
-  const { currentCompany } = useCompanyStore();
-  const slug = currentCompany?.slug ?? '';
 
   const userInitial = (user?.name || user?.email || '?').charAt(0).toUpperCase();
 
@@ -47,29 +41,14 @@ export default function SecuritySettingsPage() {
 
   return (
     <>
-      {/* Section header */}
-      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
-          aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-sm font-medium text-foreground">Giriş ve güvenlik</h2>
-      </div>
-
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col items-center gap-6 px-3">
           {/* Avatar */}
-          <Avatar className="h-[116px] w-[116px] rounded-full">
-            <Avatar.Fallback className="rounded-full bg-zinc-500 text-3xl font-semibold text-white">
-              {userInitial}
-            </Avatar.Fallback>
-          </Avatar>
+          <BalinaAvatar
+            fallback={userInitial}
+            alt={userDisplayName(user)}
+            className="h-[116px] w-[116px] text-3xl font-semibold"
+          />
 
           {/* Name + email */}
           <div className="flex w-full flex-col items-center gap-1">
@@ -98,20 +77,15 @@ export default function SecuritySettingsPage() {
                       className="h-4 w-4"
                     />
                   </span>
-                  <span className="text-sm font-medium text-foreground/85">
+                  <span className="text-body-small-one-liner-medium text-foreground/85">
                     Google
                   </span>
                 </div>
-                <Switch
-                  isSelected={googleConnected}
-                  onChange={handleGoogleToggle}
-                  isDisabled={isToggling}
-                  aria-label="Google hesabını bağla"
-                >
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                </Switch>
+                <BalinaSwitch
+                  checked={googleConnected}
+                  onCheckedChange={handleGoogleToggle}
+                  disabled={isToggling}
+                />
               </div>
             </div>
           </div>

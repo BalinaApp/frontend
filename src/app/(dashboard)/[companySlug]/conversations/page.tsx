@@ -7,6 +7,7 @@ import {
   ArrowShapeTurnUpLeft,
   Comments,
   Ellipsis,
+  Magnifier,
   PaperPlane,
   Star,
   StarFill,
@@ -14,12 +15,12 @@ import {
   Xmark,
 } from '@gravity-ui/icons';
 import {
-  Button,
-  Chip,
-  SearchField,
-  Tooltip,
+  BalinaButton,
+  BalinaChip,
+  BalinaInput,
+  BalinaTooltip,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -41,12 +42,12 @@ const STATUS_LABEL: Record<ThreadStatus, string> = {
 
 const STATUS_CHIP_COLOR: Record<
   ThreadStatus,
-  'success' | 'warning' | 'accent' | 'default'
+  'success' | 'warning' | 'accent' | 'neutral'
 > = {
   ai: 'success',
   observing: 'accent',
   human_takeover: 'warning',
-  closed: 'default',
+  closed: 'neutral',
 };
 
 const STATUS_TABS: { id: ThreadStatus | 'all'; label: string }[] = [
@@ -165,18 +166,14 @@ export default function ConversationsPage() {
       {/* SOL: thread list */}
       <aside className="flex w-[380px] shrink-0 flex-col gap-2 p-2">
         {/* Search */}
-        <SearchField
-          variant="secondary"
+        <BalinaInput
           value={search}
-          onChange={setSearch}
+          onChange={(e) => setSearch(e.target.value)}
           aria-label="Sohbet ara"
-          className="px-1"
-        >
-          <SearchField.Group>
-            <SearchField.SearchIcon />
-            <SearchField.Input placeholder="Ara..." />
-          </SearchField.Group>
-        </SearchField>
+          placeholder="Ara..."
+          leftIcon={<Magnifier className="h-4 w-4" />}
+          wrapperClassName="mx-1"
+        />
 
         {/* Status tabs */}
         <div className="mx-1 flex items-center gap-0.5 rounded-full bg-surface-secondary p-0.5">
@@ -478,9 +475,9 @@ function ThreadDetailPanel({
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1">
-                <Chip color={STATUS_CHIP_COLOR[status]} variant="soft" size="sm">
+                <BalinaChip variant={STATUS_CHIP_COLOR[status]} size="sm">
                   {STATUS_LABEL[status]}
-                </Chip>
+                </BalinaChip>
                 {status !== 'closed' && (
                   <IconButton
                     label="Cevapla"
@@ -594,17 +591,15 @@ function Composer({
           rows={2}
           className="flex-1 resize-none rounded-xl border border-default-200 bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-default-400"
         />
-        <Button
+        <BalinaButton
           variant="primary"
-          isDisabled={!draft.trim() || isSending}
-          isPending={isSending}
-          onPress={onSend}
-          isIconOnly
+          disabled={!draft.trim() || isSending}
+          onClick={onSend}
           aria-label="Gönder"
-          className="h-10 w-10 shrink-0 rounded-full"
+          className="h-10 w-10 shrink-0"
         >
           <PaperPlane className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
       </div>
     </div>
   );
@@ -705,22 +700,18 @@ function IconButton({
   children: React.ReactNode;
 }) {
   return (
-    <Tooltip>
-      <Tooltip.Trigger>
-        <Button
-          isIconOnly
-          variant="tertiary"
-          size="sm"
-          onPress={onPress}
-          isDisabled={isDisabled}
-          aria-label={label}
-          className="h-9 w-9 rounded-full"
-        >
-          {children}
-        </Button>
-      </Tooltip.Trigger>
-      <Tooltip.Content>{label}</Tooltip.Content>
-    </Tooltip>
+    <BalinaTooltip content={label}>
+      <BalinaButton
+        variant="soft"
+        size="small"
+        onClick={onPress}
+        disabled={isDisabled}
+        aria-label={label}
+        className="h-9 w-9"
+      >
+        {children}
+      </BalinaButton>
+    </BalinaTooltip>
   );
 }
 

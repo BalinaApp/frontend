@@ -190,4 +190,63 @@
       opacity: 0;
     }
   }
+
+  /* ===== Tipografi ölçeği — text-body-* utility'leri otomatik üretilir =====
+     v4 @theme: --text-{ad} + --line-height/--letter-spacing/--font-weight
+     companion'ları "text-body-default-medium" gibi tek utility üretir.
+     Tek-satır (one-liner) varyantları için `truncate` ile birlikte kullan. */
+  --text-body-mail: 0.875rem;
+  --text-body-mail--line-height: 1.5;
+  --text-body-mail--letter-spacing: -0.01em;
+
+  --text-body-mail-medium: 0.875rem;
+  --text-body-mail-medium--line-height: 1.5rem;
+  --text-body-mail-medium--letter-spacing: -0.01em;
+  --text-body-mail-medium--font-weight: 500;
+
+  --text-body-tiny-regular: 0.75rem;
+  --text-body-tiny-regular--line-height: 1.5;
+  --text-body-tiny-regular--letter-spacing: -0.005em;
+
+  --text-body-tiny-medium: 0.75rem;
+  --text-body-tiny-medium--letter-spacing: -0.005em;
+  --text-body-tiny-medium--font-weight: 450;
+
+  --text-body-small-regular: 0.812rem;
+  --text-body-small-regular--line-height: 1.5;
+  --text-body-small-regular--letter-spacing: -0.005em;
+
+  --text-body-small-medium: 0.812rem;
+  --text-body-small-medium--line-height: 1.5;
+  --text-body-small-medium--letter-spacing: -0.005em;
+  --text-body-small-medium--font-weight: 450;
+
+  /* Tek-satır buton metni (truncate ile kullan) — Button spec'i: 500 ağırlık. */
+  --text-body-small-one-liner-medium: 0.812rem;
+  --text-body-small-one-liner-medium--line-height: 1.5;
+  --text-body-small-one-liner-medium--letter-spacing: -0.005em;
+  --text-body-small-one-liner-medium--font-weight: 500;
+
+  --text-body-default-regular: 0.875rem;
+  --text-body-default-regular--line-height: 20px;
+  --text-body-default-regular--letter-spacing: -0.01em;
+
+  --text-body-default-medium: 0.875rem;
+  --text-body-default-medium--line-height: 1.5;
+  --text-body-default-medium--letter-spacing: -0.01em;
+  --text-body-default-medium--font-weight: 450;
+
+  --text-body-large-regular: 0.938rem;
+  --text-body-large-regular--line-height: 1.5;
+  --text-body-large-regular--letter-spacing: -0.01em;
+
+  --text-body-large-medium: 0.938rem;
+  --text-body-large-medium--line-height: 1.5;
+  --text-body-large-medium--letter-spacing: -0.01em;
+  --text-body-large-medium--font-weight: 450;
+
+  --text-body-micro-medium: 0.625rem;
+  --text-body-micro-medium--line-height: 1.5;
+  --text-body-micro-medium--letter-spacing: -0.005em;
+  --text-body-micro-medium--font-weight: 450;
 }

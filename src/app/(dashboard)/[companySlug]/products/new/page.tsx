@@ -16,19 +16,18 @@ import {
   TrashBin,
 } from '@gravity-ui/icons';
 import {
-  AlertDialog,
-  Button,
-  Checkbox,
-  Chip,
-  Dropdown,
-  Input,
-  ListBox,
-  Modal,
-  Switch,
-  TextArea,
-  TextField,
+  BalinaButton,
+  BalinaChip,
+  BalinaConfirmDialog,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaModal,
+  BalinaModalClose,
+  BalinaSwitch,
+  BalinaTextarea,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useAiStore } from '@/stores/aiStore';
@@ -48,23 +47,6 @@ import { VariationsTable } from '@/components/products/variations-table';
 
 const MAX_IMAGES = 8;
 const MAX_AXES = 2;
-
-// HeroUI <Input variant="secondary" /> + base saydam, focus'ta hafif bg.
-// `data-[focused=true]` HeroUI'un kendi focus state'ini override eder.
-const FIELD_CLASS =
-  'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
-
-/** HeroUI secondary Input, başlık inputuyla aynı stil. */
-function SecondaryInput(props: React.ComponentProps<typeof Input>) {
-  return (
-    <Input
-      fullWidth
-      variant="secondary"
-      {...props}
-      className={`${FIELD_CLASS} ${props.className ?? ''}`}
-    />
-  );
-}
 
 /** Fiyat input — type=text + inputMode=decimal (spinner yok), TR formatı
  *  (1.234,56) blur'da formatlanır, focus'ta raw gösterilir; canonical
@@ -131,7 +113,7 @@ function PriceField({
 }
 
 const PILL_BUTTON_CLASS =
-  'h-9 rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground hover:bg-foreground/[0.08]';
+  'h-9 bg-foreground/[0.06] px-4 text-sm font-medium text-foreground hover:bg-foreground/[0.08]';
 
 type AxisDraft = { name: string; options: string[] };
 type VariationOverride = {
@@ -293,16 +275,15 @@ function ProductImageCard({
           {label}
         </span>
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
-          <Button
+          <BalinaButton
             variant="ghost"
-            size="sm"
-            onPress={onRemove}
+            size="small"
+            onClick={onRemove}
             aria-label="Görseli sil"
-            className="rounded-full"
+            leftIcon={<TrashBin className="h-3.5 w-3.5" />}
           >
-            <TrashBin className="h-3.5 w-3.5" />
             Sil
-          </Button>
+          </BalinaButton>
         </div>
       </div>
     </div>
@@ -325,17 +306,16 @@ function BalinaAiButton({
   className?: string;
 }) {
   return (
-    <Button
-      variant="tertiary"
-      size="sm"
-      onPress={onPress}
-      isPending={isPending}
-      isDisabled={isDisabled}
-      className={`chroma-border h-9 cursor-pointer rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
+    <BalinaButton
+      variant="soft"
+      size="small"
+      onClick={onPress}
+      disabled={isPending || isDisabled}
+      leftIcon={<BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      className={`chroma-border h-9 cursor-pointer bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
     >
-      <BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />
       {label}
-    </Button>
+    </BalinaButton>
   );
 }
 
@@ -760,30 +740,28 @@ export default function NewProductPage() {
     <>
       <PageHeader
         title={name.trim() || 'Ürün Adı'}
+        icon={<Box className="h-4 w-4" />}
         leading={
-          <Button
-            variant="tertiary"
-            size="sm"
-            isIconOnly
+          <BalinaButton
+            variant="soft"
+            size="small"
             aria-label="Geri"
-            onPress={() => router.push(`/${companySlug}/products`)}
-            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+            leftIcon={<ChevronLeft className="h-4 w-4" />}
+            onClick={() => router.push(`/${companySlug}/products`)}
+            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10]"
+          />
         }
         action={
-          <Button
-            variant="tertiary"
-            size="sm"
-            onPress={handleKaydet}
-            isPending={isSubmitting}
-            isDisabled={isSubmitting}
-            className="h-8 rounded-full bg-foreground/[0.04] px-3 text-xs"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            onClick={handleKaydet}
+            disabled={isSubmitting}
+            leftIcon={<Check className="h-3.5 w-3.5" />}
+            className="h-8 bg-foreground/[0.04] px-3 text-xs"
           >
-            <Check className="h-3.5 w-3.5" />
             Kaydet
-          </Button>
+          </BalinaButton>
         }
       />
 
@@ -792,39 +770,30 @@ export default function NewProductPage() {
           {/* === 1) Başlık + Açıklama + AI butonu (absolute bottom-right of textarea) === */}
           <Section>
             <div className="flex flex-col gap-2">
-              {/* Başlık — HeroUI v3 secondary input, base bg transparent override */}
-              <TextField
+              {/* Başlık — balina text field, transparent ghost görünüm */}
+              <BalinaTextField
+                variant="ghost"
                 value={name}
                 onChange={(v) => {
                   setName(v);
                   if (errors.name) setErrors((p) => ({ ...p, name: '' }));
                 }}
                 aria-label="Ürün başlığı"
-                isInvalid={!!errors.name}
-              >
-                <Input
-                  fullWidth
-                  variant="secondary"
-                  placeholder="Ürün Başlığı"
-                  className="bg-transparent text-lg font-medium leading-7 placeholder:text-zinc-500"
-                />
-              </TextField>
+                placeholder="Ürün Başlığı"
+                className="text-lg font-medium leading-7 placeholder:text-zinc-500"
+              />
 
-              {/* Açıklama — HeroUI v3 secondary textarea, resize kapalı, AI butonu absolute */}
+              {/* Açıklama — balina textarea, resize kapalı, AI butonu absolute */}
               <div className="relative">
-                <TextField
+                <BalinaTextarea
+                  variant="ghost"
                   value={description}
-                  onChange={setDescription}
+                  onChange={(e) => setDescription(e.target.value)}
                   aria-label="Açıklama"
-                >
-                  <TextArea
-                    fullWidth
-                    variant="secondary"
-                    placeholder="Açıklama girin..."
-                    rows={3}
-                    className="min-h-[88px] resize-none bg-transparent placeholder:text-zinc-500"
-                  />
-                </TextField>
+                  placeholder="Açıklama girin..."
+                  rows={3}
+                  className="min-h-[88px] resize-none placeholder:text-zinc-500"
+                />
                 <div className="pointer-events-none absolute bottom-2 right-2 z-10">
                   <div className="pointer-events-auto">
                     <BalinaAiButton
@@ -858,16 +827,15 @@ export default function NewProductPage() {
               >
                 <div className="flex flex-col items-center gap-1.5">
                   <div className="flex items-center gap-3">
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={handleFilePick}
-                      isPending={isUploading}
-                      isDisabled={isUploading}
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      onClick={handleFilePick}
+                      disabled={isUploading}
                       className={PILL_BUTTON_CLASS}
                     >
                       Yeni Yükle
-                    </Button>
+                    </BalinaButton>
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
                       label="balinaOS AI ile Üret"
@@ -899,50 +867,33 @@ export default function NewProductPage() {
                   />
                 ))}
                 {imageUrls.length < MAX_IMAGES && (
-                  <Dropdown>
-                    <Dropdown.Trigger
-                      aria-label="Görsel ekle"
-                      isDisabled={isUploading}
-                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-black/15 text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="text-[10px]">Ekle</span>
-                    </Dropdown.Trigger>
-                    <Dropdown.Popover
-                      className="w-[200px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-                      style={{
-                        border: '1px solid var(--border)',
-                        boxShadow:
-                          '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-                      }}
-                    >
-                      <Dropdown.Menu
-                        aria-label="Görsel kaynağı"
-                        onAction={(key) => {
-                          if (key === 'ai') openAiImageModalOrRedirect();
-                          else if (key === 'file') handleFilePick();
-                        }}
-                        className="flex flex-col gap-0 py-1 outline-none"
+                  <BalinaDropdown
+                    align="start"
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label="Görsel ekle"
+                        disabled={isUploading}
+                        className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-black/15 text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
                       >
-                        <Dropdown.Item
-                          id="ai"
-                          textValue="AI ile üret"
-                          className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                        >
-                          <BalinaOsMark className="h-3.5 w-3.5 shrink-0 text-foreground" />
-                          <span className="flex-1">AI ile üret</span>
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          id="file"
-                          textValue="Dosyalardan seç"
-                          className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                        >
-                          <Plus className="h-3.5 w-3.5 shrink-0 text-foreground/70" />
-                          <span className="flex-1">Dosyalardan seç</span>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown.Popover>
-                  </Dropdown>
+                        <Plus className="h-4 w-4" />
+                        <span className="text-[10px]">Ekle</span>
+                      </button>
+                    }
+                  >
+                    <BalinaDropdownItem
+                      icon={<BalinaOsMark className="h-3.5 w-3.5 text-foreground" />}
+                      onSelect={openAiImageModalOrRedirect}
+                    >
+                      AI ile üret
+                    </BalinaDropdownItem>
+                    <BalinaDropdownItem
+                      icon={<Plus className="h-3.5 w-3.5 text-foreground/70" />}
+                      onSelect={handleFilePick}
+                    >
+                      Dosyalardan seç
+                    </BalinaDropdownItem>
+                  </BalinaDropdown>
                 )}
               </div>
             )}
@@ -963,15 +914,10 @@ export default function NewProductPage() {
               label="Durumu"
             >
               <div className="flex h-9 items-center gap-2 px-3">
-                <Switch
-                  isSelected={isActive}
-                  onChange={setIsActive}
-                  aria-label="Ürün aktif"
-                >
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                </Switch>
+                <BalinaSwitch
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
+                />
                 <span className="text-sm text-foreground">
                   {isActive ? 'Aktif' : 'Pasif'}
                 </span>
@@ -981,65 +927,49 @@ export default function NewProductPage() {
               icon={<Tag className="h-4 w-4 text-foreground/70" />}
               label="SKU"
             >
-              <TextField
+              <BalinaTextField
                 value={sku}
                 onChange={(v) => {
                   setSku(v);
                   if (errors.sku) setErrors((p) => ({ ...p, sku: '' }));
                 }}
                 aria-label="SKU"
-                isInvalid={!!errors.sku}
-              >
-                <SecondaryInput placeholder="Ekle" />
-              </TextField>
+                placeholder="Ekle"
+              />
             </FieldRow>
             <FieldRow
               icon={<Percent className="h-4 w-4 text-foreground/70" />}
               label="KDV"
             >
-              <Dropdown>
-                <Dropdown.Trigger
-                  aria-label="KDV oranı"
-                  className="flex h-9 w-full items-center justify-between rounded-xl bg-transparent px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.03] data-[focused=true]:bg-foreground/[0.03]"
-                >
-                  <span className={vatRate ? 'text-foreground' : 'text-zinc-500'}>
-                    {vatRate ? `%${vatRate}` : 'Ekle'}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-foreground/60" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover
-                  className="min-w-[200px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-                  style={{
-                    border: '1px solid var(--border)',
-                    boxShadow:
-                      '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-                  }}
-                >
-                  <Dropdown.Menu
-                    aria-label="KDV oranı seç"
-                    onAction={(key) => {
-                      setVatRate(String(key));
+              <BalinaDropdown
+                align="start"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="KDV oranı"
+                    className="flex h-9 w-full items-center justify-between rounded-xl bg-transparent px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.03] data-[focused=true]:bg-foreground/[0.03]"
+                  >
+                    <span className={vatRate ? 'text-foreground' : 'text-zinc-500'}>
+                      {vatRate ? `%${vatRate}` : 'Ekle'}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-foreground/60" />
+                  </button>
+                }
+              >
+                {['0', '1', '10', '20'].map((rate) => (
+                  <BalinaDropdownItem
+                    key={rate}
+                    selected={vatRate === rate}
+                    onSelect={() => {
+                      setVatRate(String(rate));
                       if (errors.vatRate)
                         setErrors((p) => ({ ...p, vatRate: '' }));
                     }}
-                    className="flex flex-col gap-0 py-1 outline-none"
                   >
-                    {['0', '1', '10', '20'].map((rate) => (
-                      <Dropdown.Item
-                        key={rate}
-                        id={rate}
-                        textValue={`%${rate}`}
-                        className="flex h-9 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                      >
-                        <span className="flex-1">%{rate}</span>
-                        {vatRate === rate && (
-                          <Check className="h-3.5 w-3.5 text-foreground" />
-                        )}
-                      </Dropdown.Item>
-                    ))}
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
+                    %{rate}
+                  </BalinaDropdownItem>
+                ))}
+              </BalinaDropdown>
             </FieldRow>
             {errors.sku && (
               <p className="ml-[136px] pt-1 text-xs text-danger">{errors.sku}</p>
@@ -1090,7 +1020,7 @@ export default function NewProductPage() {
                 icon={<Box className="h-4 w-4 text-foreground/70" />}
                 label="Stok"
               >
-                <TextField
+                <BalinaTextField
                   value={stockQuantity}
                   onChange={(v) => {
                     setStockQuantity(v);
@@ -1098,10 +1028,9 @@ export default function NewProductPage() {
                       setErrors((p) => ({ ...p, stockQuantity: '' }));
                   }}
                   aria-label="Stok"
-                  isInvalid={!!errors.stockQuantity}
-                >
-                  <SecondaryInput type="number" placeholder="Ekle" />
-                </TextField>
+                  type="number"
+                  placeholder="Ekle"
+                />
               </FieldRow>
             )}
             {errors.stores && (
@@ -1121,15 +1050,15 @@ export default function NewProductPage() {
                   {variationRows.length} varyasyon
                 </span>
               )}
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={addAxis}
-                isDisabled={axes.length >= MAX_AXES}
+              <BalinaButton
+                variant="soft"
+                size="small"
+                onClick={addAxis}
+                disabled={axes.length >= MAX_AXES}
                 className={PILL_BUTTON_CLASS}
               >
                 Varyasyon Ekle
-              </Button>
+              </BalinaButton>
             </div>
 
             {/* Axis rows */}
@@ -1157,9 +1086,9 @@ export default function NewProductPage() {
                   />
                   <div className="flex flex-wrap items-center gap-1">
                     {axis.options.map((opt, optIdx) => (
-                      <Chip
+                      <BalinaChip
                         key={`${opt}-${optIdx}`}
-                        variant="soft"
+                        variant="accent"
                         className="h-8 gap-1 rounded-full bg-foreground/[0.06] px-3 text-xs font-medium"
                       >
                         {opt}
@@ -1171,7 +1100,7 @@ export default function NewProductPage() {
                         >
                           <Xmark className="h-3 w-3" />
                         </button>
-                      </Chip>
+                      </BalinaChip>
                     ))}
                     <input
                       type="text"
@@ -1264,99 +1193,72 @@ export default function NewProductPage() {
       </div>
 
       {/* === Görsel silme onayı === */}
-      <AlertDialog
-        isOpen={pendingDeleteIdx !== null}
+      <BalinaConfirmDialog
+        open={pendingDeleteIdx !== null}
         onOpenChange={(open) => {
           if (!open) setPendingDeleteIdx(null);
         }}
+        title="Görseli sil"
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        onConfirm={() => {
+          if (pendingDeleteIdx !== null) {
+            removeImage(pendingDeleteIdx);
+            setPendingDeleteIdx(null);
+          }
+        }}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Görseli sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-3 pb-2">
-                <p>Bu görsel galeriden kaldırılacak. Devam edilsin mi?</p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="px-3 pb-3">
-                <Button variant="tertiary" slot="close">
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={() => {
-                    if (pendingDeleteIdx !== null) {
-                      removeImage(pendingDeleteIdx);
-                      setPendingDeleteIdx(null);
-                    }
-                  }}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p>Bu görsel galeriden kaldırılacak. Devam edilsin mi?</p>
+      </BalinaConfirmDialog>
 
       {/* === Onay modalı === */}
-      <Modal
-        isOpen={confirmOpen}
+      <BalinaModal
+        open={confirmOpen}
         onOpenChange={(open) => {
           if (!isSubmitting && !open) setConfirmOpen(false);
         }}
+        title="Mağazalara gönderilecek"
+        description="Aşağıdaki mağazalara ürün pushlanacak. Onaylıyor musun?"
+        footer={
+          <>
+            <BalinaModalClose asChild>
+              <BalinaButton variant="soft" size="large" disabled={isSubmitting}>
+                Vazgeç
+              </BalinaButton>
+            </BalinaModalClose>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              leftIcon={<Check className="h-3.5 w-3.5" />}
+              onClick={handleConfirmSubmit}
+              disabled={isSubmitting}
+            >
+              Onayla ve Yükle
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[480px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Mağazalara gönderilecek</Modal.Heading>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Aşağıdaki mağazalara ürün pushlanacak. Onaylıyor musun?
-                </p>
-              </Modal.Header>
-              <Modal.Body className="px-3 pb-3">
-                <div className="flex flex-col gap-1.5">
-                  {selectedStores.map((s) => (
-                    <div
-                      key={s.id}
-                      className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <StoreIcon name={s.name} platform={s.platform} />
-                        <span className="text-sm font-medium">{s.name}</span>
-                      </div>
-                      <span className="text-sm tabular-nums text-foreground">
-                        ₺{s.price.toLocaleString('tr-TR')}
-                      </span>
-                    </div>
-                  ))}
-                  {selectedStores.length === 0 && activeStores.length === 0 && (
-                    <p className="text-xs text-zinc-500">Aktif mağaza yok.</p>
-                  )}
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isSubmitting}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={handleConfirmSubmit}
-                  isPending={isSubmitting}
-                  isDisabled={isSubmitting}
-                >
-                  <Check className="h-3.5 w-3.5" />
-                  Onayla ve Yükle
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <div className="flex flex-col gap-1.5">
+          {selectedStores.map((s) => (
+            <div
+              key={s.id}
+              className="flex items-center justify-between gap-3 rounded-lg bg-foreground/[0.03] px-3 py-2"
+            >
+              <div className="flex items-center gap-2">
+                <StoreIcon name={s.name} platform={s.platform} />
+                <span className="text-sm font-medium">{s.name}</span>
+              </div>
+              <span className="text-sm tabular-nums text-foreground">
+                ₺{s.price.toLocaleString('tr-TR')}
+              </span>
+            </div>
+          ))}
+          {selectedStores.length === 0 && activeStores.length === 0 && (
+            <p className="text-xs text-zinc-500">Aktif mağaza yok.</p>
+          )}
+        </div>
+      </BalinaModal>
 
       {currentCompany && (
         <ProductAiImageModal

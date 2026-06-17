@@ -10,7 +10,7 @@ import {
   Plus,
   TrashBin,
 } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton, BalinaInput } from '@/components/balina';
 import {
   BLOCK_LABELS,
   makeDefaultBlock,
@@ -58,7 +58,7 @@ export function EmailLeftRail({
   ];
 
   return (
-    <aside className="hidden w-[280px] shrink-0 flex-col border-r border-foreground/[0.06] md:flex">
+    <div className="flex h-full w-full flex-col">
       {/* Vertical icon+label list (Typeform tarzı) */}
       <nav className="flex shrink-0 flex-col gap-0.5 border-b border-foreground/[0.06] p-2">
         {tabs.map((t) => {
@@ -110,7 +110,7 @@ export function EmailLeftRail({
           {footer}
         </div>
       )}
-    </aside>
+    </div>
   );
 }
 
@@ -142,16 +142,13 @@ function LayoutTab({
   return (
     <div className="flex flex-col gap-3">
       {/* Search */}
-      <div className="flex items-center gap-2 rounded-xl bg-foreground/[0.04] px-3 py-2">
-        <Magnifier className="h-3.5 w-3.5 text-muted" />
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Blok ara"
-          className="w-full border-0 bg-transparent p-0 text-xs text-foreground outline-none placeholder:text-muted"
-        />
-      </div>
+      <BalinaInput
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Blok ara"
+        leftIcon={<Magnifier className="h-3.5 w-3.5" />}
+      />
 
       {LIBRARY_GROUPS.map((group) => (
         <LibrarySection
@@ -345,39 +342,30 @@ function LayersTab({
               </span>
             </button>
             <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-              <Button
-                variant="tertiary"
-                size="sm"
-                isIconOnly
-                onPress={() => move(b.id, -1)}
-                isDisabled={disabled}
+              <BalinaButton
+                variant="ghost"
+                size="small"
+                onClick={() => move(b.id, -1)}
+                disabled={disabled}
                 aria-label="Yukarı"
-                className="h-6 w-6 rounded-md"
-              >
-                <ArrowUpSm />
-              </Button>
-              <Button
-                variant="tertiary"
-                size="sm"
-                isIconOnly
-                onPress={() => move(b.id, 1)}
-                isDisabled={disabled}
+                leftIcon={<ArrowUpSm />}
+              />
+              <BalinaButton
+                variant="ghost"
+                size="small"
+                onClick={() => move(b.id, 1)}
+                disabled={disabled}
                 aria-label="Aşağı"
-                className="h-6 w-6 rounded-md"
-              >
-                <ArrowDownSm />
-              </Button>
-              <Button
-                variant="tertiary"
-                size="sm"
-                isIconOnly
-                onPress={() => remove(b.id)}
-                isDisabled={disabled}
+                leftIcon={<ArrowDownSm />}
+              />
+              <BalinaButton
+                variant="danger"
+                size="small"
+                onClick={() => remove(b.id)}
+                disabled={disabled}
                 aria-label="Sil"
-                className="h-6 w-6 rounded-md text-danger"
-              >
-                <TrashBin className="h-3 w-3" />
-              </Button>
+                leftIcon={<TrashBin className="h-3 w-3" />}
+              />
             </div>
           </div>
         );

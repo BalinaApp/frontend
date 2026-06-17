@@ -19,20 +19,21 @@ import {
   Percent,
   CopyCheck,
   Calendar,
+  Box,
 } from '@gravity-ui/icons';
 import {
-  AlertDialog,
-  Button,
-  Checkbox,
-  Dropdown,
-  FieldError,
-  Input,
-  Label,
-  Modal,
-  TextField,
-  Tooltip as UITooltip,
+  BalinaButton,
+  BalinaCheckbox,
+  BalinaConfirmDialog,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaModal,
+  BalinaModalClose,
+  BalinaPopover,
+  BalinaTextField,
+  BalinaTooltip,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
@@ -477,154 +478,106 @@ export default function InventoryPage() {
 
   return (
     <>
-      {/* Bulk product silme onayı — native window.confirm yerine AlertDialog. */}
-      <AlertDialog
-        isOpen={bulkDeleteOpen}
+      {/* Bulk product silme onayı — native window.confirm yerine onay dialog. */}
+      <BalinaConfirmDialog
+        open={bulkDeleteOpen}
         onOpenChange={(open) => {
           if (!isBulkDeleting && !open) setBulkDeleteOpen(false);
         }}
+        title="Ürünleri sil"
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        loading={isBulkDeleting}
+        onConfirm={handleConfirmBulkDelete}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Ürünleri sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                <p>
-                  Seçili <strong>{selected.size}</strong> ürün kalıcı olarak
-                  silinecek. Bu işlem geri alınamaz.
-                </p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close" isDisabled={isBulkDeleting}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleConfirmBulkDelete}
-                  isPending={isBulkDeleting}
-                  isDisabled={isBulkDeleting}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p>
+          Seçili <strong>{selected.size}</strong> ürün kalıcı olarak silinecek.
+          Bu işlem geri alınamaz.
+        </p>
+      </BalinaConfirmDialog>
 
-      {/* Saved filter silme onayı — native window.confirm yerine HeroUI v3
-          AlertDialog. Tüm destructive aksiyonlarda bu pattern kullanılır. */}
-      <AlertDialog
-        isOpen={deleteSavedId !== null}
+      {/* Saved filter silme onayı — native window.confirm yerine onay dialog.
+          Tüm destructive aksiyonlarda bu pattern kullanılır. */}
+      <BalinaConfirmDialog
+        open={deleteSavedId !== null}
         onOpenChange={(open) => {
           if (!isDeletingSaved && !open) setDeleteSavedId(null);
         }}
+        title="Filtre setini sil"
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        loading={isDeletingSaved}
+        onConfirm={handleConfirmDeleteSaved}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                <p>
-                  <strong>{deleteSavedName}</strong> filtre seti kalıcı olarak
-                  silinecek. Bu işlem geri alınamaz.
-                </p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close" isDisabled={isDeletingSaved}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleConfirmDeleteSaved}
-                  isPending={isDeletingSaved}
-                  isDisabled={isDeletingSaved}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p>
+          <strong>{deleteSavedName}</strong> filtre seti kalıcı olarak
+          silinecek. Bu işlem geri alınamaz.
+        </p>
+      </BalinaConfirmDialog>
 
       {/* Rename modal — saved tab "Düzenle" aksiyonu açar */}
-      <Modal
-        isOpen={renameId !== null}
+      <BalinaModal
+        open={renameId !== null}
         onOpenChange={(open) => {
           if (!isRenaming && !open) setRenameId(null);
         }}
+        title="Filtre setini yeniden adlandır"
+        footer={
+          <>
+            <BalinaModalClose asChild>
+              <BalinaButton variant="soft" size="large" disabled={isRenaming}>
+                Vazgeç
+              </BalinaButton>
+            </BalinaModalClose>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={submitRename}
+              disabled={isRenaming}
+            >
+              Kaydet
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Filtre setini yeniden adlandır</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <TextField
-                  value={renameValue}
-                  onChange={(v) => {
-                    setRenameValue(v);
-                    if (renameErr) setRenameErr(null);
-                  }}
-                  isInvalid={!!renameErr}
-                  autoFocus
-                >
-                  <Label>İsim</Label>
-                  <Input
-                    placeholder="Filtre seti adı"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        submitRename();
-                      }
-                    }}
-                  />
-                  {renameErr && <FieldError>{renameErr}</FieldError>}
-                </TextField>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isRenaming}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={submitRename}
-                  isPending={isRenaming}
-                  isDisabled={isRenaming}
-                >
-                  Kaydet
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <BalinaTextField
+          label="İsim"
+          value={renameValue}
+          onChange={(v) => {
+            setRenameValue(v);
+            if (renameErr) setRenameErr(null);
+          }}
+          error={renameErr ?? undefined}
+          placeholder="Filtre seti adı"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submitRename();
+            }
+          }}
+        />
+      </BalinaModal>
 
       <PageHeader
         title="Ürünler"
+        icon={<Box className="h-4 w-4" />}
         action={
           !isStockist ? (
             // Yeni ürün ekleme şimdilik deaktif — backend hazır olduğunda
             // tekrar aktif edilecek. Link'i kaldırdık, disabled görünüm.
-            <Button
-              variant="primary"
-              size="sm"
-              isDisabled
-              className="h-8 rounded-full px-3 text-xs"
+            <BalinaButton
+              variant="soft"
+              size="small"
+              disabled
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+              className="h-8 px-3 text-xs"
               aria-label="Yeni ürün ekleme şimdilik deaktif"
             >
-              <Plus className="h-3.5 w-3.5" />
               Yeni ürün
-            </Button>
+            </BalinaButton>
           ) : null
         }
       />
@@ -807,10 +760,11 @@ export default function InventoryPage() {
                       <div
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
+                        aria-label={`${product.name} seç`}
                       >
-                        <Checkbox
-                          isSelected={isChecked}
-                          onChange={(next) => {
+                        <BalinaCheckbox
+                          checked={isChecked}
+                          onCheckedChange={(next) => {
                             setSelected((prev) => {
                               const updated = new Set(prev);
                               if (next) updated.add(product.id);
@@ -818,12 +772,7 @@ export default function InventoryPage() {
                               return updated;
                             });
                           }}
-                          aria-label={`${product.name} seç`}
-                        >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                        </Checkbox>
+                        />
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
@@ -1068,57 +1017,37 @@ function SavedTab({
         {name}
       </button>
       {isActive && (
-        <Dropdown>
-          <Dropdown.Trigger
-            aria-label="Filtre seti aksiyonları"
-            className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-muted transition-colors hover:bg-foreground/[0.10] hover:text-foreground"
-          >
-            <ChevronDown className="h-3.5 w-3.5" />
-          </Dropdown.Trigger>
-          <Dropdown.Popover
-            className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-            style={{
-              border: '1px solid var(--border)',
-              boxShadow:
-                '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-            }}
-          >
-            <Dropdown.Menu
+        <BalinaDropdown
+          trigger={
+            <button
+              type="button"
               aria-label="Filtre seti aksiyonları"
-              onAction={(key) => {
-                if (key === 'rename') onRename();
-                else if (key === 'duplicate') onDuplicate();
-                else if (key === 'delete') onDelete();
-              }}
-              className="flex flex-col gap-0 py-1 outline-none"
+              className="mr-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-foreground/[0.06] text-muted transition-colors hover:bg-foreground/[0.10] hover:text-foreground"
             >
-              <Dropdown.Item
-                id="rename"
-                textValue="Düzenle"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-              >
-                <Pencil className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="flex-1">Düzenle</span>
-              </Dropdown.Item>
-              <Dropdown.Item
-                id="duplicate"
-                textValue="Kopyala"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-              >
-                <Copy className="h-3.5 w-3.5 shrink-0 text-muted" />
-                <span className="flex-1">Kopyala</span>
-              </Dropdown.Item>
-              <Dropdown.Item
-                id="delete"
-                textValue="Sil"
-                className="flex h-8 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-danger outline-none transition-colors data-[hovered=true]:bg-danger/10 data-[focused=true]:bg-danger/10"
-              >
-                <TrashBin className="h-3.5 w-3.5 shrink-0" />
-                <span className="flex-1">Sil</span>
-              </Dropdown.Item>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          }
+        >
+          <BalinaDropdownItem
+            icon={<Pencil className="h-3.5 w-3.5" />}
+            onSelect={onRename}
+          >
+            Düzenle
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<Copy className="h-3.5 w-3.5" />}
+            onSelect={onDuplicate}
+          >
+            Kopyala
+          </BalinaDropdownItem>
+          <BalinaDropdownItem
+            icon={<TrashBin className="h-3.5 w-3.5" />}
+            danger
+            onSelect={onDelete}
+          >
+            Sil
+          </BalinaDropdownItem>
+        </BalinaDropdown>
       )}
     </div>
   );
@@ -1190,68 +1119,63 @@ function AddPricePopover({
   const hasValue = value != null;
 
   return (
-    <Dropdown
-      isOpen={isOpen}
+    <BalinaPopover
+      open={isOpen}
       onOpenChange={(open) => {
         setIsOpen(open);
         // Açılırken mevcut değerle pre-fill; kapanırken temizle.
         if (open) setRaw(hasValue ? formatPrice(value as number) : '');
         else setRaw('');
       }}
+      className="w-[180px] p-0"
+      trigger={
+        <button
+          type="button"
+          aria-label={hasValue ? 'Alış fiyatını düzenle' : 'Alış fiyatı ekle'}
+          className={[
+            'inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 transition-colors',
+            hasValue
+              ? 'text-foreground hover:bg-foreground/[0.06]'
+              : 'text-muted hover:bg-foreground/[0.06] hover:text-foreground',
+          ].join(' ')}
+        >
+          {hasValue ? (
+            `₺${formatPrice(value as number)}`
+          ) : (
+            <>
+              <CircleDashed className="h-3 w-3" />
+              Eklenmedi
+            </>
+          )}
+        </button>
+      }
     >
-      <Dropdown.Trigger
-        aria-label={hasValue ? 'Alış fiyatını düzenle' : 'Alış fiyatı ekle'}
-        className={[
-          'inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 transition-colors',
-          hasValue
-            ? 'text-foreground hover:bg-foreground/[0.06]'
-            : 'text-muted hover:bg-foreground/[0.06] hover:text-foreground',
-        ].join(' ')}
-      >
-        {hasValue ? (
-          `₺${formatPrice(value as number)}`
-        ) : (
-          <>
-            <CircleDashed className="h-3 w-3" />
-            Eklenmedi
-          </>
-        )}
-      </Dropdown.Trigger>
-      <Dropdown.Popover
-        className="w-[180px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-        style={{
-          border: '1px solid var(--border)',
-          boxShadow:
-            '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-        }}
-      >
-        <div className="flex h-9 items-center px-3">
-          <span className="mr-1 text-[13px] text-muted">₺</span>
-          {/* type="text" — number spinner ok'larını kullanıcı görmemeli.
-              Kullanıcı 1234,56 / 1.234,56 / 1234.56 gibi yazabilir; submit'te
-              parse edilir. */}
-          <input
-            type="text"
-            inputMode="decimal"
-            value={raw}
-            onChange={(e) => setRaw(liveFormatPrice(e.target.value))}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                submit();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                setIsOpen(false);
-              }
-            }}
-            placeholder="0,00"
-            aria-label="Alış fiyatı"
-            autoFocus
-            className="h-9 w-full border-0 bg-transparent p-0 text-[13px] font-normal text-foreground outline-none ring-0 placeholder:text-muted focus:outline-none focus:ring-0"
-          />
-        </div>
-      </Dropdown.Popover>
-    </Dropdown>
+      <div className="flex h-9 items-center px-3">
+        <span className="mr-1 text-[13px] text-muted">₺</span>
+        {/* type="text" — number spinner ok'larını kullanıcı görmemeli.
+            Kullanıcı 1234,56 / 1.234,56 / 1234.56 gibi yazabilir; submit'te
+            parse edilir. */}
+        <input
+          type="text"
+          inputMode="decimal"
+          value={raw}
+          onChange={(e) => setRaw(liveFormatPrice(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              submit();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setIsOpen(false);
+            }
+          }}
+          placeholder="0,00"
+          aria-label="Alış fiyatı"
+          autoFocus
+          className="h-9 w-full border-0 bg-transparent p-0 text-[13px] font-normal text-foreground outline-none ring-0 placeholder:text-muted focus:outline-none focus:ring-0"
+        />
+      </div>
+    </BalinaPopover>
   );
 }
 
@@ -1322,55 +1246,37 @@ function StatusPopover({
     );
   }
   return (
-    <Dropdown>
-      <Dropdown.Trigger
-        aria-label="Durum değiştir"
-        className="inline-flex rounded-xl outline-none transition-colors hover:bg-foreground/[0.06]"
-      >
-        {isActive ? (
-          <StatusChip variant="check">Aktif</StatusChip>
-        ) : (
-          <StatusChip variant="xmark">Pasif</StatusChip>
-        )}
-      </Dropdown.Trigger>
-      <Dropdown.Popover
-        className="w-[140px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-        style={{
-          border: '1px solid var(--border)',
-          boxShadow:
-            '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-        }}
-      >
-        <Dropdown.Menu
-          aria-label="Durum"
-          onAction={(key) => onSelect(key === 'active')}
-          className="flex flex-col gap-0 py-1 outline-none"
+    <BalinaDropdown
+      align="start"
+      trigger={
+        <button
+          type="button"
+          aria-label="Durum değiştir"
+          className="inline-flex rounded-xl outline-none transition-colors hover:bg-foreground/[0.06]"
         >
-          <Dropdown.Item
-            id="active"
-            textValue="Aktif"
-            className={MENU_ITEM_CLASS}
-          >
-            <Check className="h-4 w-4 shrink-0 text-success" />
-            <span className="flex-1 truncate">Aktif</span>
-          </Dropdown.Item>
-          <Dropdown.Item
-            id="inactive"
-            textValue="Pasif"
-            className={MENU_ITEM_CLASS}
-          >
-            <CircleXmark className="h-4 w-4 shrink-0 text-muted" />
-            <span className="flex-1 truncate">Pasif</span>
-          </Dropdown.Item>
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+          {isActive ? (
+            <StatusChip variant="check">Aktif</StatusChip>
+          ) : (
+            <StatusChip variant="xmark">Pasif</StatusChip>
+          )}
+        </button>
+      }
+    >
+      <BalinaDropdownItem
+        icon={<Check className="h-4 w-4 text-success" />}
+        onSelect={() => onSelect(true)}
+      >
+        Aktif
+      </BalinaDropdownItem>
+      <BalinaDropdownItem
+        icon={<CircleXmark className="h-4 w-4 text-muted" />}
+        onSelect={() => onSelect(false)}
+      >
+        Pasif
+      </BalinaDropdownItem>
+    </BalinaDropdown>
   );
 }
-
-// MENU_ITEM_CLASS — filter-popover ile birebir aynı görünüm.
-const MENU_ITEM_CLASS =
-  'flex h-8 cursor-pointer items-center gap-2 px-[14px] text-left text-[13px] font-medium leading-[1.193] text-foreground outline-none transition-colors data-[hovered=true]:bg-foreground/[0.04] data-[focused=true]:bg-foreground/[0.04]';
 
 // ---- Integration favicons cell -------------------------------------------
 
@@ -1387,7 +1293,7 @@ function IntegrationFavicons({
       {stores.map((s) => {
         const src = storeFaviconUrl(s.url);
         return (
-          <UITooltip key={s.id} delay={0}>
+          <BalinaTooltip key={s.id} delay={0} content={s.name}>
             <span
               className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface"
               style={{ boxShadow: '0 0 0 2px rgb(245 245 245)' }}
@@ -1411,8 +1317,7 @@ function IntegrationFavicons({
                 </span>
               )}
             </span>
-            <UITooltip.Content>{s.name}</UITooltip.Content>
-          </UITooltip>
+          </BalinaTooltip>
         );
       })}
     </div>
@@ -1494,25 +1399,28 @@ function PriceChip({
   if (!hasMultiple) return chip;
 
   return (
-    <UITooltip delay={0}>
-      {chip}
-      <UITooltip.Content className="rounded-lg border border-border bg-surface px-3 py-2 shadow-md">
+    <BalinaTooltip
+      delay={0}
+      size="large"
+      content={
         <div className="flex flex-col gap-1.5 text-xs">
-          <span className="font-medium text-muted">Pazaryeri Fiyatları</span>
+          <span className="font-medium opacity-70">Pazaryeri Fiyatları</span>
           {marketplacePrices!.map((mp) => (
             <div
               key={mp.storeId}
               className="flex items-center justify-between gap-4"
             >
-              <span className="text-foreground">{mp.storeName}</span>
-              <span className="font-medium text-foreground">
+              <span>{mp.storeName}</span>
+              <span className="font-medium">
                 ₺{mp.price.toLocaleString('tr-TR')}
               </span>
             </div>
           ))}
         </div>
-      </UITooltip.Content>
-    </UITooltip>
+      }
+    >
+      {chip}
+    </BalinaTooltip>
   );
 }
 

@@ -2,10 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useSidebarPanel } from '@/components/providers/SidebarPanel';
+import { useSidePanel } from '@/components/providers/SidePanel';
 import {
   Calendar,
   Check,
-  ChevronLeft,
   Clock,
   Eye,
   PaperPlane,
@@ -13,18 +14,21 @@ import {
   Tag,
   TrashBin,
 } from '@gravity-ui/icons';
-import {
-  AlertDialog,
-  Button,
-  Input,
-  Label,
-  Modal,
-  TextArea,
-  TextField,
-  toast,
-} from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
+import {
+  BalinaButton,
+  BalinaChip,
+  BalinaConfirmDialog,
+  BalinaDatePicker,
+  BalinaInput,
+  BalinaMailIcon,
+  BalinaModal,
+  BalinaSegmentedControl,
+  BalinaTextarea,
+  BalinaTextField,
+  toast,
+} from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -47,9 +51,6 @@ import {
   EmailRightRail,
   StylePanel,
 } from '@/components/marketing/email-right-rail';
-
-const FIELD_CLASS =
-  'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
 
 /** Section card — products/new pattern'i ile aynı. */
 function Section({
@@ -81,17 +82,16 @@ function BalinaAiButton({
   className?: string;
 }) {
   return (
-    <Button
-      variant="tertiary"
-      size="sm"
-      onPress={onPress}
-      isPending={isPending}
-      isDisabled={isDisabled}
+    <BalinaButton
+      variant="soft"
+      size="small"
+      onClick={onPress}
+      disabled={isPending || isDisabled}
+      leftIcon={<BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />}
       className={`chroma-border h-9 cursor-pointer rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
     >
-      <BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />
       {label}
-    </Button>
+    </BalinaButton>
   );
 }
 
@@ -99,22 +99,41 @@ function DateRow({
   value,
   onChange,
   disabled,
-  placeholder,
 }: {
   value: string;
   onChange: (v: string) => void;
   disabled?: boolean;
   placeholder?: string;
 }) {
+  // value: datetime-local biçimi 'yyyy-MM-ddTHH:mm'. Tarih → balina takvim,
+  // saat → balina input. Tarih seçilmeden saat girilemez.
+  const [datePart, timePart] = value
+    ? [value.split('T')[0], value.split('T')[1] ?? '']
+    : ['', ''];
+  const setDate = (d: string) =>
+    onChange(d ? `${d}T${timePart || '09:00'}` : '');
+  const setTime = (t: string) => {
+    if (!datePart) return;
+    onChange(`${datePart}T${t}`);
+  };
   return (
-    <input
-      type="datetime-local"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      placeholder={placeholder}
-      className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors placeholder:text-zinc-500 hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
-    />
+    <div className="flex items-center gap-2">
+      <div className="min-w-0 flex-1">
+        <BalinaDatePicker
+          value={datePart}
+          onChange={setDate}
+          disabled={disabled}
+          disabledDates={{ before: new Date() }}
+        />
+      </div>
+      <BalinaInput
+        type="time"
+        value={timePart}
+        onChange={(e) => setTime(e.target.value)}
+        disabled={disabled || !datePart}
+        wrapperClassName="w-[120px] shrink-0"
+      />
+    </div>
   );
 }
 
@@ -468,221 +487,12 @@ export default function CampaignEditorPage() {
     );
   };
 
-  if (loading) {
-    return (
-      <>
-        <PageHeader title="Yükleniyor…" />
-        <div className="p-6 text-sm text-muted">Kampanya yükleniyor…</div>
-      </>
-    );
-  }
-  if (!campaign) {
-    return (
-      <>
-        <PageHeader title="Kampanya bulunamadı" />
-        <div className="p-6 text-sm text-muted">Kampanya bulunamadı.</div>
-      </>
-    );
-  }
+  // Sol blok paleti → ana sidebar'da kayan panel; sağ inspector → AI drawer.
+  // Her ikisi de canlı node olarak push edilir (kapanışlar güncel state'i yakalar).
+  const { setSidebarPanel } = useSidebarPanel();
+  const { setSidePanel } = useSidePanel();
 
-  return (
-    <>
-      {/* Kampanya silme onayı */}
-      <AlertDialog
-        isOpen={deleteOpen}
-        onOpenChange={(open) => {
-          if (!isDeleting && !open) setDeleteOpen(false);
-        }}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Kampanyayı sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                Bu kampanya kalıcı olarak silinecek. Geri alınamaz.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close" isDisabled={isDeleting}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleConfirmDelete}
-                  isPending={isDeleting}
-                  isDisabled={isDeleting}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
-
-      {/* Test gönder modal */}
-      <Modal
-        isOpen={testSendOpen}
-        onOpenChange={(o) => {
-          if (!isTestSending && !o) setTestSendOpen(false);
-        }}
-      >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Test gönder</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="px-4">
-                <TextField
-                  value={testEmail}
-                  onChange={setTestEmail}
-                  isRequired
-                  autoFocus
-                >
-                  <Label>Test e-posta adresi</Label>
-                  <Input
-                    placeholder="ornek@adres.com"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleTestSend();
-                      }
-                    }}
-                  />
-                </TextField>
-                <p className="mt-2 text-xs text-muted">
-                  Yalnızca bu adrese gönderilir, audience etkilenmez.
-                </p>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={isTestSending}
-                >
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={handleTestSend}
-                  isPending={isTestSending}
-                  isDisabled={isTestSending || !testEmail.trim()}
-                >
-                  Gönder
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      {/* Preview modal — backend'in render ettiği gerçek HTML */}
-      <Modal
-        isOpen={previewHtml !== null}
-        onOpenChange={(o) => !o && setPreviewHtml(null)}
-      >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[760px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Mail önizleme</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="px-2 pb-2">
-                <div className="mb-2 flex items-center justify-center gap-1">
-                  {(['desktop', 'mobile'] as const).map((d) => (
-                    <button
-                      key={d}
-                      type="button"
-                      onClick={() => setPreviewDevice(d)}
-                      className={[
-                        'inline-flex h-7 items-center justify-center rounded-full px-3 text-[11px] font-medium transition-colors',
-                        previewDevice === d
-                          ? 'bg-foreground/[0.10] text-foreground'
-                          : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
-                      ].join(' ')}
-                    >
-                      {d === 'desktop' ? 'Masaüstü' : 'Mobil'}
-                    </button>
-                  ))}
-                </div>
-                {previewHtml && (
-                  <div className="flex justify-center bg-foreground/[0.03] py-3">
-                    <iframe
-                      title="Mail önizleme"
-                      srcDoc={previewHtml}
-                      style={{
-                        width:
-                          previewDevice === 'mobile' ? '375px' : '680px',
-                        height: '600px',
-                      }}
-                      className="rounded-lg border-0 transition-[width] duration-200"
-                    />
-                  </div>
-                )}
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close">
-                  Kapat
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      {/* === PageHeader === */}
-      <PageHeader
-        title={name.trim() || 'İsimsiz Kampanya'}
-        leading={
-          <Button
-            variant="tertiary"
-            size="sm"
-            isIconOnly
-            aria-label="Geri"
-            onPress={() => router.push(`/${slug}/marketing/campaigns`)}
-            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        }
-        action={
-          <div className="flex items-center gap-2">
-            {(campaign.status === 'draft' ||
-              campaign.status === 'cancelled' ||
-              campaign.status === 'failed') && (
-              <Button
-                variant="danger"
-                size="sm"
-                isIconOnly
-                onPress={handleDelete}
-                aria-label="Kampanyayı sil"
-                className="h-8 w-8 rounded-full"
-              >
-                <TrashBin className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <Button
-              variant="tertiary"
-              size="sm"
-              onPress={() => handleSave()}
-              isPending={isSaving}
-              isDisabled={isSaving || isReadOnly}
-              className="h-8 rounded-full bg-foreground/[0.04] px-3 text-xs"
-            >
-              <Check className="h-3.5 w-3.5" />
-              Kaydet
-            </Button>
-          </div>
-        }
-      />
-
-      {/* === 3-col workbench === */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+  const leftPanelNode = campaign ? (
         <EmailLeftRail
           blocks={blocks}
           selectedId={selectedBlockId}
@@ -691,48 +501,33 @@ export default function CampaignEditorPage() {
           disabled={isReadOnly}
           footer={
             <div className="flex flex-col gap-1.5">
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={() => setTestSendOpen(true)}
-                isDisabled={
+              <BalinaButton
+                variant="soft"
+                size="small"
+                fullWidth
+                onClick={() => setTestSendOpen(true)}
+                disabled={
                   isReadOnly || !subject.trim() || blocks.length === 0
                 }
-                className="w-full justify-start rounded-lg bg-foreground/[0.04] px-3 text-xs"
+                leftIcon={<PaperPlane className="h-3.5 w-3.5" />}
               >
-                <PaperPlane className="h-3.5 w-3.5" />
                 Test gönder
-              </Button>
-              <Button
-                variant="tertiary"
-                size="sm"
-                onPress={handlePreview}
-                isDisabled={isReadOnly || blocks.length === 0}
-                className="w-full justify-start rounded-lg bg-foreground/[0.04] px-3 text-xs"
+              </BalinaButton>
+              <BalinaButton
+                variant="soft"
+                size="small"
+                fullWidth
+                onClick={handlePreview}
+                disabled={isReadOnly || blocks.length === 0}
+                leftIcon={<Eye className="h-3.5 w-3.5" />}
               >
-                <Eye className="h-3.5 w-3.5" />
                 Tam önizle
-              </Button>
+              </BalinaButton>
             </div>
           }
         />
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <EmailCanvas
-            blocks={blocks}
-            onChange={setBlocks}
-            selectedId={selectedBlockId}
-            onSelect={handleSelectBlock}
-            subject={subject}
-            device={device}
-            brandName={currentCompany?.name ?? 'balinaOS'}
-            disabled={isReadOnly}
-            topSlot={<DeviceToggle value={device} onChange={setDevice} />}
-            onGenerateBlockText={handleGenerateBlockText}
-            onGenerateImage={handleGenerateImage}
-          />
-        </div>
-
+  ) : null;
+  const rightPanelNode = campaign ? (
         <EmailRightRail
           tab={rightTab}
           onTabChange={setRightTab}
@@ -750,47 +545,29 @@ export default function CampaignEditorPage() {
         <Section>
           <h3 className="mb-2 text-sm font-medium text-foreground">Detaylar</h3>
           <div className="flex flex-col gap-2">
-            <TextField
+            <BalinaTextField
               value={name}
               onChange={setName}
               aria-label="Kampanya başlığı"
-              isDisabled={isReadOnly}
-            >
-              <Input
-                fullWidth
-                variant="secondary"
-                placeholder="Kampanya başlığı (iç)"
-                className="bg-transparent text-sm font-medium placeholder:text-zinc-500"
-              />
-            </TextField>
-            <TextField
+              disabled={isReadOnly}
+              placeholder="Kampanya başlığı (iç)"
+            />
+            <BalinaTextField
               value={subject}
               onChange={setSubject}
               aria-label="Mail konusu"
-              isDisabled={isReadOnly}
-            >
-              <Input
-                fullWidth
-                variant="secondary"
-                placeholder="Mail konusu"
-                className={FIELD_CLASS}
-              />
-            </TextField>
+              disabled={isReadOnly}
+              placeholder="Mail konusu"
+            />
             <div className="relative">
-              <TextField
+              <BalinaTextarea
                 value={aiPrompt}
-                onChange={setAiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
                 aria-label="AI içerik brief'i"
-                isDisabled={isReadOnly}
-              >
-                <TextArea
-                  fullWidth
-                  variant="secondary"
-                  placeholder='AI brief — "Bahar indirimi, %20 elbiseler, 3 gün, samimi"'
-                  rows={3}
-                  className="min-h-[80px] resize-none bg-transparent placeholder:text-zinc-500"
-                />
-              </TextField>
+                disabled={isReadOnly}
+                placeholder='AI brief — "Bahar indirimi, %20 elbiseler, 3 gün, samimi"'
+                rows={3}
+              />
               <div className="pointer-events-none absolute bottom-2 right-2 z-10">
                 <div className="pointer-events-auto">
                   <BalinaAiButton
@@ -807,19 +584,14 @@ export default function CampaignEditorPage() {
                 <Pencil className="h-3.5 w-3.5" />
                 Ton
               </div>
-              <TextField
+              <BalinaTextField
                 value={aiTone}
                 onChange={setAiTone}
-                isDisabled={isReadOnly}
+                disabled={isReadOnly}
                 aria-label="Ton"
-              >
-                <Input
-                  fullWidth
-                  variant="secondary"
-                  placeholder="samimi, espirili, resmi"
-                  className={FIELD_CLASS}
-                />
-              </TextField>
+                placeholder="samimi, espirili, resmi"
+                containerClassName="flex-1"
+              />
             </div>
           </div>
         </Section>
@@ -828,9 +600,9 @@ export default function CampaignEditorPage() {
         <Section>
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-medium text-foreground">Hedef kitle</h3>
-            <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-xs font-medium text-foreground">
+            <BalinaChip variant="neutral" size="sm">
               {audience?.count ?? '—'} kişi
-            </span>
+            </BalinaChip>
           </div>
           <div className="flex flex-col gap-2.5">
             <div className="flex flex-col gap-1">
@@ -875,31 +647,23 @@ export default function CampaignEditorPage() {
                 <Tag className="h-3.5 w-3.5" />
                 Tag&apos;ler
               </span>
-              <TextField
+              <BalinaTextField
                 value={audienceTagsRaw}
                 onChange={setAudienceTagsRaw}
-                isDisabled={isReadOnly}
+                disabled={isReadOnly}
                 aria-label="Tag'ler"
-              >
-                <Input
-                  fullWidth
-                  variant="secondary"
-                  placeholder="vip, mart-2026 (virgülle)"
-                  className={FIELD_CLASS}
-                />
-              </TextField>
+                placeholder="vip, mart-2026 (virgülle)"
+              />
             </div>
             <div className="flex flex-col gap-1">
               <span className="flex items-center gap-1.5 text-xs text-muted">
                 <Calendar className="h-3.5 w-3.5" />
                 Son sipariş
               </span>
-              <input
-                type="date"
+              <BalinaDatePicker
                 value={audienceLastOrderAfter}
-                onChange={(e) => setAudienceLastOrderAfter(e.target.value)}
+                onChange={setAudienceLastOrderAfter}
                 disabled={isReadOnly}
-                className="h-9 w-full rounded-xl bg-transparent px-3 text-sm text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
               />
             </div>
           </div>
@@ -911,9 +675,9 @@ export default function CampaignEditorPage() {
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-sm font-medium text-foreground">Gönderim</h3>
               {campaign.status !== 'draft' && (
-                <span className="rounded-full bg-foreground/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-foreground">
+                <BalinaChip variant="neutral" size="sm" className="uppercase tracking-wide">
                   {campaign.status}
-                </span>
+                </BalinaChip>
               )}
             </div>
             <div className="flex flex-col gap-2.5">
@@ -929,48 +693,46 @@ export default function CampaignEditorPage() {
                 />
               </div>
               <div className="flex flex-col gap-2 pt-1">
-                <Button
+                <BalinaButton
                   variant="primary"
-                  size="sm"
-                  onPress={handleSendNow}
-                  isPending={isSending}
-                  isDisabled={
+                  size="small"
+                  fullWidth
+                  onClick={handleSendNow}
+                  disabled={
                     isSending ||
                     !subject.trim() ||
                     blocks.length === 0 ||
                     (audience?.count ?? 0) === 0
                   }
-                  className="w-full rounded-full"
+                  leftIcon={<PaperPlane className="h-3.5 w-3.5" />}
                 >
-                  <PaperPlane className="h-3.5 w-3.5" />
                   Hemen gönder
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onPress={handleSchedule}
-                  isPending={isScheduling}
-                  isDisabled={
+                </BalinaButton>
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  fullWidth
+                  onClick={handleSchedule}
+                  disabled={
                     isScheduling ||
                     !scheduleAt ||
                     !subject.trim() ||
                     blocks.length === 0
                   }
-                  className="w-full rounded-full"
+                  leftIcon={<Clock className="h-3.5 w-3.5" />}
                 >
-                  <Clock className="h-3.5 w-3.5" />
                   Planla
-                </Button>
+                </BalinaButton>
                 {(campaign.status === 'scheduled' ||
                   campaign.status === 'sending') && (
-                  <Button
+                  <BalinaButton
                     variant="danger"
-                    size="sm"
-                    onPress={handleCancel}
-                    className="w-full rounded-full"
+                    size="small"
+                    fullWidth
+                    onClick={handleCancel}
                   >
                     İptal et
-                  </Button>
+                  </BalinaButton>
                 )}
               </div>
             </div>
@@ -999,6 +761,207 @@ export default function CampaignEditorPage() {
           </div>
           )}
         </EmailRightRail>
+  ) : null;
+
+  useEffect(() => {
+    setSidebarPanel(leftPanelNode, {
+      backLabel: 'Geri dön',
+      onBack: () => router.push(`/${slug}/marketing/campaigns`),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [campaign, blocks, selectedBlockId, isReadOnly, subject, name]);
+  useEffect(() => () => setSidebarPanel(null), [setSidebarPanel]);
+
+  useEffect(() => {
+    setSidePanel(rightPanelNode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    rightTab, selectedBlock, name, subject, aiPrompt, aiTone, audience,
+    audienceStoreIds, audienceTagsRaw, audienceLastOrderAfter, scheduleAt,
+    isGenerating, isSending, isScheduling, isReadOnly, stores, campaign,
+  ]);
+  useEffect(() => () => setSidePanel(null), [setSidePanel]);
+
+  if (loading) {
+    return (
+      <>
+        <PageHeader title="Yükleniyor…" icon={<BalinaMailIcon className="h-4 w-4" />} />
+        <div className="p-6 text-sm text-muted">Kampanya yükleniyor…</div>
+      </>
+    );
+  }
+  if (!campaign) {
+    return (
+      <>
+        <PageHeader title="Kampanya bulunamadı" icon={<BalinaMailIcon className="h-4 w-4" />} />
+        <div className="p-6 text-sm text-muted">Kampanya bulunamadı.</div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {/* Kampanya silme onayı */}
+      <BalinaConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!isDeleting && !open) setDeleteOpen(false);
+        }}
+        title="Kampanyayı sil"
+        description="Bu kampanya kalıcı olarak silinecek. Geri alınamaz."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleConfirmDelete}
+        danger
+        loading={isDeleting}
+      />
+
+      {/* Test gönder modal */}
+      <BalinaModal
+        open={testSendOpen}
+        onOpenChange={(o) => {
+          if (!isTestSending && !o) setTestSendOpen(false);
+        }}
+        title="Test gönder"
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setTestSendOpen(false)}
+              disabled={isTestSending}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={handleTestSend}
+              disabled={isTestSending || !testEmail.trim()}
+            >
+              Gönder
+            </BalinaButton>
+          </>
+        }
+      >
+        <BalinaTextField
+          label="Test e-posta adresi"
+          value={testEmail}
+          onChange={setTestEmail}
+          autoFocus
+          placeholder="ornek@adres.com"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleTestSend();
+            }
+          }}
+        />
+        <p className="text-xs text-muted">
+          Yalnızca bu adrese gönderilir, audience etkilenmez.
+        </p>
+      </BalinaModal>
+
+      {/* Preview modal — backend'in render ettiği gerçek HTML */}
+      <BalinaModal
+        open={previewHtml !== null}
+        onOpenChange={(o) => !o && setPreviewHtml(null)}
+        className="max-w-[760px]"
+        title="Mail önizleme"
+        footer={
+          <BalinaButton
+            variant="soft"
+            size="large"
+            onClick={() => setPreviewHtml(null)}
+          >
+            Kapat
+          </BalinaButton>
+        }
+      >
+        <div>
+                <div className="mb-2 flex items-center justify-center gap-1">
+                  {(['desktop', 'mobile'] as const).map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setPreviewDevice(d)}
+                      className={[
+                        'inline-flex h-7 items-center justify-center rounded-full px-3 text-[11px] font-medium transition-colors',
+                        previewDevice === d
+                          ? 'bg-foreground/[0.10] text-foreground'
+                          : 'bg-foreground/[0.04] text-muted hover:bg-foreground/[0.06]',
+                      ].join(' ')}
+                    >
+                      {d === 'desktop' ? 'Masaüstü' : 'Mobil'}
+                    </button>
+                  ))}
+                </div>
+                {previewHtml && (
+                  <div className="flex justify-center bg-foreground/[0.03] py-3">
+                    <iframe
+                      title="Mail önizleme"
+                      srcDoc={previewHtml}
+                      style={{
+                        width:
+                          previewDevice === 'mobile' ? '375px' : '680px',
+                        height: '600px',
+                      }}
+                      className="rounded-lg border-0 transition-[width] duration-200"
+                    />
+                  </div>
+                )}
+        </div>
+      </BalinaModal>
+
+      {/* === PageHeader === */}
+      <PageHeader
+        title={name.trim() || 'İsimsiz Kampanya'}
+        icon={<BalinaMailIcon className="h-4 w-4" />}
+        action={
+          <div className="flex items-center gap-2">
+            {(campaign.status === 'draft' ||
+              campaign.status === 'cancelled' ||
+              campaign.status === 'failed') && (
+              <BalinaButton
+                variant="danger"
+                size="small"
+                onClick={handleDelete}
+                aria-label="Kampanyayı sil"
+                leftIcon={<TrashBin className="h-3.5 w-3.5" />}
+              />
+            )}
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={() => handleSave()}
+              disabled={isSaving || isReadOnly}
+              leftIcon={<Check className="h-3.5 w-3.5" />}
+            >
+              Kaydet
+            </BalinaButton>
+          </div>
+        }
+      />
+
+      {/* === 3-col workbench === */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <EmailCanvas
+            blocks={blocks}
+            onChange={setBlocks}
+            selectedId={selectedBlockId}
+            onSelect={handleSelectBlock}
+            subject={subject}
+            device={device}
+            brandName={currentCompany?.name ?? 'balinaOS'}
+            disabled={isReadOnly}
+            topSlot={<DeviceToggle value={device} onChange={setDevice} />}
+            onGenerateBlockText={handleGenerateBlockText}
+            onGenerateImage={handleGenerateImage}
+          />
+        </div>
+
       </div>
     </>
   );
@@ -1023,24 +986,15 @@ function DeviceToggle({
   onChange: (v: 'desktop' | 'tablet' | 'mobile') => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 rounded-md bg-foreground/[0.04] p-0.5">
-      {(['desktop', 'tablet', 'mobile'] as const).map((d) => (
-        <button
-          key={d}
-          type="button"
-          onClick={() => onChange(d)}
-          aria-label={d}
-          className={[
-            'inline-flex h-6 w-7 items-center justify-center rounded text-xs transition-colors',
-            value === d
-              ? 'bg-foreground/[0.10] text-foreground'
-              : 'text-muted hover:bg-foreground/[0.06]',
-          ].join(' ')}
-        >
-          <DeviceIcon kind={d} />
-        </button>
-      ))}
-    </div>
+    <BalinaSegmentedControl
+      value={value}
+      onChange={(v) => onChange(v as 'desktop' | 'tablet' | 'mobile')}
+      segments={[
+        { label: <DeviceIcon kind="desktop" />, value: 'desktop' },
+        { label: <DeviceIcon kind="tablet" />, value: 'tablet' },
+        { label: <DeviceIcon kind="mobile" />, value: 'mobile' },
+      ]}
+    />
   );
 }
 

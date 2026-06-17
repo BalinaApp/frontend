@@ -17,7 +17,12 @@ import {
   Xmark,
 } from '@gravity-ui/icons';
 
-import { Button, Dropdown, Label, toast } from '@/components/ui';
+import {
+  BalinaButton,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  toast,
+} from '@/components/balina';
 import {
   useAiCreatorStore,
   useAiCreatorHistoryStore,
@@ -33,6 +38,7 @@ import {
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
 import { applySkuOverlayToImage } from '@/lib/sku-overlay';
+import { resizeImageToDataUrl } from '@/lib/image-resize';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
 interface Props {
@@ -98,14 +104,6 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   const [composerText, setComposerText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  // Kod-bekleme durumu: image/video üretimi öncesi, ürün kodu yoksa AI önce
-  // kodu sorar. Bir sonraki kullanıcı mesajı bu kuyrukta tutulan görseller +
-  // mode ile üretime gider.
-  const [pendingCodeFor, setPendingCodeFor] = useState<{
-    files: string[];
-    promptText: string;
-    mode: 'image' | 'video';
-  } | null>(null);
   // textarea focus iken chroma sweep durur (kullanıcı odakta yazıyor,
   // çevredeki animasyon dikkat dağıtmasın). Blur olunca tekrar açılır.
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -252,22 +250,10 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     }
     const accepted = list.slice(0, remaining);
     for (const file of accepted) {
-      const url = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.readAsDataURL(file);
-      });
-      addAttachedImage(url);
+      // 2K (en uzun kenar 2048px) kalitede yeniden boyutlandır.
+      const url = await resizeImageToDataUrl(file, 2048, 0.92).catch(() => '');
+      if (url) addAttachedImage(url);
     }
-  };
-
-  /* ---------------- SKU helper ---------------- */
-
-  const computeSku = (): string => {
-    const code = productCode.trim();
-    if (!code) return '';
-    const prefix = imageIntegration?.codePrefix?.trim() ?? '';
-    return prefix ? `${prefix}-${code}` : code;
   };
 
   /* ---------------- Send ---------------- */
@@ -275,40 +261,6 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   const handleSend = async () => {
     if (!currentCompany?.id || isGenerating) return;
     const rawText = composerText.trim();
-
-    // ----- Kod-bekleme akışı: AI önceki turda kod istemişti -----
-    if (pendingCodeFor) {
-      if (!rawText) return;
-      const code = rawText.replace(/^kod\s*[:=]\s*/i, '').trim();
-      if (!code) return;
-      setProductCode(code);
-      appendMessage({ id: '', kind: 'user-text', text: rawText });
-      const { files, promptText, mode: pendingMode } = pendingCodeFor;
-      setPendingCodeFor(null);
-      setComposerText('');
-      setIsGenerating(true);
-      const pendingId = `pending-${Date.now()}`;
-      appendMessage({
-        id: pendingId,
-        kind: 'pending',
-        label:
-          pendingMode === 'image'
-            ? 'AI ile görsel oluşturuluyor…'
-            : 'AI ile video oluşturuluyor (1-3 dk sürebilir)…',
-        mode: pendingMode,
-      });
-      try {
-        if (pendingMode === 'image') {
-          await runImageGeneration(promptText, files, code);
-        } else {
-          await runVideoGeneration(promptText, files);
-        }
-      } finally {
-        removeMessage(pendingId);
-        setIsGenerating(false);
-      }
-      return;
-    }
 
     if (!rawText && attachedImages.length === 0) return;
 
@@ -333,42 +285,6 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     // değişkene image/video bekliyor.
     const resolvedMode: 'image' | 'video' =
       mode === 'image' || mode === 'video' ? mode : 'image';
-
-    // ----- Görsel üretimi öncesi: kod yoksa AI önce kodu sorsun -----
-    // Video tarafında kod/SKU kaldırıldı — sadece görselde kod sorulur.
-    const codeInProductState = productCode.trim();
-    const codeFromText = codeMatch?.[1]?.trim() ?? '';
-    const needsCodePrompt =
-      !codeInProductState &&
-      !codeFromText &&
-      resolvedMode === 'image' &&
-      attachedImages.length >= 1;
-    if (needsCodePrompt) {
-      attachedImages.forEach((url) => {
-        appendMessage({
-          id: '',
-          kind: 'user-image',
-          url,
-          createdAt: Date.now(),
-          name: 'gorsel',
-          ext: extFromUrl(url),
-        });
-      });
-      if (rawText) appendMessage({ id: '', kind: 'user-text', text: rawText });
-      appendMessage({
-        id: '',
-        kind: 'bot-text',
-        text: 'Ürün kodunu yazın — hangi kodu verirseniz o kod görsele işlenecektir.',
-      });
-      setPendingCodeFor({
-        files: [...attachedImages],
-        promptText,
-        mode: resolvedMode,
-      });
-      setComposerText('');
-      clearAttachedImages();
-      return;
-    }
 
     // Mesaj akışına user girdisini ekle.
     if (attachedImages.length > 0) {
@@ -645,12 +561,11 @@ KURALLAR:
         {/* Sağ: Genişlet (desktop-only) + Kapat. Mobile yalnızca close. */}
         {isDrawer && (
           <div className="flex h-7 items-center gap-1">
-            <Button
-              isIconOnly
+            <BalinaButton
               variant="ghost"
-              size="sm"
+              size="small"
               aria-label={isAiDrawerExpanded ? 'Daralt' : 'Genişlet'}
-              onPress={() => toggleAiDrawerExpanded()}
+              onClick={() => toggleAiDrawerExpanded()}
               className="max-sm:hidden"
             >
               {/* Corner brackets — expanded iken içe-doğru (shrink),
@@ -678,17 +593,16 @@ KURALLAR:
                   </>
                 )}
               </svg>
-            </Button>
+            </BalinaButton>
             {onClose && (
-              <Button
-                isIconOnly
+              <BalinaButton
                 variant="ghost"
-                size="sm"
+                size="small"
                 aria-label="Kapat"
-                onPress={onClose}
+                onClick={onClose}
               >
                 <Xmark className="h-4 w-4" />
-              </Button>
+              </BalinaButton>
             )}
           </div>
         )}
@@ -729,30 +643,30 @@ KURALLAR:
           >
             <div className="flex flex-wrap gap-2">
               {mode === 'image' && (
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  onPress={() => {
+                <BalinaButton
+                  size="small"
+                  variant="soft"
+                  onClick={() => {
                     setComposerText('Yeni bir ürün görseli oluştur');
                   }}
-                  className="h-8 gap-1.5 rounded-full text-xs font-medium"
+                  className="h-8 gap-1.5 text-xs font-medium"
+                  leftIcon={<Picture className="h-3.5 w-3.5 text-muted" />}
                 >
-                  <Picture className="h-3.5 w-3.5 text-muted" />
                   Yeni bir ürün görseli oluştur
-                </Button>
+                </BalinaButton>
               )}
               {mode === 'video' && (
-                <Button
-                  size="sm"
-                  variant="tertiary"
-                  onPress={() => {
+                <BalinaButton
+                  size="small"
+                  variant="soft"
+                  onClick={() => {
                     setComposerText('Ürün videosu oluştur');
                   }}
-                  className="h-8 gap-1.5 rounded-full text-xs font-medium"
+                  className="h-8 gap-1.5 text-xs font-medium"
+                  leftIcon={<Play className="h-3.5 w-3.5 text-muted" />}
                 >
-                  <Play className="h-3.5 w-3.5 text-muted" />
                   Ürün videosu oluştur
-                </Button>
+                </BalinaButton>
               )}
             </div>
           </div>
@@ -953,19 +867,18 @@ KURALLAR:
               {/* Paperclip + Tools — text modunda dosya yükleme yok, sadece mode chip. */}
               {mode !== 'text' && (
                 <>
-                  <Button
-                    isIconOnly
+                  <BalinaButton
                     aria-label="Dosya ekle"
-                    onPress={() => fileInputRef.current?.click()}
+                    onClick={() => fileInputRef.current?.click()}
                     variant="ghost"
-                    size="sm"
+                    size="small"
                     className="h-8 w-8 min-w-8 rounded-lg"
                   >
                     <Paperclip
                       className="h-4 w-4"
                       style={{ color: 'var(--balinaos-icon-strong)' }}
                     />
-                  </Button>
+                  </BalinaButton>
                   <ComposerDivider />
                 </>
               )}
@@ -1047,45 +960,47 @@ function ModeDropdown({
   triggerAriaLabel?: string;
 }) {
   return (
-    <Dropdown>
-      <Dropdown.Trigger className={triggerClassName} aria-label={triggerAriaLabel}>
-        <span className="flex items-center gap-1">{triggerContent}</span>
-      </Dropdown.Trigger>
-      <Dropdown.Popover className="min-w-[206px]" placement="top start">
-        <Dropdown.Menu
-          selectionMode="single"
-          selectedKeys={new Set([mode])}
-          onSelectionChange={(keys) => {
-            const next = Array.from(keys as Set<string>)[0];
-            if (next === 'text' || next === 'image' || next === 'video') {
-              onSelect(next);
-            }
-          }}
+    <BalinaDropdown
+      side="top"
+      align="start"
+      trigger={
+        <button
+          type="button"
+          className={triggerClassName}
+          aria-label={triggerAriaLabel}
         >
-          {hasTextIntegration ? (
-            <Dropdown.Item id="text" textValue="Metin">
-              <Dropdown.ItemIndicator />
-              <FileText className="size-4 shrink-0 text-muted" />
-              <Label>Metin (OpenAI)</Label>
-            </Dropdown.Item>
-          ) : null}
-          {hasImageIntegration ? (
-            <Dropdown.Item id="image" textValue="Görsel">
-              <Dropdown.ItemIndicator />
-              <Picture className="size-4 shrink-0 text-muted" />
-              <Label>Görsel (Fal)</Label>
-            </Dropdown.Item>
-          ) : null}
-          {hasVideoIntegration ? (
-            <Dropdown.Item id="video" textValue="Video">
-              <Dropdown.ItemIndicator />
-              <Play className="size-4 shrink-0 text-muted" />
-              <Label>Video (Fal)</Label>
-            </Dropdown.Item>
-          ) : null}
-        </Dropdown.Menu>
-      </Dropdown.Popover>
-    </Dropdown>
+          <span className="flex items-center gap-1">{triggerContent}</span>
+        </button>
+      }
+    >
+      {hasTextIntegration ? (
+        <BalinaDropdownItem
+          icon={<FileText className="size-4 shrink-0 text-muted" />}
+          selected={mode === 'text'}
+          onSelect={() => onSelect('text')}
+        >
+          Metin (OpenAI)
+        </BalinaDropdownItem>
+      ) : null}
+      {hasImageIntegration ? (
+        <BalinaDropdownItem
+          icon={<Picture className="size-4 shrink-0 text-muted" />}
+          selected={mode === 'image'}
+          onSelect={() => onSelect('image')}
+        >
+          Görsel (Fal)
+        </BalinaDropdownItem>
+      ) : null}
+      {hasVideoIntegration ? (
+        <BalinaDropdownItem
+          icon={<Play className="size-4 shrink-0 text-muted" />}
+          selected={mode === 'video'}
+          onSelect={() => onSelect('video')}
+        >
+          Video (Fal)
+        </BalinaDropdownItem>
+      ) : null}
+    </BalinaDropdown>
   );
 }
 
@@ -1123,14 +1038,13 @@ function SendButton({
     ? 'var(--balinaos-neutral-light-100)'
     : 'var(--balinaos-icon-faint)';
   return (
-    <Button
-      isIconOnly
-      size="sm"
+    <BalinaButton
+      size="small"
       variant="primary"
       aria-label="Gönder"
-      onPress={onPress}
-      isDisabled={isDisabled}
-      className={`h-8 w-8 min-w-8 shrink-0 rounded-full ${isActive ? 'chroma-bg' : ''}`}
+      onClick={onPress}
+      disabled={isDisabled}
+      className={`h-8 w-8 min-w-8 shrink-0 ${isActive ? 'chroma-bg' : ''}`}
       style={
         isActive ? undefined : { background: 'var(--balinaos-bg-dark-faint)' }
       }
@@ -1149,7 +1063,7 @@ function SendButton({
       >
         <path d="M3.83 6.67L8 2.5l4.17 4.17M8 13.5V3" />
       </svg>
-    </Button>
+    </BalinaButton>
   );
 }
 
@@ -1235,59 +1149,59 @@ function ModelDropdown({
   ];
 
   return (
-    <Dropdown>
-      <Dropdown.Trigger
-        className="inline-flex h-8 max-w-[160px] items-center overflow-hidden rounded-lg bg-transparent px-3 text-xs font-medium text-foreground/80 transition-colors hover:bg-black/[0.06]"
-        aria-label="Model seç"
-      >
-        <span className="block w-full truncate text-left">
-          {activeMeta?.label ?? 'Model'}
-        </span>
-      </Dropdown.Trigger>
-      <Dropdown.Popover className="w-[260px] rounded-lg" placement="top end">
-        {/* Search input — sade, icon yok. */}
-        <div
-          className="px-2 py-2"
-          style={{ borderBottom: '1px solid var(--balinaos-border-default)' }}
+    <BalinaDropdown
+      side="top"
+      align="end"
+      size="medium"
+      trigger={
+        <button
+          type="button"
+          className="inline-flex h-8 max-w-[160px] items-center overflow-hidden rounded-lg bg-transparent px-3 text-xs font-medium text-foreground/80 transition-colors hover:bg-black/[0.06]"
+          aria-label="Model seç"
         >
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Model ara..."
-            className="block w-full rounded-lg border-none bg-transparent px-0 py-0.5 text-xs outline-none placeholder:text-[var(--balinaos-text-faint)] focus:placeholder:text-[var(--balinaos-text-muted)]"
-            style={{ color: 'var(--balinaos-text-shout)' }}
-            autoFocus
-          />
-        </div>
-        <div className="max-h-[260px] overflow-y-auto">
-          <Dropdown.Menu
-            selectionMode="single"
-            selectedKeys={new Set([activeId])}
-            onSelectionChange={(keys) => {
-              const next = Array.from(keys as Set<string>)[0];
-              if (!next) return;
-              if (kind === 'video') onVideoSelect(next);
-              else onImageSelect(next);
+          <span className="block w-full truncate text-left">
+            {activeMeta?.label ?? 'Model'}
+          </span>
+        </button>
+      }
+    >
+      {/* Search input — sade, icon yok. */}
+      <div
+        className="px-2 py-2"
+        style={{ borderBottom: '1px solid var(--balinaos-border-default)' }}
+      >
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Model ara..."
+          className="block w-full rounded-lg border-none bg-transparent px-0 py-0.5 text-xs outline-none placeholder:text-[var(--balinaos-text-faint)] focus:placeholder:text-[var(--balinaos-text-muted)]"
+          style={{ color: 'var(--balinaos-text-shout)' }}
+          autoFocus
+        />
+      </div>
+      <div className="max-h-[260px] overflow-y-auto">
+        {ordered.map((m) => (
+          <BalinaDropdownItem
+            key={m.id}
+            icon={<ProviderIcon provider={m.provider} kind={m.kind} />}
+            selected={m.id === activeId}
+            onSelect={() => {
+              if (kind === 'video') onVideoSelect(m.id);
+              else onImageSelect(m.id);
               setQuery('');
             }}
           >
-            {ordered.map((m) => (
-              <Dropdown.Item key={m.id} id={m.id} textValue={m.label}>
-                <Dropdown.ItemIndicator />
-                <ProviderIcon provider={m.provider} kind={m.kind} />
-                <Label>{m.label}</Label>
-              </Dropdown.Item>
-            ))}
-          </Dropdown.Menu>
-          {ordered.length === 0 && (
-            <p className="px-3 py-4 text-center text-xs text-muted">
-              Eşleşen model yok
-            </p>
-          )}
-        </div>
-      </Dropdown.Popover>
-    </Dropdown>
+            {m.label}
+          </BalinaDropdownItem>
+        ))}
+        {ordered.length === 0 && (
+          <p className="px-3 py-4 text-center text-xs text-muted">
+            Eşleşen model yok
+          </p>
+        )}
+      </div>
+    </BalinaDropdown>
   );
 }
 
@@ -1737,15 +1651,14 @@ function AiMediaCard({
       {/* Action bar — mobile'da metadata altında static & hep görünür;
           md+ absolute + hover'da alttan fade-in. */}
       <div className="mt-1 flex items-center justify-center md:pointer-events-none md:absolute md:inset-x-0 md:bottom-0 md:mt-0 md:translate-y-[10%] md:opacity-0 md:blur-sm md:transition-all md:duration-200 md:group-hover:pointer-events-auto md:group-hover:-translate-y-4 md:group-hover:opacity-100 md:group-hover:blur-none">
-        <Button
+        <BalinaButton
           variant="ghost"
-          size="sm"
-          onPress={() => triggerDownload(url, filename)}
-          className="rounded-full"
+          size="small"
+          onClick={() => triggerDownload(url, filename)}
+          rightIcon={<ArrowDownToLine className="h-3.5 w-3.5" />}
         >
-          <span>İndir</span>
-          <ArrowDownToLine className="h-3.5 w-3.5" />
-        </Button>
+          İndir
+        </BalinaButton>
       </div>
     </div>
   );
@@ -1775,16 +1688,15 @@ function AiMediaOverlay({
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-6 backdrop-blur-xl sm:p-12"
     >
       {/* Kapatma — backdrop tıklaması da kapatır, ama explicit X gerekli. */}
-      <Button
-        isIconOnly
+      <BalinaButton
         variant="ghost"
-        size="sm"
+        size="small"
         aria-label="Kapat"
-        onPress={onClose}
-        className="absolute right-4 top-4 z-10 rounded-full bg-white/10 text-white hover:bg-white/20"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-10 bg-white/10 text-white hover:bg-white/20"
       >
         <Xmark className="h-4 w-4" />
-      </Button>
+      </BalinaButton>
       <div
         onClick={(e) => e.stopPropagation()}
         className="relative flex max-h-full max-w-5xl flex-col"

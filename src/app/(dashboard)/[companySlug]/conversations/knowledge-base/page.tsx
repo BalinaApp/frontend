@@ -3,18 +3,18 @@
 import { useEffect, useState } from 'react';
 import { Plus, TrashBin } from '@gravity-ui/icons';
 import {
-  AlertDialog,
-  Button,
-  Input,
-  Label,
-  Modal,
-  Switch,
-  TextArea,
-  TextField,
+  BalinaButton,
+  BalinaConfirmDialog,
+  BalinaModal,
+  BalinaModalClose,
+  BalinaSwitch,
+  BalinaTextField,
+  BalinaTextarea,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
+import { BalinaCommentsIcon } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useKnowledgeBaseStore } from '@/stores/knowledgeBaseStore';
@@ -86,17 +86,18 @@ export default function KnowledgeBasePage() {
     <>
       <PageHeader
         title="Bilgi tabanı"
+        icon={<BalinaCommentsIcon className="h-4 w-4" />}
         action={
           activeStoreId && (
-            <Button
-              variant="primary"
-              size="sm"
-              onPress={() => setCreateOpen(true)}
-              className="h-8 rounded-full px-3 text-xs"
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={() => setCreateOpen(true)}
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+              className="h-8 px-3 text-xs"
             >
-              <Plus className="h-3.5 w-3.5" />
               Yeni pattern
-            </Button>
+            </BalinaButton>
           )
         }
       />
@@ -155,9 +156,9 @@ export default function KnowledgeBasePage() {
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
-                    <Switch
-                      isSelected={item.active}
-                      onChange={(v) =>
+                    <BalinaSwitch
+                      checked={item.active}
+                      onCheckedChange={(v) =>
                         currentCompany?.id &&
                         activeStoreId &&
                         updateItem(
@@ -167,21 +168,16 @@ export default function KnowledgeBasePage() {
                           { active: v },
                         )
                       }
-                    >
-                      <Switch.Control>
-                        <Switch.Thumb />
-                      </Switch.Control>
-                    </Switch>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      isIconOnly
-                      onPress={() => setDeleteId(item.id)}
+                    />
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      onClick={() => setDeleteId(item.id)}
                       aria-label="Sil"
-                      className="h-7 w-7 rounded-full text-danger"
+                      className="h-7 w-7 text-danger"
                     >
                       <TrashBin className="h-3 w-3" />
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
               </div>
@@ -200,32 +196,16 @@ export default function KnowledgeBasePage() {
       )}
 
       {/* Delete confirm */}
-      <AlertDialog
-        isOpen={deleteId !== null}
+      <BalinaConfirmDialog
+        open={deleteId !== null}
         onOpenChange={(open) => !open && setDeleteId(null)}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Pattern&apos;ı sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                Bu pattern kalıcı olarak silinecek.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close">
-                  Vazgeç
-                </Button>
-                <Button variant="danger" onPress={handleDelete}>
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Pattern'ı sil"
+        description="Bu pattern kalıcı olarak silinecek."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleDelete}
+        danger
+      />
     </>
   );
 }
@@ -256,56 +236,58 @@ function CreatePatternModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[520px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Yeni pattern</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="px-4">
-              <div className="flex flex-col gap-3">
-                <TextField
-                  value={questionPattern}
-                  onChange={setQuestionPattern}
-                >
-                  <Label>Soru kalıbı</Label>
-                  <Input placeholder='Örn: "İade var mı?"' />
-                </TextField>
-                <TextField value={idealAnswer} onChange={setIdealAnswer}>
-                  <Label>İdeal cevap</Label>
-                  <TextArea
-                    rows={4}
-                    placeholder="AI'ın bu pattern'a yakın sorulara nasıl cevap vermesini istersin?"
-                  />
-                </TextField>
-                <TextField value={appliesTo} onChange={setAppliesTo}>
-                  <Label>Kapsam (opsiyonel)</Label>
-                  <Input placeholder="all / product / order / exchange / ..." />
-                </TextField>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="tertiary" slot="close" isDisabled={submitting}>
-                Vazgeç
-              </Button>
-              <Button
-                variant="primary"
-                onPress={handleSubmit}
-                isPending={submitting}
-                isDisabled={
-                  submitting ||
-                  !questionPattern.trim() ||
-                  !idealAnswer.trim()
-                }
-              >
-                Ekle
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={(o) => !o && onClose()}
+      className="sm:max-w-[520px]"
+      title="Yeni pattern"
+      footer={
+        <>
+          <BalinaModalClose asChild>
+            <BalinaButton variant="soft" size="large" disabled={submitting}>
+              Vazgeç
+            </BalinaButton>
+          </BalinaModalClose>
+          <BalinaButton
+            variant="primary"
+            size="large"
+            onClick={handleSubmit}
+            disabled={
+              submitting ||
+              !questionPattern.trim() ||
+              !idealAnswer.trim()
+            }
+          >
+            Ekle
+          </BalinaButton>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <BalinaTextField
+          label="Soru kalıbı"
+          value={questionPattern}
+          onChange={setQuestionPattern}
+          placeholder='Örn: "İade var mı?"'
+        />
+        <div className="flex flex-col gap-1">
+          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+            İdeal cevap
+          </label>
+          <BalinaTextarea
+            rows={4}
+            value={idealAnswer}
+            onChange={(e) => setIdealAnswer(e.target.value)}
+            placeholder="AI'ın bu pattern'a yakın sorulara nasıl cevap vermesini istersin?"
+          />
+        </div>
+        <BalinaTextField
+          label="Kapsam (opsiyonel)"
+          value={appliesTo}
+          onChange={setAppliesTo}
+          placeholder="all / product / order / exchange / ..."
+        />
+      </div>
+    </BalinaModal>
   );
 }

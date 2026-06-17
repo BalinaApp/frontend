@@ -15,7 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ListBox, Select } from '@/components/ui';
+import { BalinaSelect } from '@/components/balina';
 import { DateRangeInput, type DateRange } from '@/components/date-range-input';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
@@ -140,27 +140,12 @@ export default function PaymentsPage() {
           <h1 className="text-xl font-semibold">Ödemeler</h1>
         </div>
         <div className="flex items-center gap-3">
-          <Select
-            selectedKey={period}
-            onSelectionChange={(key) => handlePeriodChange(String(key))}
-            aria-label="Dönem"
-            className="w-36"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {periodOptions.map((opt) => (
-                  <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
-                    {opt.label}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <BalinaSelect
+            value={period}
+            onValueChange={handlePeriodChange}
+            options={periodOptions}
+            className="w-36 max-w-none"
+          />
 
           {period === 'custom' && (
             <DateRangeInput
@@ -170,33 +155,17 @@ export default function PaymentsPage() {
             />
           )}
 
-          <Select
-            selectedKey={selectedStoreId || 'all'}
-            onSelectionChange={(key) =>
-              setSelectedStoreId(key === 'all' ? null : String(key))
+          <BalinaSelect
+            value={selectedStoreId || 'all'}
+            onValueChange={(key) =>
+              setSelectedStoreId(key === 'all' ? null : key)
             }
-            aria-label="Mağaza filtresi"
-            className="w-48"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all" textValue="Tüm Mağazalar">
-                  Tüm Mağazalar
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                {stores.map((store) => (
-                  <ListBox.Item key={store.id} id={store.id} textValue={store.name}>
-                    {store.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+            options={[
+              { value: 'all', label: 'Tüm Mağazalar' },
+              ...stores.map((store) => ({ value: store.id, label: store.name })),
+            ]}
+            className="w-48 max-w-none"
+          />
         </div>
       </div>
 

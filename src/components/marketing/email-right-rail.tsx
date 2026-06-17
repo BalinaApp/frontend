@@ -1,12 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import {
-  Button,
-  Input,
-  Label,
-  TextField,
-} from '@/components/ui';
+import { BalinaButton, BalinaTextField } from '@/components/balina';
 import { Plus, TrashBin } from '@gravity-ui/icons';
 import {
   type BlockStyle,
@@ -32,7 +27,7 @@ export function EmailRightRail({
   children,
 }: EmailRightRailProps) {
   return (
-    <aside className="hidden w-[340px] shrink-0 flex-col border-l border-foreground/[0.06] lg:flex">
+    <div className="flex h-full w-full flex-col">
       <div className="flex shrink-0 items-center gap-0.5 border-b border-foreground/[0.06] px-3 py-2">
         <button
           type="button"
@@ -62,7 +57,7 @@ export function EmailRightRail({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto p-3">{children}</div>
-    </aside>
+    </div>
   );
 }
 
@@ -312,84 +307,78 @@ function BlockEssentials({
       // Görsel AI ile canvas'ta üretilir; sağda manuel URL + alt + href.
       return (
         <Section title="Görsel">
-          <TextField
+          <BalinaTextField
+            label="URL (manuel)"
             value={block.url}
             onChange={(v) => onChange({ url: v } as Partial<MailBlock>)}
-            isDisabled={disabled}
-          >
-            <Label>URL (manuel)</Label>
-            <Input placeholder="https://..." />
-          </TextField>
-          <TextField
+            disabled={disabled}
+            placeholder="https://..."
+          />
+          <BalinaTextField
+            label="Alt metin"
             value={block.alt}
             onChange={(v) => onChange({ alt: v } as Partial<MailBlock>)}
-            isDisabled={disabled}
-          >
-            <Label>Alt metin</Label>
-            <Input placeholder="Erişilebilirlik için" />
-          </TextField>
-          <TextField
+            disabled={disabled}
+            placeholder="Erişilebilirlik için"
+          />
+          <BalinaTextField
+            label="Tıklama linki"
             value={block.href ?? ''}
             onChange={(v) =>
               onChange({ href: v || null } as Partial<MailBlock>)
             }
-            isDisabled={disabled}
-          >
-            <Label>Tıklama linki</Label>
-            <Input placeholder="https://..." />
-          </TextField>
+            disabled={disabled}
+            placeholder="https://..."
+          />
         </Section>
       );
     case 'logo':
       // Logo AI ile canvas'ta üretilir; sağda manuel URL + href.
       return (
         <Section title="Logo">
-          <TextField
+          <BalinaTextField
+            label="URL (manuel)"
             value={block.url}
             onChange={(v) => onChange({ url: v } as Partial<MailBlock>)}
-            isDisabled={disabled}
-          >
-            <Label>URL (manuel)</Label>
-            <Input placeholder="https://..." />
-          </TextField>
-          <TextField
+            disabled={disabled}
+            placeholder="https://..."
+          />
+          <BalinaTextField
+            label="Tıklama linki"
             value={block.href ?? ''}
             onChange={(v) =>
               onChange({ href: v || null } as Partial<MailBlock>)
             }
-            isDisabled={disabled}
-          >
-            <Label>Tıklama linki</Label>
-            <Input placeholder="https://..." />
-          </TextField>
+            disabled={disabled}
+            placeholder="https://..."
+          />
         </Section>
       );
     case 'button':
       return (
         <Section title="Buton">
           {/* Buton metni canvas'ta inline + AI assist ile düzenlenir */}
-          <TextField
+          <BalinaTextField
+            label="Link"
             value={block.href}
             onChange={(v) => onChange({ href: v } as Partial<MailBlock>)}
-            isDisabled={disabled}
-          >
-            <Label>Link</Label>
-            <Input placeholder="https://..." />
-          </TextField>
+            disabled={disabled}
+            placeholder="https://..."
+          />
         </Section>
       );
     case 'product':
       return (
         <Section title="Ürün">
-          <Button
-            variant="tertiary"
-            size="sm"
-            onPress={() => setProductPickerOpen(true)}
-            isDisabled={disabled}
-            className="w-full rounded-lg"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            fullWidth
+            onClick={() => setProductPickerOpen(true)}
+            disabled={disabled}
           >
             {block.productId ? 'Ürünü değiştir' : 'Ürün seç'}
-          </Button>
+          </BalinaButton>
           <ProductPickerModal
             isOpen={productPickerOpen}
             onClose={() => setProductPickerOpen(false)}
@@ -434,34 +423,31 @@ function BlockEssentials({
                 <span className="flex-1 truncate text-muted">
                   Ürün #{pid.slice(0, 8)}
                 </span>
-                <Button
-                  variant="tertiary"
-                  size="sm"
-                  isIconOnly
-                  onPress={() =>
+                <BalinaButton
+                  variant="danger"
+                  size="small"
+                  onClick={() =>
                     onChange({
                       productIds: block.productIds.filter((_, i) => i !== idx),
                     } as Partial<MailBlock>)
                   }
-                  isDisabled={disabled}
+                  disabled={disabled}
                   aria-label="Çıkar"
-                  className="h-6 w-6 rounded-md text-danger"
-                >
-                  <TrashBin className="h-3 w-3" />
-                </Button>
+                  leftIcon={<TrashBin className="h-3 w-3" />}
+                />
               </div>
             ))}
           </div>
-          <Button
-            variant="tertiary"
-            size="sm"
-            onPress={() => setProductPickerOpen(true)}
-            isDisabled={disabled}
-            className="w-full rounded-lg"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            fullWidth
+            onClick={() => setProductPickerOpen(true)}
+            disabled={disabled}
+            leftIcon={<Plus className="h-3.5 w-3.5" />}
           >
-            <Plus className="h-3.5 w-3.5" />
             Ürün ekle
-          </Button>
+          </BalinaButton>
           <ProductPickerModal
             isOpen={productPickerOpen}
             onClose={() => setProductPickerOpen(false)}

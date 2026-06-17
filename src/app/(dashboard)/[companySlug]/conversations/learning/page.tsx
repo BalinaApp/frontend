@@ -2,9 +2,17 @@
 
 import { useEffect, useState } from 'react';
 import { Check, Xmark } from '@gravity-ui/icons';
-import { Button, Input, Label, Modal, TextArea, TextField, toast } from '@/components/ui';
+import {
+  BalinaButton,
+  BalinaModal,
+  BalinaModalClose,
+  BalinaTextField,
+  BalinaTextarea,
+  toast,
+} from '@/components/balina';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
+import { BalinaCommentsIcon } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import {
@@ -66,7 +74,10 @@ export default function LearningQueuePage() {
 
   return (
     <>
-      <PageHeader title="Öğrenme kuyruğu" />
+      <PageHeader
+        title="Öğrenme kuyruğu"
+        icon={<BalinaCommentsIcon className="h-4 w-4" />}
+      />
 
       <div className="flex flex-1 flex-col gap-3 p-4">
         <div className="rounded-xl bg-foreground/[0.04] p-3 text-xs text-foreground/80">
@@ -119,25 +130,24 @@ export default function LearningQueuePage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
+                    <BalinaButton
                       variant="primary"
-                      size="sm"
-                      onPress={() => setApproving(cluster)}
-                      className="h-7 rounded-full px-3 text-xs"
+                      size="small"
+                      onClick={() => setApproving(cluster)}
+                      leftIcon={<Check className="h-3.5 w-3.5" />}
+                      className="h-7 px-3 text-xs"
                     >
-                      <Check className="h-3.5 w-3.5" />
                       Onayla
-                    </Button>
-                    <Button
+                    </BalinaButton>
+                    <BalinaButton
                       variant="danger"
-                      size="sm"
-                      isIconOnly
-                      onPress={() => handleReject(cluster.id)}
+                      size="small"
+                      onClick={() => handleReject(cluster.id)}
                       aria-label="Reddet"
-                      className="h-7 w-7 rounded-full"
+                      className="h-7 w-7"
                     >
                       <Xmark className="h-3.5 w-3.5" />
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
                 <div className="text-xs leading-relaxed text-foreground/80">
@@ -195,43 +205,48 @@ function ApproveModal({
   };
 
   return (
-    <Modal isOpen onOpenChange={(o) => !o && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[520px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Onayla ve bilgi tabanına ekle</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="px-4">
-              <div className="flex flex-col gap-3">
-                <TextField value={pattern} onChange={() => {}} isReadOnly>
-                  <Label>Soru kalıbı</Label>
-                  <Input />
-                </TextField>
-                <TextField value={answer} onChange={setAnswer}>
-                  <Label>İdeal cevap (düzenleyebilirsin)</Label>
-                  <TextArea rows={5} />
-                </TextField>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="tertiary" slot="close" isDisabled={submitting}>
-                Vazgeç
-              </Button>
-              <Button
-                variant="primary"
-                onPress={handle}
-                isPending={submitting}
-                isDisabled={submitting || !answer.trim()}
-              >
-                <Check className="h-3.5 w-3.5" />
-                Onayla
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <BalinaModal
+      open
+      onOpenChange={(o) => !o && onClose()}
+      className="sm:max-w-[520px]"
+      title="Onayla ve bilgi tabanına ekle"
+      footer={
+        <>
+          <BalinaModalClose asChild>
+            <BalinaButton variant="soft" size="large" disabled={submitting}>
+              Vazgeç
+            </BalinaButton>
+          </BalinaModalClose>
+          <BalinaButton
+            variant="primary"
+            size="large"
+            onClick={handle}
+            disabled={submitting || !answer.trim()}
+            leftIcon={<Check className="h-3.5 w-3.5" />}
+          >
+            Onayla
+          </BalinaButton>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <BalinaTextField
+          label="Soru kalıbı"
+          value={pattern}
+          onChange={() => {}}
+          readOnly
+        />
+        <div className="flex flex-col gap-1">
+          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+            İdeal cevap (düzenleyebilirsin)
+          </label>
+          <BalinaTextarea
+            rows={5}
+            value={answer}
+            onChange={(e) => setAnswer(e.target.value)}
+          />
+        </div>
+      </div>
+    </BalinaModal>
   );
 }

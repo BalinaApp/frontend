@@ -35,6 +35,46 @@ import {
   toast,
 } from '@/components/ui';
 import { DateRangeInput, type DateRange } from '@/components/date-range-input';
+import { type DateRange as RdpDateRange } from 'react-day-picker';
+import { toast as sonnerToast } from 'sonner';
+import { SearchModal, type SearchSection } from '@/components/search/search-modal';
+import {
+  BalinaButton,
+  BalinaInput,
+  BalinaTextarea,
+  BalinaCheckbox,
+  BalinaSwitch,
+  BalinaRadioGroup,
+  BalinaInputOTP,
+  BalinaAvatar,
+  BalinaMenuItem,
+  BalinaMenuTitle,
+  BalinaMenuDivider,
+  BalinaTooltip,
+  BalinaToast,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaDropdownSeparator,
+  BalinaDropdownSub,
+  BalinaDropdownLabel,
+  BalinaTabs,
+  BalinaSearchResultItem,
+  BalinaModal,
+  BalinaModalClose,
+  BalinaSelect,
+  BalinaCalendar,
+  BalinaTabBar,
+  BalinaSplitButton,
+  BalinaAvatarPair,
+  BalinaIcons,
+  BalinaChatInput,
+  BalinaChat,
+  BalinaChatUserMessage,
+  BalinaChatStatus,
+  BalinaChatAiResponse,
+  BalinaPopover,
+  BalinaPopoverPreview,
+} from '@/components/balina';
 import {
   CircleCheck,
   CircleInfo,
@@ -44,6 +84,11 @@ import {
   TrashBin,
   Gear,
   Plus,
+  Box,
+  ShoppingCart,
+  ShoppingBag,
+  Person,
+  Magnifier,
 } from '@gravity-ui/icons';
 
 /* ---------- Sayfa iskeleti ---------- */
@@ -100,9 +145,92 @@ export default function ComponentsGalleryPage() {
   const [day, setDay] = React.useState<Date | undefined>(undefined);
   const [range, setRange] = React.useState<{ from?: Date; to?: Date } | undefined>(undefined);
   const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
+  const [searchOpen, setSearchOpen] = React.useState(false);
+  const [dsTab, setDsTab] = React.useState('genel');
+  // Balina (yeni) — Modal / Select / Calendar / TabBar
+  const [dsModalOpen, setDsModalOpen] = React.useState(false);
+  const [dsSelect, setDsSelect] = React.useState('trendyol');
+  const [dsDay, setDsDay] = React.useState<Date | undefined>(undefined);
+  const [dsRange, setDsRange] = React.useState<RdpDateRange | undefined>(undefined);
+  const [dsMulti, setDsMulti] = React.useState<Date[] | undefined>(undefined);
+  const [dsTabBarItems, setDsTabBarItems] = React.useState([
+    { id: 't1', label: 'Genel Bakış', icon: <ShoppingBag className="h-4 w-4" /> },
+    { id: 't2', label: 'Siparişler', icon: <ShoppingCart className="h-4 w-4" /> },
+    { id: 't3', label: 'Ürünler', icon: <Box className="h-4 w-4" /> },
+  ]);
+  const [dsActiveTab, setDsActiveTab] = React.useState('t1');
+  const [dsCheck1, setDsCheck1] = React.useState(true);
+  const [dsCheck2, setDsCheck2] = React.useState(false);
+  const [dsSwitch1, setDsSwitch1] = React.useState(true);
+  const [dsSwitch2, setDsSwitch2] = React.useState(false);
+  const [dsRadio, setDsRadio] = React.useState('trendyol');
+  const [dsOtp, setDsOtp] = React.useState('');
+
+  // Cmd/Ctrl+K ile arama modalını aç.
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setSearchOpen((o) => !o);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const searchSections: SearchSection[] = [
+    {
+      title: 'Kayıtlı aramalar',
+      onViewAll: () => {},
+      items: [
+        {
+          id: 's1',
+          title: 'Bekleyen siparişler',
+          icon: <ShoppingCart className="h-4 w-4" />,
+          action: 'Ara',
+          pill: { prefix: 'durum:', value: 'beklemede' },
+        },
+        {
+          id: 's2',
+          title: 'Stok kritik ürünler',
+          icon: <Box className="h-4 w-4" />,
+          action: 'Ara',
+        },
+        {
+          id: 's3',
+          title: 'Shopify Mağazam',
+          icon: <ShoppingBag className="h-4 w-4" />,
+          action: 'Ara',
+        },
+      ],
+    },
+    {
+      title: 'Son kullanılanlar',
+      items: [
+        {
+          id: 'r1',
+          title: 'SZ2010 — Kot Elbise',
+          icon: <Box className="h-4 w-4" />,
+          action: 'Aç',
+        },
+        {
+          id: 'r2',
+          title: 'Sipariş #10428',
+          icon: <ShoppingCart className="h-4 w-4" />,
+          action: 'Aç',
+        },
+        {
+          id: 'r3',
+          title: 'Ezgi Yılmaz',
+          icon: <Person className="h-4 w-4" />,
+          action: 'Aç',
+        },
+      ],
+    },
+  ];
 
   return (
-    <main className="h-screen overflow-y-auto bg-background text-foreground">
+    <main className="h-screen overflow-y-auto bg-white text-foreground">
       <div className="mx-auto flex max-w-5xl flex-col gap-10 px-6 py-12">
         {/* Başlık */}
         <header className="flex flex-col gap-2">
@@ -116,6 +244,676 @@ export default function ComponentsGalleryPage() {
             balinaOS UI kütüphanesi — <code className="rounded bg-default px-1 py-0.5 text-[12px]">@/components/ui</code> (Radix tabanlı HeroUI v3 drop-in&apos;leri).
           </p>
         </header>
+
+        {/* ---------------- ARAMA MODALI ---------------- */}
+        <Section
+          title="Arama Modalı (Search)"
+          description="Komut-paleti tarzı arama. ↑/↓ ile gez, Enter ile seç, Esc kapatır. Cmd/Ctrl+K ile de açılır."
+        >
+          <Row>
+            <Button onPress={() => setSearchOpen(true)}>
+              <Magnifier />
+              Aramayı aç
+            </Button>
+            <span className="text-sm text-muted">
+              veya{' '}
+              <kbd className="rounded bg-default px-1.5 py-0.5 text-xs">⌘K</kbd>
+            </span>
+          </Row>
+        </Section>
+
+        {/* ---------------- TASARIM SİSTEMİ (DS) ---------------- */}
+        <Section
+          title="Tasarım Sistemi (Balina) — yeni"
+          description="Yeni tasarım sistemi token'ları (renk + tipografi) ve Balina bileşenleri. 'define' yok; balina- prefix'i + text-body-* tipografi."
+        >
+          <div className="flex flex-col gap-6">
+            {/* Metin skalası */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">Metin skalası (text-shout → faint)</span>
+              <div className="flex flex-col gap-0.5">
+                {(['shout', 'loud', 'strong', 'default', 'muted', 'faint'] as const).map(
+                  (lvl) => (
+                    <span
+                      key={lvl}
+                      className="text-body-default-regular"
+                      style={{ color: `var(--balina-text-${lvl})` }}
+                    >
+                      balina-text-{lvl} — Çok mağazalı analitik (örnek metin)
+                    </span>
+                  ),
+                )}
+              </div>
+            </div>
+
+            {/* Tipografi ölçeği */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">Tipografi (text-body-*)</span>
+              <div className="flex flex-col gap-1" style={{ color: 'var(--balina-text-shout)' }}>
+                <span className="text-body-large-medium">text-body-large-medium</span>
+                <span className="text-body-default-medium">text-body-default-medium</span>
+                <span className="text-body-default-regular">text-body-default-regular</span>
+                <span className="text-body-small-medium">text-body-small-medium</span>
+                <span className="text-body-small-regular">text-body-small-regular</span>
+                <span className="text-body-tiny-medium">text-body-tiny-medium</span>
+                <span className="text-body-micro-medium">text-body-micro-medium</span>
+              </div>
+            </div>
+
+            {/* Zemin / kenarlık swatch'ları */}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">Zemin + kenarlık</span>
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
+                {[
+                  ['bg-light-shout', 'var(--balina-background-light-shout)'],
+                  ['bg-light-loud', 'var(--balina-background-light-loud)'],
+                  ['bg-dark-muted', 'var(--balina-background-dark-muted)'],
+                  ['bg-dark-default', 'var(--balina-background-dark-default)'],
+                  ['border-muted', 'var(--balina-border-muted)'],
+                  ['border-strong', 'var(--balina-border-strong)'],
+                ].map(([name, val]) => (
+                  <div key={name} className="flex flex-col gap-1">
+                    <div
+                      className="h-12 w-full rounded-lg"
+                      style={{ border: '1px solid var(--balina-border-strong)', background: val }}
+                    />
+                    <span className="text-body-tiny-regular text-muted">{name}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Balina Button */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Button (variant · size)</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <BalinaButton variant="primary">Primary</BalinaButton>
+                <BalinaButton variant="ghost">Ghost</BalinaButton>
+                <BalinaButton variant="plain">Plain</BalinaButton>
+                <BalinaButton variant="danger">Danger</BalinaButton>
+                <BalinaButton variant="primary" disabled>
+                  Disabled
+                </BalinaButton>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <BalinaButton variant="primary" size="small">
+                  Small
+                </BalinaButton>
+                <BalinaButton variant="primary" size="default">
+                  Default
+                </BalinaButton>
+                <BalinaButton variant="primary" size="large">
+                  Large
+                </BalinaButton>
+              </div>
+            </div>
+
+            {/* Balina SplitButton */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">
+                Balina SplitButton (ana aksiyon + chevron menü)
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                <BalinaSplitButton
+                  onMainClick={() => toast.success('Gönderildi')}
+                  menuLabel="Gönderme seçenekleri"
+                  menuContent={
+                    <>
+                      <BalinaDropdownItem icon={<Bell className="h-4 w-4" />}>
+                        Şimdi gönder
+                      </BalinaDropdownItem>
+                      <BalinaDropdownItem icon={<Gear className="h-4 w-4" />}>
+                        Sonra gönder
+                      </BalinaDropdownItem>
+                    </>
+                  }
+                >
+                  Gönder
+                </BalinaSplitButton>
+                <BalinaSplitButton
+                  variant="soft"
+                  onMainClick={() => toast('Kaydedildi')}
+                  onMenuClick={() => toast('Menü')}
+                >
+                  Kaydet
+                </BalinaSplitButton>
+                <BalinaSplitButton disabled onMainClick={() => {}}>
+                  Devre dışı
+                </BalinaSplitButton>
+              </div>
+            </div>
+
+            {/* Balina Input */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Input</span>
+              <div className="flex flex-wrap items-center gap-3">
+                <BalinaInput
+                  placeholder="Varsayılan"
+                  wrapperClassName="w-56"
+                  leftIcon={<Magnifier className="h-4 w-4" />}
+                />
+                <BalinaInput placeholder="Ghost" variant="ghost" wrapperClassName="w-56" />
+                <BalinaInput placeholder="Devre dışı" disabled wrapperClassName="w-56" />
+              </div>
+            </div>
+
+            {/* Balina Textarea */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">
+                Balina Textarea (input hissiyatı · dolu/focus&apos;ta dolgu)
+              </span>
+              <div className="flex flex-wrap items-start gap-3">
+                <BalinaTextarea placeholder="Varsayılan" wrapperClassName="w-64" />
+                <BalinaTextarea placeholder="Ghost" variant="ghost" wrapperClassName="w-64" />
+                <BalinaTextarea placeholder="Devre dışı" disabled wrapperClassName="w-64" />
+              </div>
+            </div>
+
+            {/* Balina Checkbox */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">
+                Balina Checkbox (check animasyonlu)
+              </span>
+              <div className="flex flex-wrap items-center gap-4">
+                <BalinaCheckbox checked={dsCheck1} onCheckedChange={setDsCheck1}>
+                  Bildirimleri aç
+                </BalinaCheckbox>
+                <BalinaCheckbox checked={dsCheck2} onCheckedChange={setDsCheck2}>
+                  Pazarlama e-postaları
+                </BalinaCheckbox>
+                <BalinaCheckbox defaultChecked disabled>
+                  Devre dışı (seçili)
+                </BalinaCheckbox>
+                <BalinaCheckbox disabled>Devre dışı</BalinaCheckbox>
+              </div>
+            </div>
+
+            {/* Balina Switch */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Switch (animasyonlu)</span>
+              <div className="flex flex-wrap items-center gap-4">
+                <BalinaSwitch checked={dsSwitch1} onCheckedChange={setDsSwitch1}>
+                  Otomatik senkron
+                </BalinaSwitch>
+                <BalinaSwitch checked={dsSwitch2} onCheckedChange={setDsSwitch2}>
+                  Karanlık mod
+                </BalinaSwitch>
+                <BalinaSwitch defaultChecked disabled>
+                  Devre dışı
+                </BalinaSwitch>
+              </div>
+            </div>
+
+            {/* Balina Radio */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Radio (animasyonlu dot)</span>
+              <BalinaRadioGroup
+                value={dsRadio}
+                onValueChange={setDsRadio}
+                options={[
+                  { value: 'trendyol', label: 'Trendyol' },
+                  { value: 'hepsiburada', label: 'Hepsiburada' },
+                  { value: 'shopify', label: 'Shopify' },
+                  { value: 'woo', label: 'WooCommerce (devre dışı)', disabled: true },
+                ]}
+              />
+            </div>
+
+            {/* Balina Input OTP */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Input OTP (6 hane)</span>
+              <BalinaInputOTP value={dsOtp} onChange={setDsOtp} />
+            </div>
+
+            {/* Balina Avatar */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Avatar (size · fallback + görsel)</span>
+              <div className="flex items-center gap-3">
+                <BalinaAvatar size="small" fallback="S" />
+                <BalinaAvatar size="medium" fallback="M" />
+                <BalinaAvatar size="large" fallback="L" />
+                <BalinaAvatar size="default" fallback="MÖ" />
+              </div>
+              <div className="flex items-center gap-3">
+                <BalinaAvatar size="small" src="https://github.com/torvalds.png" alt="L" />
+                <BalinaAvatar size="medium" src="https://github.com/shadcn.png" alt="s" />
+                <BalinaAvatar size="large" src="https://github.com/sindresorhus.png" alt="S" />
+                <BalinaAvatar size="default" src="https://github.com/raunofreiberg.png" alt="R" />
+              </div>
+            </div>
+
+            {/* Balina MenuItem */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina MenuItem</span>
+              <div
+                className="flex w-64 flex-col gap-0.5 rounded-xl p-1 shadow-elevation-medium"
+                style={{ backgroundColor: 'var(--balina-background-light-shout)' }}
+              >
+                <BalinaMenuTitle>Menü</BalinaMenuTitle>
+                <BalinaMenuItem icon={<Box className="h-4 w-4" />}>Ürünler</BalinaMenuItem>
+                <BalinaMenuItem icon={<ShoppingCart className="h-4 w-4" />} selected>
+                  Siparişler
+                </BalinaMenuItem>
+                <BalinaMenuItem icon={<Gear className="h-4 w-4" />} shortcut="K">
+                  Ayarlar
+                </BalinaMenuItem>
+                <BalinaMenuDivider />
+                <BalinaMenuItem icon={<TrashBin className="h-4 w-4" />} disabled>
+                  Sil (devre dışı)
+                </BalinaMenuItem>
+              </div>
+            </div>
+
+            {/* Balina Tooltip */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Tooltip</span>
+              <Row>
+                <BalinaTooltip content="Küçük tooltip">
+                  <BalinaButton variant="ghost">Üzerine gel (small)</BalinaButton>
+                </BalinaTooltip>
+                <BalinaTooltip size="large" content="Daha büyük, biraz daha geniş bir tooltip içeriği">
+                  <BalinaButton variant="ghost">Üzerine gel (large)</BalinaButton>
+                </BalinaTooltip>
+              </Row>
+            </div>
+
+            {/* Balina Tabs (segmented) */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Tabs (segmented)</span>
+              <BalinaTabs
+                value={dsTab}
+                onChange={setDsTab}
+                items={[
+                  { id: 'genel', label: 'Genel' },
+                  { id: 'siparisler', label: 'Siparişler' },
+                  { id: 'ayarlar', label: 'Ayarlar' },
+                ]}
+              />
+            </div>
+
+            {/* Balina Dropdown */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Dropdown (menü + alt menü)</span>
+              <BalinaDropdown
+                align="start"
+                trigger={
+                  <BalinaButton variant="ghost">
+                    <Gear className="h-4 w-4" />
+                    Aksiyonlar
+                  </BalinaButton>
+                }
+              >
+                <BalinaDropdownItem icon={<Bell className="h-4 w-4" />} shortcut="B">
+                  Bildirim gönder
+                </BalinaDropdownItem>
+                <BalinaDropdownSub icon={<Gear className="h-4 w-4" />} label="Tercihler">
+                  <BalinaDropdownItem>Profil</BalinaDropdownItem>
+                  <BalinaDropdownItem>Görünüm</BalinaDropdownItem>
+                </BalinaDropdownSub>
+                <BalinaDropdownSeparator />
+                <BalinaDropdownItem icon={<TrashBin className="h-4 w-4" />} shortcut="X" danger>
+                  Sil
+                </BalinaDropdownItem>
+              </BalinaDropdown>
+            </div>
+
+            {/* Balina Dropdown — hesap değiştirici (avatar + alt başlık + ✓) */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Dropdown (hesap değiştirici)</span>
+              <BalinaDropdown
+                align="start"
+                size="large"
+                trigger={
+                  <BalinaButton variant="ghost">
+                    <BalinaAvatar size="medium" fallback="JM" />
+                    João da Maia
+                  </BalinaButton>
+                }
+              >
+                <BalinaDropdownLabel>Hesap değiştir</BalinaDropdownLabel>
+                <BalinaDropdownItem
+                  icon={<BalinaAvatar size="medium" fallback="JM" />}
+                  subtitle="joao@example.com"
+                  selected
+                >
+                  João da Maia
+                </BalinaDropdownItem>
+                <BalinaDropdownItem
+                  icon={<BalinaAvatar size="medium" fallback="JP" />}
+                  subtitle="joao@damaia.com"
+                >
+                  João da Maia (Personal)
+                </BalinaDropdownItem>
+                <BalinaDropdownSeparator />
+                <BalinaDropdownItem icon={<BalinaIcons.CirclePlus className="h-4 w-4" />}>
+                  Başka hesap ekle
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Settings className="h-4 w-4" />}>
+                  Ayarlar
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Invite className="h-4 w-4" />}>
+                  Ekibini davet et
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Logout className="h-4 w-4" />}>
+                  Çıkış yap
+                </BalinaDropdownItem>
+              </BalinaDropdown>
+            </div>
+
+            {/* Balina Dropdown — model seçici (ikon + ✓) */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Dropdown (model seçici)</span>
+              <BalinaDropdown
+                align="start"
+                trigger={<BalinaButton variant="soft">Auto</BalinaButton>}
+              >
+                <BalinaDropdownItem icon={<BalinaIcons.Ai className="h-4 w-4" />} selected>
+                  Auto
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Style className="h-4 w-4" />}>
+                  Claude Sonnet 4.5
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Style className="h-4 w-4" />}>
+                  Gemini 3 Pro
+                </BalinaDropdownItem>
+                <BalinaDropdownItem icon={<BalinaIcons.Style className="h-4 w-4" />}>
+                  GPT-5.1
+                </BalinaDropdownItem>
+              </BalinaDropdown>
+            </div>
+
+            {/* Balina Popover — önizleme kartı */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Popover (önizleme)</span>
+              <BalinaPopover
+                trigger={<BalinaButton variant="ghost">Önizleme göster</BalinaButton>}
+              >
+                <BalinaPopoverPreview
+                  title="New email draft"
+                  meta="2sa önce"
+                  body="Preview super hyper mega long content that will be clamped to two lines in the popover card."
+                />
+              </BalinaPopover>
+            </div>
+
+            {/* Balina Toast */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Toast — variant (butona tıkla)</span>
+              <div className="flex flex-wrap items-center gap-3">
+                {(['default', 'success', 'error', 'warning', 'info'] as const).map((v) => (
+                  <BalinaButton
+                    key={v}
+                    variant="soft"
+                    onClick={() =>
+                      sonnerToast.custom(
+                        () => (
+                          <BalinaToast variant={v} className="w-fit">
+                            {v === 'error'
+                              ? 'Bir hata oluştu'
+                              : v === 'warning'
+                                ? 'Dikkat gerekiyor'
+                                : v === 'success'
+                                  ? 'Sipariş kaydedildi'
+                                  : v === 'info'
+                                    ? 'Yeni bildirim var'
+                                    : 'Bilgilendirme'}
+                          </BalinaToast>
+                        ),
+                        { unstyled: true },
+                      )
+                    }
+                  >
+                    {v}
+                  </BalinaButton>
+                ))}
+              </div>
+              <span className="text-xs text-muted">Konum</span>
+              <div className="flex flex-wrap items-center gap-3">
+                {(
+                  [
+                    ['top-left', 'Sol üst'],
+                    ['top-center', 'Orta üst'],
+                    ['top-right', 'Sağ üst'],
+                    ['bottom-left', 'Sol alt'],
+                    ['bottom-center', 'Orta alt'],
+                    ['bottom-right', 'Sağ alt'],
+                  ] as const
+                ).map(([pos, label]) => (
+                  <BalinaButton
+                    key={pos}
+                    variant="soft"
+                    onClick={() =>
+                      sonnerToast.custom(
+                        (id) => (
+                          <BalinaToast
+                            variant="info"
+                            className="w-fit"
+                            action={
+                              <BalinaButton
+                                variant="plain"
+                                size="small"
+                                onClick={() => sonnerToast.dismiss(id)}
+                              >
+                                Geri al
+                              </BalinaButton>
+                            }
+                          >
+                            {label}
+                          </BalinaToast>
+                        ),
+                        { position: pos, unstyled: true },
+                      )
+                    }
+                  >
+                    {label}
+                  </BalinaButton>
+                ))}
+              </div>
+            </div>
+
+            {/* Balina ChatInput */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina ChatInput (AI composer)</span>
+              <div className="w-full max-w-md">
+                <BalinaChatInput onSend={(v) => toast.success(`Gönderildi: ${v}`)} />
+              </div>
+            </div>
+
+            {/* Balina Chat (asistan paneli) */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Chat (asistan paneli)</span>
+              <div className="h-[34rem] w-full max-w-[26rem]">
+                <BalinaChat title="New agent" onSend={(v) => toast.success(`Gönderildi: ${v}`)}>
+                  <BalinaChatUserMessage>
+                    Bu haftaki siparişleri özetler misin?
+                  </BalinaChatUserMessage>
+                  <BalinaChatStatus variant="thinking">9 saniye düşündü</BalinaChatStatus>
+                  <BalinaChatStatus
+                    variant="results"
+                    avatars={[
+                      'https://github.com/torvalds.png',
+                      'https://github.com/shadcn.png',
+                      'https://github.com/sindresorhus.png',
+                    ]}
+                  >
+                    8 sonuç
+                  </BalinaChatStatus>
+                  <BalinaChatAiResponse onInsert={() => toast('Eklendi')}>
+                    <p>İşte bu haftaki siparişlerin kısa bir özeti:</p>
+                    <ul className="flex flex-col gap-2 pl-4">
+                      <li className="list-disc">Toplam 128 sipariş, geçen haftaya göre %12 artış.</li>
+                      <li className="list-disc">En çok satan: SZ2010 — Kot Elbise (24 adet).</li>
+                    </ul>
+                  </BalinaChatAiResponse>
+                </BalinaChat>
+              </div>
+            </div>
+
+            {/* Balina SearchResultItem */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina SearchResultItem</span>
+              <div
+                className="flex w-full max-w-md flex-col gap-0.5 rounded-xl p-1 shadow-elevation-medium"
+                style={{ backgroundColor: 'var(--balina-background-light-shout)' }}
+              >
+                <BalinaSearchResultItem
+                  icon={<ShoppingCart className="h-4 w-4" />}
+                  title="Sipariş #10428"
+                  pill={<span className="text-body-mail-medium text-[var(--balina-text-shout)]">@Trendyol</span>}
+                  action="Aç"
+                  active
+                />
+                <BalinaSearchResultItem
+                  icon={<Box className="h-4 w-4" />}
+                  title="SZ2010 — Kot Elbise"
+                  action="Aç"
+                />
+              </div>
+            </div>
+
+            {/* Balina Select */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Select (tekli seçim)</span>
+              <BalinaSelect
+                value={dsSelect}
+                onValueChange={setDsSelect}
+                options={[
+                  { value: 'trendyol', label: 'Trendyol', icon: <ShoppingBag className="h-4 w-4" /> },
+                  { value: 'hepsiburada', label: 'Hepsiburada', icon: <ShoppingBag className="h-4 w-4" /> },
+                  { value: 'shopify', label: 'Shopify', icon: <ShoppingCart className="h-4 w-4" /> },
+                  { value: 'woo', label: 'WooCommerce', icon: <Box className="h-4 w-4" />, disabled: true },
+                ]}
+              />
+            </div>
+
+            {/* Balina Modal */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Modal (dialog + aksiyonlar)</span>
+              <BalinaModal
+                open={dsModalOpen}
+                onOpenChange={setDsModalOpen}
+                trigger={<BalinaButton variant="primary">Modal aç</BalinaButton>}
+                title="Mağazayı sil"
+                titleIcon={<TrashBin className="h-4 w-4" />}
+                description="Bu mağaza ve ilişkili tüm veriler kalıcı olarak silinecek. Bu işlem geri alınamaz."
+                footer={
+                  <>
+                    <BalinaModalClose asChild>
+                      <BalinaButton variant="ghost">Vazgeç</BalinaButton>
+                    </BalinaModalClose>
+                    <BalinaButton variant="danger" onClick={() => setDsModalOpen(false)}>
+                      Sil
+                    </BalinaButton>
+                  </>
+                }
+              />
+            </div>
+
+            {/* Balina Calendar */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">
+                Balina Calendar — mode: single · range · multiple
+              </span>
+              <div className="flex flex-wrap items-start gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-body-tiny-regular text-muted">single (tek tarih)</span>
+                  <div
+                    className="w-fit rounded-2xl p-2 shadow-elevation-medium"
+                    style={{ backgroundColor: 'var(--balina-background-light-shout)' }}
+                  >
+                    <BalinaCalendar mode="single" selected={dsDay} onSelect={setDsDay} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-body-tiny-regular text-muted">range (tarih aralığı)</span>
+                  <div
+                    className="w-fit rounded-2xl p-2 shadow-elevation-medium"
+                    style={{ backgroundColor: 'var(--balina-background-light-shout)' }}
+                  >
+                    <BalinaCalendar mode="range" selected={dsRange} onSelect={setDsRange} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-body-tiny-regular text-muted">multiple (birden fazla gün)</span>
+                  <div
+                    className="w-fit rounded-2xl p-2 shadow-elevation-medium"
+                    style={{ backgroundColor: 'var(--balina-background-light-shout)' }}
+                  >
+                    <BalinaCalendar mode="multiple" selected={dsMulti} onSelect={setDsMulti} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Balina TabBar */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">
+                Balina TabBar (kapatılabilir, connector&apos;lı sekmeler)
+              </span>
+              <div
+                className="shadow-panel-surface isolate overflow-hidden rounded-2xl"
+                style={{ backgroundImage: 'var(--balina-panel-surface)' }}
+              >
+                <div className="px-2 pt-2">
+                  <BalinaTabBar
+                    items={dsTabBarItems}
+                    activeId={dsActiveTab}
+                    onSelect={setDsActiveTab}
+                    onClose={(id) =>
+                      setDsTabBarItems((prev) => {
+                        const next = prev.filter((t) => t.id !== id);
+                        if (id === dsActiveTab && next.length) setDsActiveTab(next[0].id);
+                        return next;
+                      })
+                    }
+                    onAdd={() =>
+                      setDsTabBarItems((prev) => {
+                        const id = `t${prev.length + 1}-${prev.length}`;
+                        setDsActiveTab(id);
+                        return [...prev, { id, label: 'Yeni sekme', icon: <Plus className="h-4 w-4" /> }];
+                      })
+                    }
+                  />
+                </div>
+                <div className="p-4 text-body-default-regular text-[var(--balina-text-default)]">
+                  Aktif sekme: {dsTabBarItems.find((t) => t.id === dsActiveTab)?.label ?? '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Balina AvatarPair */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina AvatarPair (2&apos;li, mask&apos;lı grup)</span>
+              <div className="flex items-center gap-6">
+                <BalinaAvatarPair first={{ fallback: 'A' }} second={{ fallback: 'B' }} />
+                <BalinaAvatarPair first={{ fallback: 'M' }} second={{ fallback: 'E' }} />
+                <BalinaAvatarPair first={{ fallback: 'T' }} second={{ fallback: 'S' }} />
+              </div>
+            </div>
+
+            {/* Balina Icons */}
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-muted">Balina Icons (BalinaIcons)</span>
+              <div
+                className="grid grid-cols-6 gap-1 sm:grid-cols-10"
+                style={{ color: 'var(--balina-icon-strong)' }}
+              >
+                {Object.entries(BalinaIcons).map(([name, Icon]) => (
+                  <div
+                    key={name}
+                    title={name}
+                    className="flex flex-col items-center gap-1 rounded-lg p-2 transition-colors hover:bg-[var(--balina-background-dark-muted)]"
+                  >
+                    <Icon />
+                    <span className="text-body-micro-medium w-full truncate text-center text-[var(--balina-text-muted)]">
+                      {name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Section>
 
         {/* ---------------- TİPOGRAFİ ---------------- */}
         <Section
@@ -714,6 +1512,13 @@ export default function ComponentsGalleryPage() {
           balinaOS · UI bileşen galerisi — yalnızca geliştirme amaçlı.
         </footer>
       </div>
+
+      <SearchModal
+        isOpen={searchOpen}
+        onOpenChange={setSearchOpen}
+        sections={searchSections}
+        onSaveSearch={() => {}}
+      />
     </main>
   );
 }

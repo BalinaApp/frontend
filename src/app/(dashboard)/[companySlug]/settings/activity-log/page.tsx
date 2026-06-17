@@ -1,25 +1,29 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { CircleCheckFill } from '@gravity-ui/icons';
 import {
-  ChevronLeft,
-  Clock,
-  Person,
-  Briefcase,
-  ShoppingCart,
-  Box as Package,
-  ArrowsRotateRight as RefreshCw,
-  AbbrApi as Key,
-  Lock,
-  CircleCheckFill,
-  CircleXmark,
-} from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+  BalinaClockIcon,
+  BalinaPersonIcon,
+  BalinaCompanyIcon,
+  BalinaOrderIcon,
+  BalinaProductsIcon,
+  BalinaRegenerateIcon,
+  BalinaApiIcon,
+  BalinaLockIcon,
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useAuditLogStore, AuditLogItem } from '@/stores/auditLogStore';
 import { usePageTitle } from '@/hooks/use-page-title';
-import { DateRangeInput, DateRange } from '@/components/date-range-input';
+import {
+  BalinaCalendar,
+  BalinaPopover,
+  BalinaCalendarIcon,
+  BalinaButton,
+} from '@/components/balina';
+import type { DateRange } from 'react-day-picker';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
 
 type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
 
@@ -32,73 +36,39 @@ interface ActionMeta {
 // karşılık gelir. Etiket Türkçe ve fiilin yanında kaynağı (Mağaza, Sipariş…)
 // içerir; renk burada değil — `colorFor()` her action'a deterministic atar.
 const ACTION_META: Record<string, ActionMeta> = {
-  AUTH_LOGIN: { label: 'Giriş yaptı', icon: Lock },
-  AUTH_LOGIN_FAILED: { label: 'Giriş başarısız', icon: Lock },
-  AUTH_LOGOUT: { label: 'Çıkış yaptı', icon: Lock },
-  AUTH_REGISTER: { label: 'Hesap oluşturdu', icon: Person },
-  AUTH_PASSWORD_RESET: { label: 'Şifre sıfırladı', icon: Lock },
-  AUTH_PASSWORD_CHANGE: { label: 'Şifre değiştirdi', icon: Lock },
+  AUTH_LOGIN: { label: 'Giriş yaptı', icon: BalinaLockIcon },
+  AUTH_LOGIN_FAILED: { label: 'Giriş başarısız', icon: BalinaLockIcon },
+  AUTH_LOGOUT: { label: 'Çıkış yaptı', icon: BalinaLockIcon },
+  AUTH_REGISTER: { label: 'Hesap oluşturdu', icon: BalinaPersonIcon },
+  AUTH_PASSWORD_RESET: { label: 'Şifre sıfırladı', icon: BalinaLockIcon },
+  AUTH_PASSWORD_CHANGE: { label: 'Şifre değiştirdi', icon: BalinaLockIcon },
 
-  COMPANY_CREATE: { label: 'Şirket oluşturdu', icon: Briefcase },
-  COMPANY_UPDATE: { label: 'Şirket bilgilerini güncelledi', icon: Briefcase },
-  COMPANY_DELETE: { label: 'Şirketi sildi', icon: Briefcase },
-  COMPANY_INVITE: { label: 'Şirkete üye davet etti', icon: Person },
-  COMPANY_MEMBER_REMOVE: { label: 'Şirket üyesini kaldırdı', icon: Person },
+  COMPANY_CREATE: { label: 'Şirket oluşturdu', icon: BalinaCompanyIcon },
+  COMPANY_UPDATE: { label: 'Şirket bilgilerini güncelledi', icon: BalinaCompanyIcon },
+  COMPANY_DELETE: { label: 'Şirketi sildi', icon: BalinaCompanyIcon },
+  COMPANY_INVITE: { label: 'Şirkete üye davet etti', icon: BalinaPersonIcon },
+  COMPANY_MEMBER_REMOVE: { label: 'Şirket üyesini kaldırdı', icon: BalinaPersonIcon },
 
-  STORE_CREATE: { label: 'Mağaza ekledi', icon: Package },
-  STORE_UPDATE: { label: 'Mağazayı güncelledi', icon: Package },
-  STORE_DELETE: { label: 'Mağazayı sildi', icon: Package },
-  STORE_TEST_CONNECTION: { label: 'Mağaza bağlantısını test etti', icon: Package },
+  STORE_CREATE: { label: 'Mağaza ekledi', icon: BalinaProductsIcon },
+  STORE_UPDATE: { label: 'Mağazayı güncelledi', icon: BalinaProductsIcon },
+  STORE_DELETE: { label: 'Mağazayı sildi', icon: BalinaProductsIcon },
+  STORE_TEST_CONNECTION: { label: 'Mağaza bağlantısını test etti', icon: BalinaProductsIcon },
 
-  ORDER_CREATE: { label: 'Sipariş oluşturdu', icon: ShoppingCart },
-  ORDER_UPDATE: { label: 'Siparişi güncelledi', icon: ShoppingCart },
-  ORDER_REFUND: { label: 'Siparişi iade etti', icon: RefreshCw },
-  ORDER_CANCEL: { label: 'Siparişi iptal etti', icon: ShoppingCart },
+  ORDER_CREATE: { label: 'Sipariş oluşturdu', icon: BalinaOrderIcon },
+  ORDER_UPDATE: { label: 'Siparişi güncelledi', icon: BalinaOrderIcon },
+  ORDER_REFUND: { label: 'Siparişi iade etti', icon: BalinaRegenerateIcon },
+  ORDER_CANCEL: { label: 'Siparişi iptal etti', icon: BalinaOrderIcon },
 
-  STOCK_UPDATE: { label: 'Stok güncelledi', icon: Package },
-  STOCK_PUSH_REMOTE: { label: 'Pazaryerine stok gönderdi', icon: Package },
+  STOCK_UPDATE: { label: 'Stok güncelledi', icon: BalinaProductsIcon },
+  STOCK_PUSH_REMOTE: { label: 'Pazaryerine stok gönderdi', icon: BalinaProductsIcon },
 
-  CARGO_CREATE: { label: 'Kargo oluşturdu', icon: Package },
-  CARGO_CANCEL: { label: 'Kargoyu iptal etti', icon: Package },
+  CARGO_CREATE: { label: 'Kargo oluşturdu', icon: BalinaProductsIcon },
+  CARGO_CANCEL: { label: 'Kargoyu iptal etti', icon: BalinaProductsIcon },
 
-  API_KEY_CREATE: { label: 'API anahtarı oluşturdu', icon: Key },
-  API_KEY_REVOKE: { label: 'API anahtarını iptal etti', icon: Key },
-  API_KEY_ROTATE: { label: 'API anahtarını yeniledi', icon: Key },
+  API_KEY_CREATE: { label: 'API anahtarı oluşturdu', icon: BalinaApiIcon },
+  API_KEY_REVOKE: { label: 'API anahtarını iptal etti', icon: BalinaApiIcon },
+  API_KEY_ROTATE: { label: 'API anahtarını yeniledi', icon: BalinaApiIcon },
 };
-
-// Renk paletini Tailwind'in tarayıcısı yakalayabilsin diye class isimleri
-// tam (literal) yazıldı — `bg-${x}-500` şeklinde dynamic compose Tailwind v4'te
-// güvenilir değil.
-const COLOR_PALETTE: string[] = [
-  'bg-blue-500',
-  'bg-emerald-500',
-  'bg-violet-500',
-  'bg-amber-500',
-  'bg-rose-500',
-  'bg-sky-500',
-  'bg-orange-500',
-  'bg-fuchsia-500',
-  'bg-indigo-500',
-  'bg-teal-500',
-  'bg-lime-500',
-  'bg-cyan-500',
-  'bg-pink-500',
-  'bg-red-500',
-  'bg-yellow-500',
-  'bg-green-500',
-];
-
-function hashString(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i += 1) {
-    h = (h * 31 + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-function colorFor(key: string): string {
-  return COLOR_PALETTE[hashString(key) % COLOR_PALETTE.length];
-}
 
 /** UUID/cuid pattern — 18+ alfasayısal karakterli segmentleri "id" sayar. */
 const ID_LIKE = /^[a-z0-9]{18,}$/i;
@@ -397,7 +367,7 @@ function deriveAction(item: AuditLogItem): DerivedAction {
   if (normalized && method) {
     const rule = matchEndpointRule(normalized, method);
     if (rule) {
-      return { verb: rule.label, icon: Clock, colorKey: rule.key };
+      return { verb: rule.label, icon: BalinaClockIcon, colorKey: rule.key };
     }
   }
 
@@ -410,7 +380,7 @@ function deriveAction(item: AuditLogItem): DerivedAction {
   };
   return {
     verb: verbMap[method] ?? 'işlem yaptı',
-    icon: Clock,
+    icon: BalinaClockIcon,
     colorKey: item.action,
   };
 }
@@ -434,39 +404,46 @@ function endOfDay(date: Date): Date {
 export default function ActivityLogPage() {
   usePageTitle('Aktivite günlüğü');
 
-  const router = useRouter();
   const { currentCompany } = useCompanyStore();
   const { items, meta, isLoading, error, forbidden, fetchCompanyLogs, reset } =
     useAuditLogStore();
 
-  const slug = currentCompany?.slug ?? '';
   const companyId = currentCompany?.id;
   // Doc §1.1: yalnızca OWNER/ADMIN üyeler audit log'u görebilir. Backend zaten
   // 403 döner; UI'da önceden gate edip net mesaj göstermek daha iyi.
   const userRole = currentCompany?.role;
   const canViewLogs = userRole === 'OWNER' || userRole === 'ADMIN';
 
-  const [range, setRange] = useState<DateRange>(() => todayRange());
+  const [range, setRange] = useState<DateRange | undefined>(() => todayRange());
+  const [calOpen, setCalOpen] = useState(false);
+  const rangeLabel =
+    range?.from
+      ? `${format(range.from, 'd MMM yyyy', { locale: tr })} – ${format(
+          range.to ?? range.from,
+          'd MMM yyyy',
+          { locale: tr },
+        )}`
+      : 'Tarih seç';
 
   useEffect(() => {
-    if (!companyId || !canViewLogs) return;
+    if (!companyId || !canViewLogs || !range?.from) return;
     reset();
     fetchCompanyLogs(companyId, {
       page: 1,
       startDate: range.from,
-      endDate: endOfDay(range.to),
+      endDate: endOfDay(range.to ?? range.from),
     });
-  }, [companyId, canViewLogs, range.from, range.to, fetchCompanyLogs, reset]);
+  }, [companyId, canViewLogs, range?.from, range?.to, fetchCompanyLogs, reset]);
 
   const hasMore = meta.page < meta.totalPages;
 
   const handleLoadMore = () => {
-    if (!companyId || isLoading || !hasMore) return;
+    if (!companyId || isLoading || !hasMore || !range?.from) return;
     fetchCompanyLogs(companyId, {
       page: meta.page + 1,
       append: true,
       startDate: range.from,
-      endDate: endOfDay(range.to),
+      endDate: endOfDay(range.to ?? range.from),
     });
   };
 
@@ -474,28 +451,13 @@ export default function ActivityLogPage() {
 
   return (
     <>
-      {/* Section header — settings layout convention */}
-      <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
-          aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <h2 className="text-sm font-medium text-foreground">Aktivite günlüğü</h2>
-      </div>
-
       <div className="flex flex-1 flex-col items-center overflow-y-auto py-6">
         <div className="flex w-full max-w-[616px] flex-col px-3">
           {/* OWNER/ADMIN dışı roller bu sayfayı göremez — backend 403 dönmeden
               UI'da net bir mesajla durduralım. */}
           {!canViewLogs ? (
             <div className="flex flex-col items-center gap-2 rounded-xl bg-surface px-4 py-12 text-center">
-              <Lock className="h-6 w-6 text-muted" />
+              <BalinaLockIcon className="h-6 w-6 text-muted" />
               <span className="text-sm font-medium text-foreground">
                 Bu sayfaya erişim yetkiniz yok
               </span>
@@ -506,7 +468,7 @@ export default function ActivityLogPage() {
             </div>
           ) : (
           <>
-          {/* Filter row 1: meta + date range */}
+          {/* Filter row: meta + tarih aralığı butonu (tıklayınca BalinaCalendar popover) */}
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-xs text-muted">
               {meta.total > 0
@@ -515,21 +477,39 @@ export default function ActivityLogPage() {
                   ? ''
                   : 'Kayıt yok'}
             </span>
-            <DateRangeInput
-              value={range}
-              onChange={(next) => {
-                if (next) setRange(next);
-              }}
-              visibleMonths={1}
-              tone="muted"
-              className="w-[260px]"
-            />
+            <BalinaPopover
+              open={calOpen}
+              onOpenChange={setCalOpen}
+              side="bottom"
+              align="end"
+              noAutoFocus
+              className="w-fit max-w-none overflow-hidden p-1"
+              trigger={
+                <button
+                  type="button"
+                  className="text-body-small-medium inline-flex h-9 cursor-pointer items-center gap-2 rounded-[0.625rem] bg-[var(--balina-background-dark-default)] px-3 text-[var(--balina-text-strong)] outline-none transition-colors hover:bg-[var(--balina-background-dark-strong)] focus-visible:outline-none"
+                >
+                  <BalinaCalendarIcon className="h-4 w-4 text-[var(--balina-icon-strong)]" />
+                  <span>{rangeLabel}</span>
+                </button>
+              }
+            >
+              <BalinaCalendar
+                mode="range"
+                selected={range}
+                onSelect={(r) => {
+                  setRange(r);
+                  if (r?.from && r?.to) setCalOpen(false);
+                }}
+                disabled={{ after: new Date() }}
+              />
+            </BalinaPopover>
           </div>
 
           <div className="flex flex-col rounded-xl bg-surface">
             {forbidden ? (
               <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-                <Lock className="mb-1 h-6 w-6 text-muted" />
+                <BalinaLockIcon className="mb-1 h-6 w-6 text-muted" />
                 <span className="text-sm font-medium text-foreground">
                   Bu sayfaya erişim yetkiniz yok
                 </span>
@@ -551,7 +531,7 @@ export default function ActivityLogPage() {
               </div>
             ) : renderedItems.length === 0 ? (
               <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
-                <Clock className="mb-1 h-6 w-6 text-muted" />
+                <BalinaClockIcon className="mb-1 h-6 w-6 text-muted" />
                 <span className="text-sm font-medium text-foreground">
                   Bu aralıkta kayıt yok
                 </span>
@@ -564,7 +544,6 @@ export default function ActivityLogPage() {
                 const isLast = index === renderedItems.length - 1;
                 const derived = deriveAction(item);
                 const Icon = derived.icon;
-                const tile = colorFor(derived.colorKey);
                 return (
                   <div
                     key={item.id}
@@ -572,13 +551,13 @@ export default function ActivityLogPage() {
                       !isLast ? 'border-b border-black/[0.04]' : ''
                     }`}
                   >
-                    {/* Action tile (deterministic color) */}
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white ${tile}`}
+                    {/* Aksiyon ikonu — yeni sistem: renkli tile yok, sade. */}
+                    <span
+                      className="flex h-8 w-8 shrink-0 items-center justify-center text-foreground/70"
                       aria-hidden="true"
                     >
-                      <Icon className="h-4 w-4" />
-                    </div>
+                      <Icon className="h-5 w-5" />
+                    </span>
 
                     {/* Body — title is a full Turkish sentence. */}
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -592,8 +571,7 @@ export default function ActivityLogPage() {
                           </span>
                         </p>
                         {!item.success && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
-                            <CircleXmark className="h-3 w-3" />
+                          <span className="inline-flex items-center rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-medium text-rose-600">
                             Hata
                           </span>
                         )}
@@ -621,15 +599,14 @@ export default function ActivityLogPage() {
 
           {hasMore && !error && (
             <div className="mt-4 flex justify-center">
-              <Button
-                variant="tertiary"
-                onPress={handleLoadMore}
-                isPending={isLoading}
-                isDisabled={isLoading}
-                className="h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+              <BalinaButton
+                variant="soft"
+                size="large"
+                onClick={handleLoadMore}
+                disabled={isLoading}
               >
                 Daha fazla göster
-              </Button>
+              </BalinaButton>
             </div>
           )}
 

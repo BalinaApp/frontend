@@ -14,17 +14,15 @@ import {
   TrashBin,
 } from '@gravity-ui/icons';
 import {
-  AlertDialog,
-  Button,
-  Checkbox,
-  Dropdown,
-  Input,
-  ListBox,
-  Switch,
-  TextArea,
-  TextField,
+  BalinaButton,
+  BalinaConfirmDialog,
+  BalinaDropdown,
+  BalinaDropdownItem,
+  BalinaSwitch,
+  BalinaTextarea,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useAiStore } from '@/stores/aiStore';
@@ -41,22 +39,6 @@ import { VariationsTable } from '@/components/products/variations-table';
  */
 
 const MAX_IMAGES = 8;
-
-// HeroUI <Input variant="secondary" /> + base saydam, focus'ta hafif bg.
-const FIELD_CLASS =
-  'bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] data-[focused=true]:bg-foreground/[0.06] placeholder:text-zinc-500';
-
-/** HeroUI secondary Input, başlık inputuyla aynı stil. */
-function SecondaryInput(props: React.ComponentProps<typeof Input>) {
-  return (
-    <Input
-      fullWidth
-      variant="secondary"
-      {...props}
-      className={`${FIELD_CLASS} ${props.className ?? ''}`}
-    />
-  );
-}
 
 /** Fiyat input — type=text + inputMode=decimal, TR formatı (1.234,56), ₺ suffix. */
 function PriceField({
@@ -119,7 +101,7 @@ function PriceField({
 }
 
 const PILL_BUTTON_CLASS =
-  'h-9 rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground hover:bg-foreground/[0.08]';
+  'h-9 bg-foreground/[0.06] px-4 text-sm font-medium text-foreground hover:bg-foreground/[0.08]';
 
 /** public/logos/ veya /figma/integrations/'tan platform logo path'i. */
 function platformLogoSrc(
@@ -235,16 +217,15 @@ function ProductImageCard({
           {label}
         </span>
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:pointer-events-auto group-hover:opacity-100">
-          <Button
+          <BalinaButton
             variant="ghost"
-            size="sm"
-            onPress={onRemove}
+            size="small"
+            onClick={onRemove}
             aria-label="Görseli sil"
-            className="rounded-full"
+            leftIcon={<TrashBin className="h-3.5 w-3.5" />}
           >
-            <TrashBin className="h-3.5 w-3.5" />
             Sil
-          </Button>
+          </BalinaButton>
         </div>
       </div>
     </div>
@@ -265,17 +246,16 @@ function BalinaAiButton({
   className?: string;
 }) {
   return (
-    <Button
-      variant="tertiary"
-      size="sm"
-      onPress={onPress}
-      isPending={isPending}
-      isDisabled={isDisabled}
-      className={`chroma-border h-9 cursor-pointer rounded-full bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
+    <BalinaButton
+      variant="soft"
+      size="small"
+      onClick={onPress}
+      disabled={isPending || isDisabled}
+      leftIcon={<BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />}
+      className={`chroma-border h-9 cursor-pointer bg-foreground/[0.06] px-4 text-sm font-medium text-foreground ${className}`}
     >
-      <BalinaOsMark className="h-4 w-4 shrink-0" aria-hidden="true" />
       {label}
-    </Button>
+    </BalinaButton>
   );
 }
 
@@ -616,12 +596,13 @@ export default function ProductEditPage() {
     }
   };
 
-  if (!currentCompany || isLoading) return <PageHeader title="Ürün Adı" />;
+  if (!currentCompany || isLoading)
+    return <PageHeader title="Ürün Adı" icon={<Box className="h-4 w-4" />} />;
 
   if (loadError) {
     return (
       <>
-        <PageHeader title="Ürün Adı" />
+        <PageHeader title="Ürün Adı" icon={<Box className="h-4 w-4" />} />
         <div className="p-6">
           <div className="rounded-lg bg-danger/10 p-4 text-sm text-danger">
             {loadError}
@@ -634,7 +615,7 @@ export default function ProductEditPage() {
   if (!selectedProduct) {
     return (
       <>
-        <PageHeader title="Ürün Adı" />
+        <PageHeader title="Ürün Adı" icon={<Box className="h-4 w-4" />} />
         <div className="p-6 text-sm text-zinc-500">Ürün bulunamadı</div>
       </>
     );
@@ -647,30 +628,28 @@ export default function ProductEditPage() {
     <>
       <PageHeader
         title={name.trim() || 'Ürün Adı'}
+        icon={<Box className="h-4 w-4" />}
         leading={
-          <Button
-            variant="tertiary"
-            size="sm"
-            isIconOnly
+          <BalinaButton
+            variant="soft"
+            size="small"
             aria-label="Geri"
-            onPress={() => router.push(`/${companySlug}/products`)}
-            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+            leftIcon={<ChevronLeft className="h-4 w-4" />}
+            onClick={() => router.push(`/${companySlug}/products`)}
+            className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10]"
+          />
         }
         action={
-          <Button
-            variant="tertiary"
-            size="sm"
-            onPress={handleKaydet}
-            isPending={isSaving}
-            isDisabled={isSaving}
-            className="h-8 rounded-full bg-foreground/[0.04] px-3 text-xs"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            onClick={handleKaydet}
+            disabled={isSaving}
+            leftIcon={<Check className="h-3.5 w-3.5" />}
+            className="h-8 bg-foreground/[0.04] px-3 text-xs"
           >
-            <Check className="h-3.5 w-3.5" />
             Kaydet
-          </Button>
+          </BalinaButton>
         }
       />
 
@@ -679,36 +658,24 @@ export default function ProductEditPage() {
           {/* === 1) Başlık + Açıklama + AI === */}
           <Section>
             <div className="flex flex-col gap-2">
-              <TextField value={name} onChange={setName} aria-label="Ürün başlığı">
-                <Input
-                  fullWidth
-                  variant="secondary"
-                  placeholder="Ürün Başlığı"
-                  className="bg-transparent focus:outline-none focus:ring-0 focus:bg-foreground/[0.06] text-lg font-medium leading-7 placeholder:text-zinc-500"
-                />
-              </TextField>
+              <BalinaTextField
+                variant="ghost"
+                value={name}
+                onChange={setName}
+                aria-label="Ürün başlığı"
+                placeholder="Ürün Başlığı"
+                className="text-lg font-medium leading-7 placeholder:text-zinc-500"
+              />
               <div>
-                <TextField
+                <BalinaTextarea
+                  variant="ghost"
                   value={description}
-                  onChange={setDescription}
+                  onChange={(e) => setDescription(e.target.value)}
                   aria-label="Açıklama"
-                >
-                  <TextArea
-                    fullWidth
-                    variant="secondary"
-                    placeholder="Açıklama Alanı"
-                    rows={3}
-                    className="
-                      min-h-[88px]
-                      resize-none
-                      bg-transparent
-                      focus:outline-none
-                      focus:ring-0
-                      focus:bg-foreground/[0.06]
-                      placeholder:text-zinc-500
-                    "
-                  />
-                </TextField>
+                  placeholder="Açıklama Alanı"
+                  rows={3}
+                  className="min-h-[88px] resize-none placeholder:text-zinc-500"
+                />
                 <div className="pointer-events-none flex flex-1 items-center justify-end mt-4">
                   <div className="pointer-events-auto">
                     <BalinaAiButton
@@ -739,16 +706,15 @@ export default function ProductEditPage() {
               >
                 <div className="flex flex-col items-center gap-1.5">
                   <div className="flex items-center gap-3">
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={handleFilePick}
-                      isPending={isUploading}
-                      isDisabled={isUploading}
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      onClick={handleFilePick}
+                      disabled={isUploading}
                       className={PILL_BUTTON_CLASS}
                     >
                       Yeni Yükle
-                    </Button>
+                    </BalinaButton>
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
                       label="balinaOS AI ile Üret"
@@ -780,50 +746,33 @@ export default function ProductEditPage() {
                   />
                 ))}
                 {imageUrls.length < MAX_IMAGES && (
-                  <Dropdown>
-                    <Dropdown.Trigger
-                      aria-label="Görsel ekle"
-                      isDisabled={isUploading}
-                      className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-black/15 text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span className="text-[10px]">Ekle</span>
-                    </Dropdown.Trigger>
-                    <Dropdown.Popover
-                      className="w-[200px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-                      style={{
-                        border: '1px solid var(--border)',
-                        boxShadow:
-                          '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-                      }}
-                    >
-                      <Dropdown.Menu
-                        aria-label="Görsel kaynağı"
-                        onAction={(key) => {
-                          if (key === 'ai') openAiImageModalOrRedirect();
-                          else if (key === 'file') handleFilePick();
-                        }}
-                        className="flex flex-col gap-0 py-1 outline-none"
+                  <BalinaDropdown
+                    align="start"
+                    trigger={
+                      <button
+                        type="button"
+                        aria-label="Görsel ekle"
+                        disabled={isUploading}
+                        className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-black/15 text-zinc-500 transition-colors hover:bg-foreground/[0.04]"
                       >
-                        <Dropdown.Item
-                          id="ai"
-                          textValue="AI ile üret"
-                          className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                        >
-                          <BalinaOsMark className="h-3.5 w-3.5 shrink-0 text-foreground" />
-                          <span className="flex-1">AI ile üret</span>
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          id="file"
-                          textValue="Dosyalardan seç"
-                          className="flex h-9 cursor-pointer items-center gap-2.5 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                        >
-                          <Plus className="h-3.5 w-3.5 shrink-0 text-foreground/70" />
-                          <span className="flex-1">Dosyalardan seç</span>
-                        </Dropdown.Item>
-                      </Dropdown.Menu>
-                    </Dropdown.Popover>
-                  </Dropdown>
+                        <Plus className="h-4 w-4" />
+                        <span className="text-[10px]">Ekle</span>
+                      </button>
+                    }
+                  >
+                    <BalinaDropdownItem
+                      icon={<BalinaOsMark className="h-3.5 w-3.5 text-foreground" />}
+                      onSelect={openAiImageModalOrRedirect}
+                    >
+                      AI ile üret
+                    </BalinaDropdownItem>
+                    <BalinaDropdownItem
+                      icon={<Plus className="h-3.5 w-3.5 text-foreground/70" />}
+                      onSelect={handleFilePick}
+                    >
+                      Dosyalardan seç
+                    </BalinaDropdownItem>
+                  </BalinaDropdown>
                 )}
               </div>
             )}
@@ -844,15 +793,10 @@ export default function ProductEditPage() {
               label="Durumu"
             >
               <div className="flex h-9 items-center gap-2 px-3">
-                <Switch
-                  isSelected={isActive}
-                  onChange={setIsActive}
-                  aria-label="Ürün aktif"
-                >
-                  <Switch.Control>
-                    <Switch.Thumb />
-                  </Switch.Control>
-                </Switch>
+                <BalinaSwitch
+                  checked={isActive}
+                  onCheckedChange={setIsActive}
+                />
                 <span className="text-sm text-foreground">
                   {isActive ? 'Aktif' : 'Pasif'}
                 </span>
@@ -862,53 +806,42 @@ export default function ProductEditPage() {
               icon={<Tag className="h-4 w-4 text-foreground/70" />}
               label="SKU"
             >
-              <TextField value={sku} onChange={setSku} aria-label="SKU">
-                <SecondaryInput placeholder="Ekle" />
-              </TextField>
+              <BalinaTextField
+                value={sku}
+                onChange={setSku}
+                aria-label="SKU"
+                placeholder="Ekle"
+              />
             </FieldRow>
             <FieldRow
               icon={<Percent className="h-4 w-4 text-foreground/70" />}
               label="KDV"
             >
-              <Dropdown>
-                <Dropdown.Trigger
-                  aria-label="KDV oranı"
-                  className="flex h-9 w-full items-center justify-between rounded-xl bg-transparent px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.03] data-[focused=true]:bg-foreground/[0.03]"
-                >
-                  <span className={vatRate ? 'text-foreground' : 'text-zinc-500'}>
-                    {vatRate ? `%${vatRate}` : 'Ekle'}
-                  </span>
-                  <ChevronDown className="h-3.5 w-3.5 text-foreground/60" />
-                </Dropdown.Trigger>
-                <Dropdown.Popover
-                  className="min-w-[200px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-                  style={{
-                    border: '1px solid var(--border)',
-                    boxShadow:
-                      '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-                  }}
-                >
-                  <Dropdown.Menu
-                    aria-label="KDV oranı seç"
-                    onAction={(key) => setVatRate(String(key))}
-                    className="flex flex-col gap-0 py-1 outline-none"
+              <BalinaDropdown
+                align="start"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="KDV oranı"
+                    className="flex h-9 w-full items-center justify-between rounded-xl bg-transparent px-3 text-sm outline-none transition-colors hover:bg-foreground/[0.03] data-[focused=true]:bg-foreground/[0.03]"
                   >
-                    {['0', '1', '10', '20'].map((rate) => (
-                      <Dropdown.Item
-                        key={rate}
-                        id={rate}
-                        textValue={`%${rate}`}
-                        className="flex h-9 cursor-pointer items-center gap-2 px-3 text-[13px] font-medium text-foreground outline-none transition-colors data-[hovered=true]:bg-default/60 data-[focused=true]:bg-default/60"
-                      >
-                        <span className="flex-1">%{rate}</span>
-                        {vatRate === rate && (
-                          <Check className="h-3.5 w-3.5 text-foreground" />
-                        )}
-                      </Dropdown.Item>
-                    ))}
-                  </Dropdown.Menu>
-                </Dropdown.Popover>
-              </Dropdown>
+                    <span className={vatRate ? 'text-foreground' : 'text-zinc-500'}>
+                      {vatRate ? `%${vatRate}` : 'Ekle'}
+                    </span>
+                    <ChevronDown className="h-3.5 w-3.5 text-foreground/60" />
+                  </button>
+                }
+              >
+                {['0', '1', '10', '20'].map((rate) => (
+                  <BalinaDropdownItem
+                    key={rate}
+                    selected={vatRate === rate}
+                    onSelect={() => setVatRate(String(rate))}
+                  >
+                    %{rate}
+                  </BalinaDropdownItem>
+                ))}
+              </BalinaDropdown>
             </FieldRow>
           </Section>
 
@@ -1022,43 +955,25 @@ export default function ProductEditPage() {
       </div>
 
       {/* === Görsel silme onayı === */}
-      <AlertDialog
-        isOpen={pendingDeleteIdx !== null}
+      <BalinaConfirmDialog
+        open={pendingDeleteIdx !== null}
         onOpenChange={(open) => {
           if (!open) setPendingDeleteIdx(null);
         }}
+        title="Görseli sil"
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        onConfirm={async () => {
+          if (pendingDeleteIdx !== null) {
+            const idx = pendingDeleteIdx;
+            setPendingDeleteIdx(null);
+            await removeImage(idx);
+          }
+        }}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Görseli sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-3 pb-2">
-                <p>Bu görsel galeriden kaldırılacak. Devam edilsin mi?</p>
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="px-3 pb-3">
-                <Button variant="tertiary" slot="close">
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={async () => {
-                    if (pendingDeleteIdx !== null) {
-                      const idx = pendingDeleteIdx;
-                      setPendingDeleteIdx(null);
-                      await removeImage(idx);
-                    }
-                  }}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p>Bu görsel galeriden kaldırılacak. Devam edilsin mi?</p>
+      </BalinaConfirmDialog>
 
       {currentCompany && (
         <ProductAiImageModal

@@ -1,0 +1,339 @@
+/* ===================================================================
+   Tasarım sistemi (DS) — renk token'ları + global yardımcı sınıflar.
+   Kaynak "define" sisteminden birebir taşındı; yalnızca prefix `define`
+   yerine `ds` kullanıldı. Değerler/yapı aynen korundu.
+   Tipografi ayrı (theme.css @theme → text-body-*).
+   =================================================================== */
+
+:root {
+  /* ----- Base ----- */
+  --balina-base-heavy: oklch(87.92% 0.000 89.88);
+  --balina-base-heavy-loud: oklch(87.92% 0.000 89.88 / 0.96);
+  --balina-base-heavy-strong: oklch(87.92% 0.000 89.88 / 0.72);
+  --balina-base-heavy-default: oklch(87.92% 0.000 89.88 / 0.56);
+  --balina-base-heavy-muted: oklch(87.92% 0.000 89.88 / 0.4);
+  --balina-base-light: oklch(93.92% 0.000 90.82);
+  --balina-base-light-loud: oklch(93.92% 0.000 90.82 / 0.96);
+  --balina-base-light-strong: oklch(93.92% 0.000 90.82 / 0.8);
+  --balina-base-light-default: oklch(93.92% 0.000 90.82 / 0.7);
+  --balina-base-light-muted: oklch(93.92% 0.000 90.82 / 0.6);
+
+  /* ----- Neutral (dark) opaklık merdiveni ----- */
+  --balina-neutral-dark-1: oklch(25.42% 0.000 89.37 / 0.01);
+  --balina-neutral-dark-2: oklch(25.42% 0.000 89.37 / 0.02);
+  --balina-neutral-dark-4: oklch(25.42% 0.000 89.37 / 0.04);
+  --balina-neutral-dark-6: oklch(25.42% 0.000 89.37 / 0.06);
+  --balina-neutral-dark-8: oklch(25.42% 0.000 89.37 / 0.08);
+  --balina-neutral-dark-10: oklch(25.42% 0.000 89.37 / 0.1);
+  --balina-neutral-dark-16: oklch(25.42% 0.000 89.37 / 0.16);
+  --balina-neutral-dark-20: oklch(25.42% 0.000 89.37 / 0.2);
+  --balina-neutral-dark-30: oklch(25.42% 0.000 89.37 / 0.3);
+  --balina-neutral-dark-40: oklch(25.42% 0.000 89.37 / 0.4);
+  --balina-neutral-dark-50: oklch(25.42% 0.000 89.37 / 0.5);
+  --balina-neutral-dark-60: oklch(25.42% 0.000 89.37 / 0.6);
+  --balina-neutral-dark-70: oklch(25.42% 0.000 89.37 / 0.7);
+  --balina-neutral-dark-80: oklch(25.42% 0.000 89.37 / 0.8);
+  --balina-neutral-dark-90: oklch(25.42% 0.000 89.37 / 0.9);
+  --balina-neutral-dark-100: oklch(25.42% 0.000 89.37);
+  --balina-neutral-dark-1000: #000000;
+
+  /* ----- Neutral (light) opaklık merdiveni ----- */
+  --balina-neutral-light-1: oklch(97.92% 0.000 87.05 / 0.01);
+  --balina-neutral-light-2: oklch(97.92% 0.000 87.05 / 0.02);
+  --balina-neutral-light-4: oklch(97.92% 0.000 87.05 / 0.04);
+  --balina-neutral-light-6: oklch(97.92% 0.000 87.05 / 0.06);
+  --balina-neutral-light-8: oklch(97.92% 0.000 87.05 / 0.08);
+  --balina-neutral-light-10: oklch(97.92% 0.000 87.05 / 0.1);
+  --balina-neutral-light-16: oklch(97.92% 0.000 87.05 / 0.16);
+  --balina-neutral-light-20: oklch(97.92% 0.000 87.05 / 0.2);
+  --balina-neutral-light-30: oklch(97.92% 0.000 87.05 / 0.3);
+  --balina-neutral-light-40: oklch(97.92% 0.000 87.05 / 0.4);
+  --balina-neutral-light-50: oklch(97.92% 0.000 87.05 / 0.5);
+  --balina-neutral-light-60: oklch(97.92% 0.000 87.05 / 0.6);
+  --balina-neutral-light-70: oklch(97.92% 0.000 87.05 / 0.7);
+  --balina-neutral-light-80: oklch(97.92% 0.000 87.05 / 0.8);
+  --balina-neutral-light-90: oklch(97.92% 0.000 87.05 / 0.9);
+  --balina-neutral-light-100: oklch(97.92% 0.000 87.05);
+  --balina-neutral-light-1000: #ffffff;
+
+  /* ----- Background (light) ----- */
+  --balina-background-light-shout: var(--balina-neutral-light-1000);
+  --balina-background-light-loud: var(--balina-neutral-light-90);
+  --balina-background-light-strong: var(--balina-neutral-light-80);
+  --balina-background-light-default: var(--balina-neutral-light-40);
+  --balina-background-light-muted: var(--balina-neutral-light-20);
+  --balina-background-light-faint: var(--balina-neutral-light-2);
+
+  /* ----- Background (dark / hover-fill) ----- */
+  --balina-background-dark-shout: var(--balina-neutral-dark-1000);
+  --balina-background-dark-loud: var(--balina-neutral-dark-20);
+  --balina-background-dark-strong: var(--balina-neutral-dark-8);
+  --balina-background-dark-default: var(--balina-neutral-dark-6);
+  --balina-background-dark-muted: var(--balina-neutral-dark-4);
+  --balina-background-dark-faint: var(--balina-neutral-dark-2);
+
+  /* ----- Text ----- */
+  --balina-text-shout: var(--balina-neutral-dark-100);
+  --balina-text-loud: var(--balina-neutral-dark-90);
+  --balina-text-strong: var(--balina-neutral-dark-70);
+  --balina-text-default: var(--balina-neutral-dark-60);
+  --balina-text-muted: var(--balina-neutral-dark-40);
+  --balina-text-faint: var(--balina-neutral-dark-30);
+
+  /* ----- Icon ----- */
+  --balina-icon-shout: var(--balina-neutral-dark-100);
+  --balina-icon-loud: var(--balina-neutral-dark-80);
+  --balina-icon-strong: var(--balina-neutral-dark-60);
+  --balina-icon-default: var(--balina-neutral-dark-50);
+  --balina-icon-muted: var(--balina-neutral-dark-30);
+  --balina-icon-faint: var(--balina-neutral-dark-20);
+
+  /* ----- Border ----- */
+  --balina-border-shout: var(--balina-neutral-dark-80);
+  --balina-border-loud: var(--balina-neutral-dark-10);
+  --balina-border-strong: var(--balina-neutral-dark-8);
+  --balina-border-default: var(--balina-neutral-dark-6);
+  --balina-border-muted: var(--balina-neutral-dark-4);
+  --balina-border-faint: var(--balina-neutral-dark-2);
+  --balina-border-focus: var(--balina-neutral-dark-80);
+
+  /* ----- Accent ----- */
+  --accent-red: oklch(0.5775 0.22 27.72);
+
+  /* ----- Layout / timing ----- */
+  --selection: var(--balina-base-heavy-muted);
+  --aside-width: 256px;
+  --aside-min-width: 180px;
+  --resize-handle-size: 6px;
+  --gap: 0.5rem;
+  --top-bar-height: 35px;
+  --transition-duration: 150ms;
+  --transition-timing-function: ease;
+  --scrollbar-size: 0.25rem;
+
+  /* ----- Yüzey kompozisyonları ----- */
+  --balina-panel-surface: radial-gradient(50.07% 50% at 100% 50.07%, var(--balina-base-heavy-muted) 0%, var(--balina-background-light-loud) 100%),
+    radial-gradient(50.07% 50% at 0% 50.07%, var(--balina-base-heavy-muted) 0%, var(--balina-background-light-loud) 100%),
+    radial-gradient(50% 50% at 50% 50%, var(--balina-base-heavy-muted) 0%, var(--balina-background-light-loud) 100%),
+    linear-gradient(180deg, var(--balina-background-light-loud) 15%, var(--balina-base-heavy-muted) 100%),
+    linear-gradient(180deg, var(--balina-background-light-loud) 15%, var(--balina-background-light-loud) 100%);
+  --color-background-raised-default: linear-gradient(to bottom, color-mix(in oklch, var(--balina-background-light-loud) 44%, transparent) 0%, color-mix(in oklch, var(--balina-background-light-faint) 44%, transparent) 100%),
+    linear-gradient(to bottom, var(--balina-background-light-default) 0%, var(--balina-background-light-default) 100%);
+  --color-background-raised-loud: linear-gradient(to bottom, var(--balina-background-light-shout) 0%, var(--balina-background-light-strong) 100%),
+    linear-gradient(to bottom, var(--balina-background-light-strong) 0%, var(--balina-background-light-strong) 100%);
+  --color-background-raised-shout: linear-gradient(to bottom, var(--balina-background-light-shout) 0%, var(--balina-background-light-strong) 100%),
+    linear-gradient(to bottom, var(--balina-background-light-loud) 0%, var(--balina-background-light-loud) 100%);
+
+  /* ----- Color picker (tema editörü) ----- */
+  --color-picker-light-100: hsla(0, 0%, 100%, 1);
+  --color-picker-light-90: hsla(0, 0%, 100%, 0.9);
+  --color-picker-light-80: hsla(0, 0%, 100%, 0.8);
+  --color-picker-dark-56: hsla(0, 0%, 5%, 0.56);
+  --color-picker-dark-40: hsla(0, 0%, 5%, 0.4);
+  --color-picker-dark-30: hsla(0, 0%, 5%, 0.3);
+  --color-picker-dark-20: hsla(0, 0%, 5%, 0.2);
+  --color-picker-dark-16: hsla(0, 0%, 5%, 0.16);
+  --color-picker-dark-10: hsla(0, 0%, 5%, 0.1);
+  --color-picker-dark-8: hsla(0, 0%, 5%, 0.08);
+  --color-picker-dark-6: hsla(0, 0%, 5%, 0.06);
+  --color-picker-dark-5: hsla(0, 0%, 5%, 0.05);
+  --color-picker-dark-4: hsla(0, 0%, 5%, 0.04);
+  --color-picker-dark-3: hsla(0, 0%, 5%, 0.03);
+  --color-picker-dark-2: hsla(0, 0%, 5%, 0.02);
+  --color-accent-red: oklch(0.5775 0.22 27.72);
+}
+
+/* ===================== Yardımcı sınıflar ===================== */
+
+.button-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* Metin renk yardımcıları */
+.color-text-shout {
+  color: var(--balina-text-shout);
+}
+.color-text-loud {
+  color: var(--balina-text-loud);
+}
+.color-text-strong {
+  color: var(--balina-text-strong);
+}
+.color-text-default {
+  color: var(--balina-text-default);
+}
+.color-text-muted {
+  color: var(--balina-text-muted);
+}
+.color-text-faint {
+  color: var(--balina-text-faint);
+}
+
+/* Raised (kabarık) yüzeyler */
+.color-background-raised-default {
+  background-image: var(--color-background-raised-shout);
+  background-color: var(--balina-background-light-default);
+}
+.color-background-raised-loud {
+  background-image: var(--color-background-raised-loud);
+  background-color: var(--balina-background-light-strong);
+}
+.color-background-raised-shout {
+  background-image: var(--color-background-raised-loud);
+  background-color: var(--balina-background-light-shout);
+}
+
+/* Gölge (elevation) sistemi */
+.shadow-elevation-medium {
+  box-shadow: 0 24px 40px -12px var(--balina-neutral-dark-8), 0 16px 28px -8px var(--balina-neutral-dark-4),
+    0 4px 6px -2px var(--balina-neutral-dark-4), 0 0 2px 0 var(--balina-neutral-dark-4), 0 0 0 1px var(--balina-neutral-dark-4);
+}
+.shadow-elevation-large,
+.shadow-elevation-medium {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+.shadow-elevation-large {
+  box-shadow: 0 48px 64px -20px var(--balina-neutral-dark-10), 0 24px 40px -10px var(--balina-neutral-dark-4),
+    0 16px 24px -8px var(--balina-neutral-dark-2), 0 8px 16px -4px var(--balina-neutral-dark-2),
+    0 4px 6px -2px var(--balina-neutral-dark-4), 0 0 2px 0 var(--balina-neutral-dark-4), 0 0 0 1px var(--balina-neutral-dark-4);
+}
+.shadow-elevation-small {
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  box-shadow: 0 16px 24px -8px var(--balina-neutral-dark-4), 0 4px 8px -2px var(--balina-neutral-dark-4),
+    0 2px 4px -1px var(--balina-neutral-dark-4), 0 0 2px 0 var(--balina-neutral-dark-4), 0 0 0 1px var(--balina-neutral-dark-4);
+}
+.shadow-panel-surface {
+  box-shadow: 0 0 6px 0 var(--balina-neutral-dark-8), 0 1px 3px 0 var(--balina-neutral-dark-4),
+    0 0.5px 0.5px 0 var(--balina-neutral-dark-6);
+}
+.shadow-message-rest {
+  box-shadow: 0 6px 32px 0 var(--balina-neutral-dark-4), 0 40px 56px -32px var(--balina-neutral-dark-2),
+    0 0 0 0.75px var(--balina-neutral-dark-4);
+}
+.shadow-ui-tooltip {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 0 2px 0 var(--balina-neutral-dark-4), 0 0.5px 0.5px 0 var(--balina-neutral-dark-6),
+    0 4px 6px 0 var(--balina-neutral-dark-4), 0 10px 24px 0 var(--balina-neutral-dark-4);
+}
+.shadow-media-rest {
+  box-shadow: 0 20px 40px 0 var(--balina-neutral-dark-10);
+}
+.shadow-media-hover {
+  box-shadow: 0 24px 56px 0 var(--balina-neutral-dark-16);
+}
+.shadow-search-modal {
+  box-shadow: 0 24px 120px 0 var(--balina-neutral-dark-4), 0 32px 64px 0 var(--balina-neutral-dark-6),
+    0 24px 40px 0 var(--balina-neutral-dark-4), 0 16px 24px -8px var(--balina-neutral-dark-2),
+    0 8px 16px -4px var(--balina-neutral-dark-2), 0 4px 6px -2px var(--balina-neutral-dark-4),
+    0 0 2px 0 var(--balina-neutral-dark-4), 0 0 0 1px var(--balina-neutral-dark-4);
+}
+
+/* Klavye odak halkası */
+.focusable:focus-visible {
+  outline: solid 0.1rem var(--balina-neutral-dark-80);
+  outline-offset: 0.1rem;
+  box-shadow: 0 0 0 0.1rem var(--balina-neutral-light-90), 0 0 0 0.35rem var(--balina-neutral-dark-6);
+}
+
+/* ===================== Otomatik gizlenen scrollbar ===================== */
+/* `balina-scrollbar` sınıfı + useBalinaScrollbar hook'u: kaydırınca görünür,
+   durunca kaybolur (data-scrolling attribute'u hook tarafından yönetilir). */
+.balina-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color var(--transition-duration) ease;
+}
+.balina-scrollbar[data-scrolling="true"] {
+  scrollbar-color: var(--balina-neutral-dark-20) transparent;
+}
+.balina-scrollbar::-webkit-scrollbar {
+  width: var(--scrollbar-size);
+  height: var(--scrollbar-size);
+}
+.balina-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.balina-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 99px;
+  transition: background-color var(--transition-duration) ease;
+}
+.balina-scrollbar[data-scrolling="true"]::-webkit-scrollbar-thumb {
+  background-color: var(--balina-neutral-dark-20);
+}
+
+/* ===================== Toast gölgesi ===================== */
+.shadow-toast {
+  box-shadow:
+    0 4px 12px 0 var(--balina-neutral-dark-2),
+    0 8px 24px 0 var(--balina-neutral-dark-2),
+    0 16px 32px 0 var(--balina-neutral-dark-4),
+    0 32px 48px 0 var(--balina-neutral-dark-2);
+}
+
+/* ===================== Panel-surface gölgesi ===================== */
+.shadow-panel-surface {
+  box-shadow:
+    0 0 6px 0 var(--balina-neutral-dark-8),
+    0 1px 3px 0 var(--balina-neutral-dark-4),
+    0 0.5px 0.5px 0 var(--balina-neutral-dark-6);
+}
+
+/* ===================== Raised yüzey gölgesi (1px halka + yumuşak) ===================== */
+.shadow-raised {
+  box-shadow:
+    0 0 0 1px var(--balina-neutral-dark-4),
+    0 4px 12px 0 var(--balina-neutral-dark-2),
+    0 8px 24px 0 var(--balina-neutral-dark-2),
+    0 16px 32px 0 var(--balina-neutral-dark-4),
+    0 32px 48px 0 var(--balina-neutral-dark-2);
+}
+
+/* ===================== Aksan renkleri (durum) ===================== */
+:root {
+  --accent-green: oklch(0.63 0.17 145);
+  --accent-amber: oklch(0.78 0.15 80);
+  --accent-blue: oklch(0.60 0.16 250);
+}
+
+/* ===================== Modal animasyonu (scale + opacity, açılış=kapanış) ===================== */
+@keyframes balina-modal-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes balina-modal-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+.balina-modal[data-state="open"] {
+  animation: balina-modal-in 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.balina-modal[data-state="closed"] {
+  animation: balina-modal-out 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@keyframes balina-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes balina-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+.balina-modal-overlay[data-state="open"] {
+  animation: balina-overlay-in 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.balina-modal-overlay[data-state="closed"] {
+  animation: balina-overlay-out 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===================== Checkbox check çizim animasyonu ===================== */
+@keyframes balina-check-draw {
+  from { stroke-dashoffset: 18; }
+  to { stroke-dashoffset: 0; }
+}
+.balina-check-path {
+  stroke-dasharray: 18;
+  stroke-dashoffset: 18;
+  animation: balina-check-draw 220ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}

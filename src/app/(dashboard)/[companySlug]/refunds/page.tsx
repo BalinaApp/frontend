@@ -17,7 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { Button, Input, ListBox, Select, TextField } from '@/components/ui';
+import { BalinaButton, BalinaInput, BalinaSelect } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useRefundStore } from '@/stores/refundStore';
@@ -157,54 +157,23 @@ export default function RefundsPage() {
           <h1 className="text-lg font-semibold">İade Analizi</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            selectedKey={selectedStoreId || 'all'}
-            onSelectionChange={(key) =>
-              setSelectedStoreId(key === 'all' ? null : String(key))
+          <BalinaSelect
+            value={selectedStoreId || 'all'}
+            onValueChange={(key) =>
+              setSelectedStoreId(key === 'all' ? null : key)
             }
-            aria-label="Mağaza filtresi"
-            className="w-[160px]"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all" textValue="Tüm Mağazalar">
-                  Tüm Mağazalar
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                {stores.map((store) => (
-                  <ListBox.Item key={store.id} id={store.id} textValue={store.name}>
-                    {store.name}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
-          <Select
-            selectedKey={period}
-            onSelectionChange={(key) => setPeriod(String(key))}
-            aria-label="Dönem"
-            className="w-[140px]"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                {PERIOD_OPTIONS.map((opt) => (
-                  <ListBox.Item key={opt.value} id={opt.value} textValue={opt.label}>
-                    {opt.label}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+            options={[
+              { value: 'all', label: 'Tüm Mağazalar' },
+              ...stores.map((store) => ({ value: store.id, label: store.name })),
+            ]}
+            className="w-[160px] max-w-none"
+          />
+          <BalinaSelect
+            value={period}
+            onValueChange={setPeriod}
+            options={PERIOD_OPTIONS}
+            className="w-[140px] max-w-none"
+          />
         </div>
       </div>
 
@@ -458,11 +427,13 @@ export default function RefundsPage() {
             <h3 className="text-sm font-medium">İade Listesi</h3>
             <span className="text-xs text-muted">({refundListTotal} kayıt)</span>
           </div>
-          <div className="relative w-64">
-            <Search className="absolute left-2 top-1/2 z-10 -translate-y-1/2 h-4 w-4 text-muted" />
-            <TextField value={searchTerm} onChange={setSearchTerm}>
-              <Input placeholder="Ara..." className="h-8 pl-8" />
-            </TextField>
+          <div className="w-64">
+            <BalinaInput
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Ara..."
+              leftIcon={<Search className="h-4 w-4" />}
+            />
           </div>
         </div>
 
@@ -531,26 +502,22 @@ export default function RefundsPage() {
                   Sayfa {refundListPage} / {refundListTotalPages}
                 </span>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isIconOnly
+                  <BalinaButton
+                    variant="soft"
+                    size="small"
                     aria-label="Önceki sayfa"
-                    onPress={() => handlePageChange(refundListPage - 1)}
-                    isDisabled={refundListPage <= 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isIconOnly
+                    onClick={() => handlePageChange(refundListPage - 1)}
+                    disabled={refundListPage <= 1}
+                    leftIcon={<ChevronLeft className="h-4 w-4" />}
+                  />
+                  <BalinaButton
+                    variant="soft"
+                    size="small"
                     aria-label="Sonraki sayfa"
-                    onPress={() => handlePageChange(refundListPage + 1)}
-                    isDisabled={refundListPage >= refundListTotalPages}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
+                    onClick={() => handlePageChange(refundListPage + 1)}
+                    disabled={refundListPage >= refundListTotalPages}
+                    leftIcon={<ChevronRight className="h-4 w-4" />}
+                  />
                 </div>
               </div>
             )}

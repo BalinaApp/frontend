@@ -9,7 +9,7 @@ import {
   Copy as CopyIcon,
   TrashBin,
 } from '@gravity-ui/icons';
-import { Dropdown as HDropdown } from '@/components/ui';
+import { BalinaDropdown, BalinaDropdownItem } from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useInventoryStore } from '@/stores/inventoryStore';
 import {
@@ -475,21 +475,28 @@ function ImageAiPanel({
           <BalinaOsMark className="h-3.5 w-3.5" />
           balinaOS AI · {block.type === 'logo' ? 'logo' : 'görsel'}
         </div>
-        <HDropdown>
-          <HDropdown.Trigger className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-accent hover:bg-accent/10">
-            {aspectLabel}
-            <ChevronDown className="h-3 w-3" />
-          </HDropdown.Trigger>
-          <HDropdown.Popover className="w-44 bg-surface/95 p-0 backdrop-blur-[4px]">
-            <HDropdown.Menu onAction={(k) => setAspect(k as ImageAspect)}>
-              {IMAGE_ASPECT_OPTIONS.map((a) => (
-                <HDropdown.Item key={a.id} id={a.id}>
-                  {a.label}
-                </HDropdown.Item>
-              ))}
-            </HDropdown.Menu>
-          </HDropdown.Popover>
-        </HDropdown>
+        <BalinaDropdown
+          align="start"
+          trigger={
+            <button
+              type="button"
+              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-accent hover:bg-accent/10"
+            >
+              {aspectLabel}
+              <ChevronDown className="h-3 w-3" />
+            </button>
+          }
+        >
+          {IMAGE_ASPECT_OPTIONS.map((a) => (
+            <BalinaDropdownItem
+              key={a.id}
+              onSelect={() => setAspect(a.id)}
+              selected={aspect === a.id}
+            >
+              {a.label}
+            </BalinaDropdownItem>
+          ))}
+        </BalinaDropdown>
         <input
           type="text"
           value={prompt}
@@ -562,21 +569,28 @@ function AiAssistPanel({
         <BalinaOsMark className="h-3.5 w-3.5" />
         balinaOS AI · {kindLabel}
       </div>
-      <HDropdown>
-        <HDropdown.Trigger className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-accent hover:bg-accent/10">
-          {toneLabel}
-          <ChevronDown className="h-3 w-3" />
-        </HDropdown.Trigger>
-        <HDropdown.Popover className="w-40 bg-surface/95 p-0 backdrop-blur-[4px]">
-          <HDropdown.Menu onAction={(k) => setTone(k as string)}>
-            {TONE_OPTIONS.map((t) => (
-              <HDropdown.Item key={t.id} id={t.id}>
-                {t.label}
-              </HDropdown.Item>
-            ))}
-          </HDropdown.Menu>
-        </HDropdown.Popover>
-      </HDropdown>
+      <BalinaDropdown
+        align="start"
+        trigger={
+          <button
+            type="button"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-accent hover:bg-accent/10"
+          >
+            {toneLabel}
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        }
+      >
+        {TONE_OPTIONS.map((t) => (
+          <BalinaDropdownItem
+            key={t.id}
+            onSelect={() => setTone(t.id)}
+            selected={tone === t.id}
+          >
+            {t.label}
+          </BalinaDropdownItem>
+        ))}
+      </BalinaDropdown>
       <input
         type="text"
         value={prompt}

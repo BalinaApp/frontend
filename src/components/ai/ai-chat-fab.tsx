@@ -2,7 +2,7 @@
 
 import { Xmark } from '@gravity-ui/icons';
 import { useRouter } from 'next/navigation';
-import { toast } from '@/components/ui';
+import { toast } from '@/components/balina';
 import { useUIStore } from '@/stores/uiStore';
 import { useAiStore } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';

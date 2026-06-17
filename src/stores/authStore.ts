@@ -18,6 +18,7 @@ interface User {
   currentCompanyId?: string;
   themeMode?: 'light' | 'dark';
   themeAccent?: string | null;
+  themeColor?: string | null;
   googleConnected?: boolean;
 }
 

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { Check, ArrowsRotateRight as Loader2 } from '@gravity-ui/icons';
-import { Input, TextField } from '@/components/ui';
+import { BalinaTextField } from '@/components/balina';
 
 interface EditableTextCellProps {
   value: string;
@@ -94,14 +94,13 @@ export function EditableTextCell({
   }
 
   return (
-    <TextField
-      value={editValue}
-      onChange={setEditValue}
-      isDisabled={isSaving}
-      aria-label="Düzenle"
-    >
-      <Input
+    <div className="inline-flex items-center">
+      <BalinaTextField
         ref={inputRef}
+        value={editValue}
+        onChange={setEditValue}
+        disabled={isSaving}
+        aria-label="Düzenle"
         onBlur={handleSave}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -122,6 +121,6 @@ export function EditableTextCell({
           <Loader2 className="h-3 w-3 animate-spin text-muted" />
         </span>
       )}
-    </TextField>
+    </div>
   );
 }

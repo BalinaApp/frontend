@@ -5,14 +5,13 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { UpgradePlanModal } from '@/components/pricing/upgrade-plan-modal';
 import { ArrowsRotateRight as Loader2, TrashBin as Trash2, ArrowUpRightFromSquare as ExternalLink, Check, Sparkles, Gear as Settings, Key } from '@gravity-ui/icons';
 import { ArrowsRotateRight as Loader, ArrowsRotateRight as RefreshCw, CircleExclamation as AlertCircle, Link as LinkIcon, PlugConnection as Plug, Copy, Eye, EyeSlash as EyeOff } from '@gravity-ui/icons';
-import { Alert, AlertDialog, Button, Card, Chip, Input, InputGroup, Label, ListBox, Modal, SearchField, Select, Switch, Tabs, TextArea, TextField, toast } from '@/components/ui';
+import { BalinaAlert, BalinaCard, BalinaChip, BalinaConfirmDialog, BalinaInput, BalinaModal, BalinaSelect, BalinaSwitch, BalinaTextField, BalinaTextarea, toast } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useProductMappingStore } from '@/stores/productMappingStore';
 import { useAiStore, FAL_MODEL_CATALOG, type ProductType } from '@/stores/aiStore';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
 import { FalMark } from '@/components/icons/fal-mark';
-import { MobileSidebarToggle } from '@/components/layout/mobile-sidebar-toggle';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
@@ -21,6 +20,9 @@ import { useTiktokIntegrationStore } from '@/stores/tiktokIntegrationStore';
 import { TiktokMark } from '@/components/icons/tiktok-mark';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
+import { PageHeader } from '@/components/layout/page-header';
+import { BalinaIntegrationIcon, BalinaTabs, BalinaButton, BalinaCloseIcon, BalinaTooltip, BalinaSearchIcon, type BalinaTabItem } from '@/components/balina';
+import { useSidePanel } from '@/components/providers/SidePanel';
 
 // ===== Fal video üretim varsayılanları (Yönet modalı) =====
 const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/pro/image-to-video';
@@ -339,9 +341,12 @@ export default function StoresPage() {
     useStoreStore();
   const { runAutoMatch } = useProductMappingStore();
 
-  const [search, setSearch] = useState('');
+  // Hero arama kaldırıldı; `search` filtre yardımcılarında kullanılıyor (boş = tümü).
+  const [search] = useState('');
   const [selectedMarketplace, setSelectedMarketplace] = useState<Marketplace | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  // Entegrasyon durum filtresi: Hepsi / Aktif / Pasif (segmented).
+  const [activeIntegrationTab, setActiveIntegrationTab] = useState<string>('all');
   const [currentStep, setCurrentStep] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -419,6 +424,8 @@ export default function StoresPage() {
   const [isManageSaving, setIsManageSaving] = useState(false);
   // Anahtar değiştirme alt-modalı — Yönet modalı içindeki butondan açılır.
   const [isChangeKeyOpen, setIsChangeKeyOpen] = useState(false);
+  // "Hesabı Kaldır" onay diyaloğu (Yönet modalı içinde).
+  const [isFalRemoveConfirmOpen, setIsFalRemoveConfirmOpen] = useState(false);
   // Manage dialog tüm integrations'tan çekilir.
   const manageFal = manageFalId
     ? integrations.find((i) => i.id === manageFalId) ?? null
@@ -1419,6 +1426,8 @@ export default function StoresPage() {
     >
   >({});
   const [settingsModalStoreId, setSettingsModalStoreId] = useState<string | null>(null);
+  // Mağaza ayarları modalı sekmesi (Genel / Stok Sync / Trendyol).
+  const [settingsTab, setSettingsTab] = useState<string>('general');
   const [deleteConfirmStoreId, setDeleteConfirmStoreId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -2297,57 +2306,377 @@ export default function StoresPage() {
   // Shared pill button — Figma's 36-px chip on #EBEBEC. We use the same
   // muted black-translucent tone the Settings "Çıkış yap" button uses so
   // every action pill across the app reads identically over any backdrop.
-  const pillBtnClass =
-    'h-8 cursor-pointer rounded-full bg-black/[0.06] px-3 text-sm font-medium text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]';
   // Bağlı Olanlar grid'i — soft top-down gradient + 0.5-px ring.
   const cardShellClass =
     'rounded-2xl bg-gradient-to-b from-black/[0.04] to-black/[0.06] shadow-[0_0_0_0.5px_rgba(0,0,0,0.07)]';
 
+  const hasConnected =
+    filteredStores.length > 0 ||
+    fals.length > 0 ||
+    openais.length > 0 ||
+    bizimhesaps.length > 0 ||
+    parasuts.length > 0 ||
+    cargoConnections.length > 0;
+
+  // Aktif (bağlı) entegrasyon TÜR id'leri — kart/sekme durum filtresi için.
+  const activeIds = new Set<string>();
+  stores.forEach((s) => {
+    if (s.platform === 'WOOCOMMERCE') activeIds.add('WORDPRESS');
+    else if (s.platform) activeIds.add(s.platform);
+  });
+  if (fals.length > 0) activeIds.add('FAL_AI');
+  if (openais.length > 0) activeIds.add('OPENAI');
+  if (bizimhesaps.length > 0) activeIds.add('BIZIMHESAP');
+  if (parasuts.length > 0) activeIds.add('PARASUT');
+  if (cargoConnections.some((c) => c.provider?.toUpperCase().includes('DHL')))
+    activeIds.add('DHL');
+  if (Object.values(igConfigs).some((c) => c?.connected)) activeIds.add('INSTAGRAM');
+  if (Object.values(ttConfigs).some((c) => c?.connected)) activeIds.add('TIKTOK');
+
+  // Durum sekmeleri: Hepsi / Aktif / Pasif.
+  const integrationTabs: BalinaTabItem[] = [
+    { id: 'all', label: 'Hepsi' },
+    { id: 'active', label: 'Aktif' },
+    { id: 'passive', label: 'Pasif' },
+  ];
+  const activeTab = integrationTabs.some((t) => t.id === activeIntegrationTab)
+    ? activeIntegrationTab
+    : 'all';
+
+  // Her entegrasyon için "Destek" YouTube videosu. Anahtar = marketplace.id.
+  // TODO: linkler verildikçe doldur (örn. woocommerce: 'https://youtu.be/...').
+  const SUPPORT_VIDEOS: Record<string, string> = {};
+  const openSupport = () => {
+    const url = selectedMarketplace ? SUPPORT_VIDEOS[selectedMarketplace.id] : '';
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    else toast.info('Destek videosu yakında eklenecek');
+  };
+
+  // Bağlantı paneli — AI drawer (SidePanelCard) içinde sağdan açılır. İçerik
+  // sayfanın state/handler'larına closure ile bağlı; effect, ilgili state
+  // değiştikçe paneli yeniden push eder (primitive bağımlılıklar → döngü yok).
+  const { setSidePanel } = useSidePanel();
+
+  const connectPanel = (
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      {/* Header — AI paneli (BalinaChat) ile aynı chrome: logo + "{ad} Bağla". */}
+      <div className="flex h-12 shrink-0 items-center justify-between gap-1 border-b border-[var(--balina-background-light-default)] p-2.5">
+        <div className="flex h-7 min-w-0 items-center gap-1.5 px-1">
+          {selectedMarketplace?.logo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={selectedMarketplace.logo}
+              alt={selectedMarketplace.name}
+              className="h-5 w-5 shrink-0 object-contain"
+            />
+          )}
+          <span className="text-body-small-one-liner-medium truncate text-[var(--balina-text-strong)]">
+            {selectedMarketplace?.name} Bağla
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* Destek — entegrasyona özel video/yardım. */}
+          <button
+            type="button"
+            onClick={openSupport}
+            className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-lg bg-[var(--balina-background-dark-default)] px-2.5 text-body-tiny-medium text-[var(--balina-text-strong)] outline-none transition-colors hover:bg-[var(--balina-background-light-default)]"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Destek
+          </button>
+          <BalinaTooltip content="Kapat" side="bottom">
+            <button
+              type="button"
+              aria-label="Kapat"
+              onClick={handleDialogClose}
+              className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg text-[var(--balina-icon-strong)] outline-none transition-colors hover:bg-[var(--balina-background-dark-default)] hover:text-[var(--balina-icon-loud)] focus-visible:outline-none"
+            >
+              <BalinaCloseIcon className="h-4 w-4" />
+            </button>
+          </BalinaTooltip>
+        </div>
+      </div>
+
+      {/* Body — adım adım bağlantı sihirbazı. */}
+      <div className="balina-scrollbar min-h-0 flex-1 overflow-y-auto p-3">
+        <div className="py-2">
+          {selectedMarketplace?.steps?.map((step, index) => {
+            const isActive = index === currentStep;
+            const isCompleted = index < currentStep;
+            return (
+              <div key={index} className="flex gap-4">
+                <div className="flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={() => isCompleted && setCurrentStep(index)}
+                    disabled={!isCompleted}
+                    className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-accent text-accent-foreground'
+                        : isCompleted
+                          ? 'cursor-pointer bg-default text-muted hover:bg-default/80'
+                          : 'cursor-default bg-default text-muted'
+                    }`}
+                  >
+                    {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
+                  </button>
+                  {index < totalSteps && (
+                    <div className="min-h-4 w-0.5 flex-1 bg-default" />
+                  )}
+                </div>
+                <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
+                  {isActive && !isLastStep ? (
+                    <div className="flex flex-col gap-3">
+                      <BalinaTextField
+                        label={step.label}
+                        value={formData[step.key as keyof typeof formData]}
+                        onChange={(value) =>
+                          setFormData((prev) => ({ ...prev, [step.key]: value }))
+                        }
+                        type={step.type || 'text'}
+                        autoFocus
+                        placeholder={step.placeholder}
+                      />
+                      <p className="text-sm text-muted">{step.description}</p>
+                      <BalinaButton onClick={handleNext} fullWidth>
+                        İleri
+                      </BalinaButton>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => isCompleted && setCurrentStep(index)}
+                      disabled={!isCompleted}
+                      className={`w-full pt-1.5 text-left ${
+                        isCompleted ? 'cursor-pointer hover:opacity-80' : ''
+                      }`}
+                    >
+                      <span className="text-sm text-muted">{step.label}</span>
+                      {isCompleted && (
+                        <p className="mt-0.5 truncate text-xs text-muted/70">
+                          {formData[step.key as keyof typeof formData]}
+                        </p>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          <div className="flex gap-4">
+            <div className="flex flex-col items-center">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
+                  isLastStep
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-default text-muted'
+                }`}
+              >
+                {totalSteps + 1}
+              </div>
+            </div>
+            <div className="flex-1">
+              {isLastStep ? (
+                selectedMarketplace?.platform === 'WOOCOMMERCE' ? (
+                  <div className="flex flex-col gap-3">
+                    <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">WooCommerce&apos;a Yönlendir</label>
+                    <p className="text-sm text-muted">
+                      Sonraki adımda WooCommerce sitenize gideceksiniz. WP admin&apos;e
+                      giriş yapıp <strong>Approve</strong> butonuna tıkladıktan sonra
+                      otomatik olarak geri döneceksiniz.
+                    </p>
+                    <BalinaCard>
+                      <BalinaCard.Content className="flex flex-col gap-1 text-sm">
+                        <p>
+                          <span className="text-muted">Mağaza:</span>{' '}
+                          {formData.name}
+                        </p>
+                        <p>
+                          <span className="text-muted">URL:</span>{' '}
+                          {formData.url}
+                        </p>
+                      </BalinaCard.Content>
+                    </BalinaCard>
+                    <BalinaButton
+                      onClick={handleWoocommerceStart}
+                      disabled={isSubmitting}
+                      fullWidth
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Yönlendiriliyor...
+                        </>
+                      ) : (
+                        "WooCommerce'a Git"
+                      )}
+                    </BalinaButton>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Bağlantı Testi</label>
+                    <p className="text-sm text-muted">
+                      Girdiğiniz bilgilerle bağlantıyı test edin.
+                    </p>
+                    <BalinaCard>
+                      <BalinaCard.Content className="flex flex-col gap-1 text-sm">
+                        <p>
+                          <span className="text-muted">Mağaza:</span>{' '}
+                          {formData.name}
+                        </p>
+                        {selectedMarketplace?.platform === 'SHOPIFY' ? (
+                          <p>
+                            <span className="text-muted">Domain:</span>{' '}
+                            {formData.shopDomain}
+                          </p>
+                        ) : selectedMarketplace?.platform === 'TRENDYOL' ? (
+                          <>
+                            <p>
+                              <span className="text-muted">Satıcı ID:</span>{' '}
+                              {formData.sellerId}
+                            </p>
+                            <p>
+                              <span className="text-muted">Ortam:</span>{' '}
+                              {formData.environment === 'prod' ? 'Prod' : 'Stage'}
+                            </p>
+                          </>
+                        ) : selectedMarketplace?.platform === 'HEPSIBURADA' ? (
+                          <>
+                            <p>
+                              <span className="text-muted">Merchant ID:</span>{' '}
+                              {formData.merchantId}
+                            </p>
+                            <p>
+                              <span className="text-muted">Kullanıcı:</span>{' '}
+                              {formData.hbUsername}
+                            </p>
+                          </>
+                        ) : (
+                          <p>
+                            <span className="text-muted">URL:</span>{' '}
+                            {formData.url}
+                          </p>
+                        )}
+                      </BalinaCard.Content>
+                    </BalinaCard>
+                    <BalinaButton
+                      onClick={handleTestConnection}
+                      disabled={isTesting}
+                      variant="soft"
+                      fullWidth
+                    >
+                      {isTesting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Test ediliyor...
+                        </>
+                      ) : (
+                        'Bağlantıyı Test Et'
+                      )}
+                    </BalinaButton>
+                    {testResult && (
+                      <BalinaAlert
+                        status={testResult.success ? 'success' : 'danger'}
+                      >
+                        <BalinaAlert.Indicator />
+                        <BalinaAlert.Content>
+                          <BalinaAlert.Title>
+                            {testResult.success
+                              ? testResult.meta?.shopName
+                                ? `Bağlandı: ${testResult.meta.shopName}${
+                                    testResult.meta.currency
+                                      ? ` (${testResult.meta.currency})`
+                                      : ''
+                                  }`
+                                : 'Bağlantı başarılı!'
+                              : testResult.error}
+                          </BalinaAlert.Title>
+                        </BalinaAlert.Content>
+                      </BalinaAlert>
+                    )}
+                    <BalinaButton
+                      onClick={handleConnect}
+                      disabled={isSubmitting || !testResult?.success}
+                      fullWidth
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Bağlanıyor...
+                        </>
+                      ) : (
+                        'Mağazayı Bağla'
+                      )}
+                    </BalinaButton>
+                  </div>
+                )
+              ) : (
+                <div className="pt-1.5">
+                  <span className="text-sm text-muted">
+                    {selectedMarketplace?.platform === 'WOOCOMMERCE'
+                      ? "WooCommerce'a Yönlendir"
+                      : 'Bağlantı Testi'}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {selectedMarketplace?.helpUrl && (
+          <div className="pt-4">
+            <a
+              href={selectedMarketplace.helpUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
+            >
+              Dokümantasyon
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // İçeriği AI drawer'a senkronla. Bağımlılıklar yalnızca panelin gösterdiği
+  // state primitive'leri — setSidePanel kaynaklı re-render bunları değiştirmediği
+  // için döngü oluşmaz; connectPanel/handler'lar her render'da taze kapanır.
+  useEffect(() => {
+    setSidePanel(isDialogOpen && selectedMarketplace ? connectPanel : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isDialogOpen,
+    selectedMarketplace,
+    currentStep,
+    formData,
+    isSubmitting,
+    isTesting,
+    testResult,
+  ]);
+
+  // Sayfadan ayrılırken paneli kapat (SidePanelProvider layout'ta kalıcı).
+  useEffect(() => () => setSidePanel(null), [setSidePanel]);
+
   return (
     <>
+      {/* Sağdaki durum sekmeleri — Hepsi / Aktif / Pasif filtresi. */}
+      <PageHeader
+        title="Entegrasyonlar"
+        icon={<BalinaIntegrationIcon className="h-4 w-4" />}
+        action={
+          <BalinaTabs
+            items={integrationTabs}
+            value={activeTab}
+            onChange={setActiveIntegrationTab}
+          />
+        }
+      />
       <div className="relative flex flex-1 flex-col overflow-x-hidden overflow-y-auto p-4">
-        {/* Mobil sidebar toggle — bu sayfanın PageHeader'ı yok, bu yüzden
-            sol-üst köşede absolute olarak gösteriyoruz. Desktop'ta gizli. */}
-        <MobileSidebarToggle className="absolute left-4 top-4 z-20" />
-
-        {/* Soft blurred blob — Figma 12107:16370. 952×160 pill horizontally
-        centered at -80 so it bleeds a subtle shadow behind the title. Black
-        on the neutral grey page; switches to white when a theme accent is
-        active so it lifts off the coloured gradient instead of muddying it. */}
-        <div className="integrations-blob pointer-events-none absolute left-1/2 -top-20 z-0 h-40 w-[952px] -translate-x-1/2 rounded-[278px] blur-[32px]" />
-
-        {/* Title block — pb-8 mirrors the 32-px bottom padding from Figma 12107:16372 */}
-        <div className="relative z-10 flex flex-col items-center gap-8 px-4 pb-8 pt-24">
-          <div className="flex flex-col items-center gap-2 text-center">
-            <h1 className="text-4xl font-medium leading-tight text-foreground">
-              Entegrasyonlar
-            </h1>
-            <p className="text-sm text-foreground/70">
-              Kullanmak istediklerinizi balinaOS&apos;a bağlayın.
-            </p>
-          </div>
-          <SearchField
-            variant="secondary"
-            value={search}
-            onChange={setSearch}
-            aria-label="Entegrasyonlarda ara"
-            className="w-full max-w-[572px]"
-          >
-            <SearchField.Group>
-              <SearchField.SearchIcon />
-              <SearchField.Input placeholder="Entegrasyonlarda ara..." />
-            </SearchField.Group>
-          </SearchField>
-        </div>
-
-        <div className="flex flex-col gap-8 px-4 pb-8 pt-8">
-          {/* Bağlı Olanlar — mağazalar + fal + openai + e-fatura hesapları aynı şeritte */}
-          {(filteredStores.length > 0 ||
-            fals.length > 0 ||
-            openais.length > 0 ||
-            bizimhesaps.length > 0 ||
-            parasuts.length > 0 ||
-            cargoConnections.length > 0) && (
+        <div className="flex flex-col gap-8 px-4 pb-8 pt-2">
+          {/* Bağlı Olanlar — Pasif sekmesinde gizli (yalnızca Hepsi/Aktif'te). */}
+          {hasConnected && activeTab !== 'passive' && (
             <section className="flex flex-col gap-4">
               <h2 className="text-sm font-medium text-foreground">Bağlı Olanlar</h2>
               <div
@@ -2410,14 +2739,13 @@ export default function StoresPage() {
                       {isSyncing && (
                         <Loader className="h-4 w-4 animate-spin text-muted" aria-label="Senkronize ediliyor" />
                       )}
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => setSettingsModalStoreId(store.id)}
-                        className={pillBtnClass}
+                      <BalinaButton
+                        variant="soft"
+                        size="default"
+                        onClick={() => setSettingsModalStoreId(store.id)}
                       >
                         Yönet
-                      </Button>
+                      </BalinaButton>
                     </div>
                   );
                 })}
@@ -2457,14 +2785,13 @@ export default function StoresPage() {
                           aria-label="Test ediliyor"
                         />
                       )}
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => setManageIgStoreId(store.id)}
-                        className={pillBtnClass}
+                      <BalinaButton
+                        variant="soft"
+                        size="default"
+                        onClick={() => setManageIgStoreId(store.id)}
                       >
                         Yönet
-                      </Button>
+                      </BalinaButton>
                     </div>
                   );
                 })}
@@ -2485,10 +2812,10 @@ export default function StoresPage() {
                         Fal.ai • <span className="font-mono">••••{fal.apiKeyTail ?? '----'}</span>
                       </span>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={() => {
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      onClick={() => {
                         setManageFalId(fal.id);
                         setManageFalKey('');
                         setManageFalShowKey(false);
@@ -2503,10 +2830,9 @@ export default function StoresPage() {
                           fal.imageModel ?? DEFAULT_FAL_IMAGE_MODEL,
                         );
                       }}
-                      className={pillBtnClass}
                     >
                       Yönet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 ))}
 
@@ -2527,20 +2853,19 @@ export default function StoresPage() {
                         OpenAI • <span className="font-mono">••••{oa.apiKeyTail ?? '----'}</span>
                       </span>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={() => {
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      onClick={() => {
                         setManageFalId(oa.id);
                         setManageFalKey('');
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setManageFalActive(oa.isActive);
                       }}
-                      className={pillBtnClass}
                     >
                       Yönet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 ))}
 
@@ -2560,17 +2885,16 @@ export default function StoresPage() {
                         Bizim Hesap • Firma {bh.config.firmId || '—'}
                       </span>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={() => {
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      onClick={() => {
                         setManageBizimhesapId(bh.id);
                         setManageBizimhesapActive(bh.isActive);
                       }}
-                      className={pillBtnClass}
                     >
                       Yönet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 ))}
 
@@ -2590,17 +2914,16 @@ export default function StoresPage() {
                         Paraşüt • Şirket {ps.config.parasutCompanyId || '—'}
                       </span>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={() => {
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      onClick={() => {
                         setManageParasutId(ps.id);
                         setManageParasutActive(ps.isActive);
                       }}
-                      className={pillBtnClass}
                     >
                       Yönet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 ))}
 
@@ -2632,10 +2955,10 @@ export default function StoresPage() {
                           {meta}
                         </span>
                       </div>
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => {
+                      <BalinaButton
+                        variant="soft"
+                        size="default"
+                        onClick={() => {
                           setManageCargoId(cn.id);
                           setManageCargoForm({
                             customerNumber: cn.customerNumber ?? '',
@@ -2644,10 +2967,9 @@ export default function StoresPage() {
                           setManageCargoActive(cn.isActive);
                           setManageCargoShowPassword(false);
                         }}
-                        className={pillBtnClass}
                       >
                         Yönet
-                      </Button>
+                      </BalinaButton>
                     </div>
                   );
                 })}
@@ -2655,8 +2977,19 @@ export default function StoresPage() {
             </section>
           )}
 
-          {/* Available categories — horizontal grid of 314-px brand cards */}
-          {visibleCategories.map((cat) => (
+          {/* Mevcut entegrasyonlar — Aktif sekmesinde gizli; Pasif'te yalnızca
+              bağlı olmayanlar. */}
+          {activeTab !== 'active' &&
+            visibleCategories
+              .map((cat) => ({
+                ...cat,
+                items:
+                  activeTab === 'passive'
+                    ? cat.items.filter((it) => !activeIds.has(it.id))
+                    : cat.items,
+              }))
+              .filter((cat) => cat.items.length > 0)
+              .map((cat) => (
             <section key={cat.id} className="flex flex-col gap-4">
               <h2 className="text-sm font-medium text-foreground">{cat.title}</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -2730,15 +3063,14 @@ export default function StoresPage() {
                           </span>
                         )}
                       </div>
-                      <Button
-                        variant="tertiary"
-                        size="sm"
-                        onPress={() => handleMarketplaceClick(item)}
-                        isDisabled={isDisabled}
-                        className={pillBtnClass}
+                      <BalinaButton
+                        variant="soft"
+                        size="default"
+                        onClick={() => handleMarketplaceClick(item)}
+                        disabled={isDisabled}
                       >
                         {buttonLabel}
-                      </Button>
+                      </BalinaButton>
                     </div>
                   );
                 })}
@@ -2746,298 +3078,40 @@ export default function StoresPage() {
             </section>
           ))}
 
-          {filteredStores.length === 0 && visibleCategories.length === 0 && (
+          {activeTab === 'active' && !hasConnected && (
             <p className="text-center text-sm text-muted">
-              Aramanızla eşleşen entegrasyon bulunamadı.
+              Henüz aktif (bağlı) bir entegrasyon yok.
             </p>
           )}
+          {activeTab !== 'active' &&
+            filteredStores.length === 0 &&
+            visibleCategories.length === 0 && (
+              <p className="text-center text-sm text-muted">
+                Aramanızla eşleşen entegrasyon bulunamadı.
+              </p>
+            )}
         </div>
       </div>
 
-      <Modal isOpen={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose()}>
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  {selectedMarketplace && (
-                    <img
-                      src={selectedMarketplace.logo}
-                      alt={selectedMarketplace.name}
-                      className="h-6 w-6 object-contain"
-                    />
-                  )}
-                  {selectedMarketplace?.name} Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
-                <div className="py-2">
-                  {selectedMarketplace?.steps?.map((step, index) => {
-                    const isActive = index === currentStep;
-                    const isCompleted = index < currentStep;
-                    return (
-                      <div key={index} className="flex gap-4">
-                        <div className="flex flex-col items-center">
-                          <button
-                            type="button"
-                            onClick={() => isCompleted && setCurrentStep(index)}
-                            disabled={!isCompleted}
-                            className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
-                              isActive
-                                ? 'bg-accent text-accent-foreground'
-                                : isCompleted
-                                  ? 'cursor-pointer bg-default text-muted hover:bg-default/80'
-                                  : 'cursor-default bg-default text-muted'
-                            }`}
-                          >
-                            {isCompleted ? <Check className="h-4 w-4" /> : index + 1}
-                          </button>
-                          {index < totalSteps && (
-                            <div className="min-h-4 w-0.5 flex-1 bg-default" />
-                          )}
-                        </div>
-                        <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
-                          {isActive && !isLastStep ? (
-                            <div className="flex flex-col gap-3">
-                              <TextField
-                                value={formData[step.key as keyof typeof formData]}
-                                onChange={(value) =>
-                                  setFormData((prev) => ({ ...prev, [step.key]: value }))
-                                }
-                                type={step.type || 'text'}
-                                autoFocus
-                              >
-                                <Label>{step.label}</Label>
-                                <Input placeholder={step.placeholder} />
-                              </TextField>
-                              <p className="text-sm text-muted">{step.description}</p>
-                              <Button onPress={handleNext} fullWidth>
-                                İleri
-                              </Button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => isCompleted && setCurrentStep(index)}
-                              disabled={!isCompleted}
-                              className={`w-full pt-1.5 text-left ${
-                                isCompleted ? 'cursor-pointer hover:opacity-80' : ''
-                              }`}
-                            >
-                              <span className="text-sm text-muted">{step.label}</span>
-                              {isCompleted && (
-                                <p className="mt-0.5 truncate text-xs text-muted/70">
-                                  {formData[step.key as keyof typeof formData]}
-                                </p>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+      {/* Bağlantı sihirbazı artık AI drawer'da (useSidePanel) açılıyor —
+          yukarıdaki connectPanel + effect ile. Eski Modal kaldırıldı. */}
 
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <div
-                        className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
-                          isLastStep
-                            ? 'bg-accent text-accent-foreground'
-                            : 'bg-default text-muted'
-                        }`}
-                      >
-                        {totalSteps + 1}
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      {isLastStep ? (
-                        selectedMarketplace?.platform === 'WOOCOMMERCE' ? (
-                          <div className="flex flex-col gap-3">
-                            <Label>WooCommerce'a Yönlendir</Label>
-                            <p className="text-sm text-muted">
-                              Sonraki adımda WooCommerce sitenize gideceksiniz. WP admin'e
-                              giriş yapıp <strong>Approve</strong> butonuna tıkladıktan sonra
-                              otomatik olarak geri döneceksiniz.
-                            </p>
-                            <Card>
-                              <Card.Content className="flex flex-col gap-1 text-sm">
-                                <p>
-                                  <span className="text-muted">Mağaza:</span>{' '}
-                                  {formData.name}
-                                </p>
-                                <p>
-                                  <span className="text-muted">URL:</span>{' '}
-                                  {formData.url}
-                                </p>
-                              </Card.Content>
-                            </Card>
-                            <Button
-                              onPress={handleWoocommerceStart}
-                              isDisabled={isSubmitting}
-                              isPending={isSubmitting}
-                              fullWidth
-                            >
-                              {isSubmitting ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Yönlendiriliyor...
-                                </>
-                              ) : (
-                                "WooCommerce'a Git"
-                              )}
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col gap-3">
-                            <Label>Bağlantı Testi</Label>
-                            <p className="text-sm text-muted">
-                              Girdiğiniz bilgilerle bağlantıyı test edin.
-                            </p>
-                            <Card>
-                              <Card.Content className="flex flex-col gap-1 text-sm">
-                                <p>
-                                  <span className="text-muted">Mağaza:</span>{' '}
-                                  {formData.name}
-                                </p>
-                                {selectedMarketplace?.platform === 'SHOPIFY' ? (
-                                  <p>
-                                    <span className="text-muted">Domain:</span>{' '}
-                                    {formData.shopDomain}
-                                  </p>
-                                ) : selectedMarketplace?.platform === 'TRENDYOL' ? (
-                                  <>
-                                    <p>
-                                      <span className="text-muted">Satıcı ID:</span>{' '}
-                                      {formData.sellerId}
-                                    </p>
-                                    <p>
-                                      <span className="text-muted">Ortam:</span>{' '}
-                                      {formData.environment === 'prod' ? 'Prod' : 'Stage'}
-                                    </p>
-                                  </>
-                                ) : selectedMarketplace?.platform === 'HEPSIBURADA' ? (
-                                  <>
-                                    <p>
-                                      <span className="text-muted">Merchant ID:</span>{' '}
-                                      {formData.merchantId}
-                                    </p>
-                                    <p>
-                                      <span className="text-muted">Kullanıcı:</span>{' '}
-                                      {formData.hbUsername}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <p>
-                                    <span className="text-muted">URL:</span>{' '}
-                                    {formData.url}
-                                  </p>
-                                )}
-                              </Card.Content>
-                            </Card>
-                            <Button
-                              onPress={handleTestConnection}
-                              isDisabled={isTesting}
-                              isPending={isTesting}
-                              variant="outline"
-                              fullWidth
-                            >
-                              {isTesting ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Test ediliyor...
-                                </>
-                              ) : (
-                                'Bağlantıyı Test Et'
-                              )}
-                            </Button>
-                            {testResult && (
-                              <Alert
-                                status={testResult.success ? 'success' : 'danger'}
-                              >
-                                <Alert.Indicator />
-                                <Alert.Content>
-                                  <Alert.Title>
-                                    {testResult.success
-                                      ? testResult.meta?.shopName
-                                        ? `Bağlandı: ${testResult.meta.shopName}${
-                                            testResult.meta.currency
-                                              ? ` (${testResult.meta.currency})`
-                                              : ''
-                                          }`
-                                        : 'Bağlantı başarılı!'
-                                      : testResult.error}
-                                  </Alert.Title>
-                                </Alert.Content>
-                              </Alert>
-                            )}
-                            <Button
-                              onPress={handleConnect}
-                              isDisabled={isSubmitting || !testResult?.success}
-                              isPending={isSubmitting}
-                              fullWidth
-                            >
-                              {isSubmitting ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                  Bağlanıyor...
-                                </>
-                              ) : (
-                                'Mağazayı Bağla'
-                              )}
-                            </Button>
-                          </div>
-                        )
-                      ) : (
-                        <div className="pt-1.5">
-                          <span className="text-sm text-muted">
-                            {selectedMarketplace?.platform === 'WOOCOMMERCE'
-                              ? "WooCommerce'a Yönlendir"
-                              : 'Bağlantı Testi'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                {selectedMarketplace?.helpUrl && (
-                  <div className="pt-4">
-                    <a
-                      href={selectedMarketplace.helpUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
-                    >
-                      Dokümantasyon
-                      <ExternalLink className="h-3 w-3" />
-                    </a>
-                  </div>
-                )}
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
-
-      <Modal
-        isOpen={dhlModalOpen}
+      <BalinaModal
+        open={dhlModalOpen}
         onOpenChange={(open) => !open && handleDhlDialogClose()}
+        title={
+          <span className="flex items-center gap-2">
+            <img
+              src="/figma/integrations/dhl.png"
+              alt="DHL"
+              className="h-6 w-6 object-contain"
+            />
+            DHL Bağla
+          </span>
+        }
+        className="sm:max-w-md"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <img
-                    src="/figma/integrations/dhl.png"
-                    alt="DHL"
-                    className="h-6 w-6 object-contain"
-                  />
-                  DHL Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 <div className="py-2">
                   {dhlSteps.map((step, index) => {
                     const isActive = index === dhlCurrentStep;
@@ -3066,7 +3140,8 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isDhlLastStep ? (
                             <div className="flex flex-col gap-3">
-                              <TextField
+                              <BalinaTextField
+                                  label={step.label}
                                   value={dhlForm[step.key]}
                                   onChange={(value) =>
                                     setDhlForm((prev) => ({
@@ -3082,14 +3157,9 @@ export default function StoresPage() {
                                       : 'text'
                                   }
                                   autoFocus
-                                >
-                                  <Label>{step.label}</Label>
-                                  {step.kind === 'password' ? (
-                                    <div className="relative w-full">
-                                      <Input
-                                        placeholder={step.placeholder}
-                                        className="w-full pr-10"
-                                      />
+                                  placeholder={step.placeholder}
+                                  rightIcon={
+                                    step.kind === 'password' ? (
                                       <button
                                         type="button"
                                         onClick={() => setDhlShowPassword((v) => !v)}
@@ -3098,7 +3168,7 @@ export default function StoresPage() {
                                             ? 'Şifreyi gizle'
                                             : 'Şifreyi göster'
                                         }
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                        className="text-muted hover:text-foreground"
                                       >
                                         {dhlShowPassword ? (
                                           <EyeOff className="h-4 w-4" />
@@ -3106,15 +3176,13 @@ export default function StoresPage() {
                                           <Eye className="h-4 w-4" />
                                         )}
                                       </button>
-                                    </div>
-                                  ) : (
-                                    <Input placeholder={step.placeholder} />
-                                  )}
-                                </TextField>
+                                    ) : undefined
+                                  }
+                                />
                               <p className="text-sm text-muted">{step.description}</p>
-                              <Button onPress={handleDhlNext} fullWidth>
+                              <BalinaButton onClick={handleDhlNext} fullWidth>
                                 İleri
-                              </Button>
+                              </BalinaButton>
                             </div>
                           ) : (
                             <button
@@ -3159,14 +3227,13 @@ export default function StoresPage() {
                     <div className="flex-1">
                       {isDhlLastStep ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Bağla</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Bağla</label>
                           <p className="text-sm text-muted">
                             Girdiğiniz bilgilerle DHL bağlantısını kaydedin.
                           </p>
-                          <Button
-                            onPress={handleSaveDhl}
-                            isDisabled={isDhlSaving}
-                            isPending={isDhlSaving}
+                          <BalinaButton
+                            onClick={handleSaveDhl}
+                            disabled={isDhlSaving}
                             fullWidth
                           >
                             {isDhlSaving ? (
@@ -3177,7 +3244,7 @@ export default function StoresPage() {
                             ) : (
                               'Bağla'
                             )}
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <div className="pt-1.5">
@@ -3198,37 +3265,31 @@ export default function StoresPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Fal.ai / OpenAI bağlama modalı — Woocommerce/DHL ile aynı stepper deseni. */}
-      <Modal
-        isOpen={isFalDialogOpen}
+      <BalinaModal
+        open={isFalDialogOpen}
         onOpenChange={(open) => !open && handleFalDialogClose()}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            {falDialogProvider === 'openai' ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src="/figma/integrations/openai.svg"
+                alt="OpenAI"
+                className="h-6 w-6 rounded-md"
+              />
+            ) : (
+              <FalMark className="h-6 w-6 rounded-md" />
+            )}
+            {falProviderLabel} Bağla
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  {falDialogProvider === 'openai' ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src="/figma/integrations/openai.svg"
-                      alt="OpenAI"
-                      className="h-6 w-6 rounded-md"
-                    />
-                  ) : (
-                    <FalMark className="h-6 w-6 rounded-md" />
-                  )}
-                  {falProviderLabel} Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 {(() => {
                   const count =
                     falDialogProvider === 'openai'
@@ -3269,7 +3330,8 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isFalLastStep ? (
                             <div className="flex flex-col gap-3">
-                              <TextField
+                              <BalinaTextField
+                                label={step.label}
                                 value={falForm[step.key]}
                                 onChange={(value) =>
                                   setFalForm((prev) => ({ ...prev, [step.key]: value }))
@@ -3282,21 +3344,16 @@ export default function StoresPage() {
                                     : 'text'
                                 }
                                 autoFocus
-                              >
-                                <Label>{step.label}</Label>
-                                {step.isPassword ? (
-                                  <div className="relative w-full">
-                                    <Input
-                                      placeholder={step.placeholder}
-                                      className="w-full pr-10"
-                                    />
+                                placeholder={step.placeholder}
+                                rightIcon={
+                                  step.isPassword ? (
                                     <button
                                       type="button"
                                       onClick={() => setFalShowKey((v) => !v)}
                                       aria-label={
                                         falShowKey ? 'Anahtarı gizle' : 'Anahtarı göster'
                                       }
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                      className="text-muted hover:text-foreground"
                                     >
                                       {falShowKey ? (
                                         <EyeOff className="h-4 w-4" />
@@ -3304,15 +3361,13 @@ export default function StoresPage() {
                                         <Eye className="h-4 w-4" />
                                       )}
                                     </button>
-                                  </div>
-                                ) : (
-                                  <Input placeholder={step.placeholder} />
-                                )}
-                              </TextField>
+                                  ) : undefined
+                                }
+                              />
                               <p className="text-sm text-muted">{step.description}</p>
-                              <Button onPress={handleFalNext} fullWidth>
+                              <BalinaButton onClick={handleFalNext} fullWidth>
                                 İleri
-                              </Button>
+                              </BalinaButton>
                             </div>
                           ) : (
                             <button
@@ -3352,15 +3407,14 @@ export default function StoresPage() {
                     <div className="flex-1">
                       {isFalLastStep ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Bağla</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Bağla</label>
                           <p className="text-sm text-muted">
                             Anahtarınız şifrelenip kaydedilecek; ardından AI Üretim panelinden
                             görsel üretebilirsiniz.
                           </p>
-                          <Button
-                            onPress={handleFalSave}
-                            isDisabled={isSavingFal}
-                            isPending={isSavingFal}
+                          <BalinaButton
+                            onClick={handleFalSave}
+                            disabled={isSavingFal}
                             fullWidth
                           >
                             {isSavingFal ? (
@@ -3371,7 +3425,7 @@ export default function StoresPage() {
                             ) : (
                               'Bağla'
                             )}
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <div className="pt-1.5">
@@ -3392,26 +3446,18 @@ export default function StoresPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Fal.ai yönetim modalı — Mağaza Ayarları desenini takip eder.
           Anahtar değişikliği ayrı bir alt-modale taşındı. */}
-      <Modal
-        isOpen={manageFalId !== null}
+      <BalinaModal
+        open={manageFalId !== null}
         onOpenChange={(open) => !open && handleManageClose()}
+        className="sm:max-w-lg"
+        title="Hesap Ayarları"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-lg">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Hesap Ayarları</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-4">
                   {manageFal && (
                     <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
@@ -3429,15 +3475,10 @@ export default function StoresPage() {
                           </span>
                         </p>
                       </div>
-                      <Switch
-                        isSelected={manageFalActive}
-                        onChange={setManageFalActive}
-                        aria-label="Aktif"
-                      >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch>
+                      <BalinaSwitch
+                        checked={manageFalActive}
+                        onCheckedChange={setManageFalActive}
+                      />
                     </div>
                   )}
 
@@ -3447,7 +3488,7 @@ export default function StoresPage() {
                   {manageFal && manageProvider === 'fal' && (
                     <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-surface-secondary/30 p-3">
                       <div className="flex flex-col gap-0.5">
-                        <Label className="text-sm font-semibold">Video ayarları</Label>
+                        <label className="text-sm font-semibold text-[var(--balina-text-strong)]">Video ayarları</label>
                         <p className="text-[11px] text-muted">
                           Model, en-boy oranı ve süre. Prompt sabittir.
                         </p>
@@ -3455,97 +3496,59 @@ export default function StoresPage() {
 
                       {/* Varsayılan video modeli */}
                       <div className="flex flex-col gap-1.5">
-                        <Label>Varsayılan video modeli</Label>
-                        <Select
-                          selectedKey={manageFalVideoModel}
-                          onSelectionChange={(key) =>
+                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Varsayılan video modeli</label>
+                        <BalinaSelect
+                          value={manageFalVideoModel}
+                          onValueChange={(key) =>
                             setManageFalVideoModel(
-                              String(key) || DEFAULT_FAL_VIDEO_MODEL,
+                              key || DEFAULT_FAL_VIDEO_MODEL,
                             )
                           }
-                          aria-label="Varsayılan video modeli"
-                          className="w-full"
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {VIDEO_MODEL_OPTIONS.map((m) => (
-                                <ListBox.Item
-                                  key={m.id}
-                                  id={m.id}
-                                  textValue={m.label}
-                                >
-                                  <div className="flex flex-col">
-                                    <span>{m.label}</span>
-                                    <span className="text-[11px] text-muted">
-                                      {m.description}
-                                    </span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
+                          className="w-full max-w-none"
+                          options={VIDEO_MODEL_OPTIONS.map((m) => ({
+                            value: m.id,
+                            label: (
+                              <div className="flex flex-col">
+                                <span>{m.label}</span>
+                                <span className="text-[11px] text-muted">
+                                  {m.description}
+                                </span>
+                              </div>
+                            ),
+                          }))}
+                        />
                       </div>
 
                       {/* Parametreler: en-boy oranı / süre */}
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="flex flex-col gap-1.5">
-                          <Label>En boy oranı</Label>
-                          <Select
-                            selectedKey={manageFalAspectRatio}
-                            onSelectionChange={(key) =>
-                              setManageFalAspectRatio(String(key) || '9:16')
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>
+                          <BalinaSelect
+                            value={manageFalAspectRatio}
+                            onValueChange={(key) =>
+                              setManageFalAspectRatio(key || '9:16')
                             }
-                            aria-label="En boy oranı"
-                            className="w-full"
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {VEO_ASPECT_OPTIONS.map((o) => (
-                                  <ListBox.Item key={o} id={o} textValue={o}>
-                                    {o}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
+                            className="w-full max-w-none"
+                            options={VEO_ASPECT_OPTIONS.map((o) => ({
+                              value: o,
+                              label: o,
+                            }))}
+                          />
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <Label>Süre</Label>
-                          <Select
-                            selectedKey={manageFalDuration}
-                            onSelectionChange={(key) =>
-                              setManageFalDuration(String(key) || '10')
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Süre</label>
+                          <BalinaSelect
+                            value={manageFalDuration}
+                            onValueChange={(key) =>
+                              setManageFalDuration(key || '10')
                             }
-                            aria-label="Süre"
-                            className="w-full"
-                          >
-                            <Select.Trigger>
-                              <Select.Value />
-                              <Select.Indicator />
-                            </Select.Trigger>
-                            <Select.Popover>
-                              <ListBox>
-                                {VEO_DURATION_OPTIONS.map((o) => (
-                                  <ListBox.Item key={o} id={o} textValue={o}>
-                                    {o}
-                                    <ListBox.ItemIndicator />
-                                  </ListBox.Item>
-                                ))}
-                              </ListBox>
-                            </Select.Popover>
-                          </Select>
+                            className="w-full max-w-none"
+                            options={VEO_DURATION_OPTIONS.map((o) => ({
+                              value: o,
+                              label: o,
+                            }))}
+                          />
                         </div>
                       </div>
                     </div>
@@ -3556,9 +3559,9 @@ export default function StoresPage() {
                   {manageFal && manageProvider === 'fal' && (
                     <div className="flex flex-col gap-4 rounded-xl border border-border/60 bg-surface-secondary/30 p-3">
                       <div className="flex flex-col gap-0.5">
-                        <Label className="text-sm font-semibold">
+                        <label className="text-sm font-semibold text-[var(--balina-text-strong)]">
                           Fotoğraf ayarları
-                        </Label>
+                        </label>
                         <p className="text-[11px] text-muted">
                           Varsayılan görsel modeli. Çözünürlük her zaman 2K.
                         </p>
@@ -3566,41 +3569,27 @@ export default function StoresPage() {
 
                       {/* Varsayılan görsel modeli */}
                       <div className="flex flex-col gap-1.5">
-                        <Label>Varsayılan görsel modeli</Label>
-                        <Select
-                          selectedKey={manageFalImageModel}
-                          onSelectionChange={(key) =>
+                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Varsayılan görsel modeli</label>
+                        <BalinaSelect
+                          value={manageFalImageModel}
+                          onValueChange={(key) =>
                             setManageFalImageModel(
-                              String(key) || DEFAULT_FAL_IMAGE_MODEL,
+                              key || DEFAULT_FAL_IMAGE_MODEL,
                             )
                           }
-                          aria-label="Varsayılan görsel modeli"
-                          className="w-full"
-                        >
-                          <Select.Trigger>
-                            <Select.Value />
-                            <Select.Indicator />
-                          </Select.Trigger>
-                          <Select.Popover>
-                            <ListBox>
-                              {IMAGE_MODEL_OPTIONS.map((m) => (
-                                <ListBox.Item
-                                  key={m.id}
-                                  id={m.id}
-                                  textValue={m.label}
-                                >
-                                  <div className="flex flex-col">
-                                    <span>{m.label}</span>
-                                    <span className="text-[11px] text-muted">
-                                      {m.description}
-                                    </span>
-                                  </div>
-                                  <ListBox.ItemIndicator />
-                                </ListBox.Item>
-                              ))}
-                            </ListBox>
-                          </Select.Popover>
-                        </Select>
+                          className="w-full max-w-none"
+                          options={IMAGE_MODEL_OPTIONS.map((m) => ({
+                            value: m.id,
+                            label: (
+                              <div className="flex flex-col">
+                                <span>{m.label}</span>
+                                <span className="text-[11px] text-muted">
+                                  {m.description}
+                                </span>
+                              </div>
+                            ),
+                          }))}
+                        />
                       </div>
 
                       <p className="text-[11px] text-muted">
@@ -3613,26 +3602,26 @@ export default function StoresPage() {
 
                   {/* API Anahtarı — değiştirme alt-modalını açan satır */}
                   <div className="flex flex-col gap-2">
-                    <Label>API Anahtarı</Label>
+                    <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">API Anahtarı</label>
                     <div className="flex items-center gap-2 rounded-lg bg-surface-secondary/50 p-3">
                       <Key className="h-4 w-4 shrink-0 text-muted" />
                       <span className="flex-1 truncate font-mono text-sm">
                         ••••••••••••{manageFal?.apiKeyTail ?? '----'}
                       </span>
                     </div>
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={() => {
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      className="self-start"
+                      onClick={() => {
                         setManageFalKey('');
                         setManageFalShowKey(false);
                         setManageFalTestResult(null);
                         setIsChangeKeyOpen(true);
                       }}
-                      className={`self-start ${pillBtnClass}`}
                     >
                       Anahtarı Değiştir
-                    </Button>
+                    </BalinaButton>
                   </div>
 
                   {manageFal && (
@@ -3643,50 +3632,40 @@ export default function StoresPage() {
                   )}
 
                   <div className="flex gap-2">
-                    <AlertDialog>
-                      <Button variant="tertiary" className="flex-1 text-danger">
-                        <Trash2 className="h-4 w-4" />
-                        Hesabı Kaldır
-                      </Button>
-                      <AlertDialog.Backdrop>
-                        <AlertDialog.Container>
-                          <AlertDialog.Dialog className="sm:max-w-md">
-                            <AlertDialog.Header>
-                              <AlertDialog.Icon status="danger" />
-                              <AlertDialog.Heading>Hesabı Kaldır</AlertDialog.Heading>
-                            </AlertDialog.Header>
-                            <AlertDialog.Body style={{ marginTop: 0, padding: '0 12px' }}>
-                              <p className="text-sm text-muted">
-                                <span className="font-medium text-foreground">
-                                  {manageFal?.name}
-                                </span>{' '}
-                                Fal.ai hesabını kaldırmak istediğinize emin misiniz? Bu
-                                işlem geri alınamaz; bağlı ürün türleri ve model ayarları
-                                da silinir.
-                              </p>
-                            </AlertDialog.Body>
-                            <AlertDialog.Footer>
-                              <Button variant="tertiary" slot="close" className="flex-1">
-                                İptal
-                              </Button>
-                              <Button
-                                variant="danger"
-                                slot="close"
-                                onPress={handleManageRemove}
-                                className="flex-1"
-                              >
-                                Kaldır
-                              </Button>
-                            </AlertDialog.Footer>
-                          </AlertDialog.Dialog>
-                        </AlertDialog.Container>
-                      </AlertDialog.Backdrop>
-                    </AlertDialog>
-                    <Button
+                    <BalinaButton
+                      variant="soft"
+                      className="flex-1 text-danger"
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={() => setIsFalRemoveConfirmOpen(true)}
+                    >
+                      Hesabı Kaldır
+                    </BalinaButton>
+                    <BalinaConfirmDialog
+                      open={isFalRemoveConfirmOpen}
+                      onOpenChange={setIsFalRemoveConfirmOpen}
+                      title="Hesabı Kaldır"
+                      titleIcon={<Trash2 className="h-5 w-5 text-danger" />}
+                      confirmLabel="Kaldır"
+                      cancelLabel="İptal"
+                      danger
+                      onConfirm={() => {
+                        setIsFalRemoveConfirmOpen(false);
+                        void handleManageRemove();
+                      }}
+                    >
+                      <p className="text-sm text-muted">
+                        <span className="font-medium text-foreground">
+                          {manageFal?.name}
+                        </span>{' '}
+                        Fal.ai hesabını kaldırmak istediğinize emin misiniz? Bu
+                        işlem geri alınamaz; bağlı ürün türleri ve model ayarları
+                        da silinir.
+                      </p>
+                    </BalinaConfirmDialog>
+                    <BalinaButton
                       className="flex-1"
-                      onPress={handleManageSettingsSave}
-                      isDisabled={isManageSaving}
-                      isPending={isManageSaving}
+                      onClick={handleManageSettingsSave}
+                      disabled={isManageSaving}
                     >
                       {isManageSaving ? (
                         <>
@@ -3696,33 +3675,27 @@ export default function StoresPage() {
                       ) : (
                         'Kaydet'
                       )}
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Anahtar değiştirme alt-modalı — Yönet içindeki Değiştir butonundan açılır. */}
-      <Modal
-        isOpen={isChangeKeyOpen}
+      <BalinaModal
+        open={isChangeKeyOpen}
         onOpenChange={(open) => {
           if (!open && !isSavingFal && !manageFalTesting) handleChangeKeyClose();
         }}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <FalMark className="h-6 w-6 rounded-md" />
+            Anahtarı Değiştir
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <FalMark className="h-6 w-6 rounded-md" />
-                  Anahtarı Değiştir
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-4">
                   {manageFal && (
                     <p className="text-sm text-muted">
@@ -3732,24 +3705,20 @@ export default function StoresPage() {
                     </p>
                   )}
 
-                  <TextField
+                  <BalinaTextField
+                    label="Yeni API Anahtarı"
                     value={manageFalKey}
                     onChange={setManageFalKey}
                     type={manageFalShowKey ? 'text' : 'password'}
-                  >
-                    <Label>Yeni API Anahtarı</Label>
-                    <div className="relative w-full">
-                      <Input
-                        placeholder="fal-..."
-                        className="w-full pr-10"
-                        autoComplete="off"
-                        autoFocus
-                      />
+                    placeholder="fal-..."
+                    autoComplete="off"
+                    autoFocus
+                    rightIcon={
                       <button
                         type="button"
                         onClick={() => setManageFalShowKey((v) => !v)}
                         aria-label={manageFalShowKey ? 'Anahtarı gizle' : 'Anahtarı göster'}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                        className="text-muted hover:text-foreground"
                       >
                         {manageFalShowKey ? (
                           <EyeOff className="h-4 w-4" />
@@ -3757,32 +3726,31 @@ export default function StoresPage() {
                           <Eye className="h-4 w-4" />
                         )}
                       </button>
-                    </div>
-                  </TextField>
+                    }
+                  />
                   <p className="text-xs text-muted">
                     Anahtar şifreli olarak saklanır. Test Et ile kaydetmeden önce
                     doğrulayabilirsiniz.
                   </p>
 
                   {manageFalTestResult && (
-                    <Alert status={manageFalTestResult.ok ? 'success' : 'danger'}>
-                      <Alert.Indicator />
-                      <Alert.Content>
-                        <Alert.Title>
+                    <BalinaAlert status={manageFalTestResult.ok ? 'success' : 'danger'}>
+                      <BalinaAlert.Indicator />
+                      <BalinaAlert.Content>
+                        <BalinaAlert.Title>
                           {manageFalTestResult.ok
                             ? 'Bağlantı başarılı'
                             : manageFalTestResult.error || 'Bağlantı başarısız'}
-                        </Alert.Title>
-                      </Alert.Content>
-                    </Alert>
+                        </BalinaAlert.Title>
+                      </BalinaAlert.Content>
+                    </BalinaAlert>
                   )}
 
                   <div className="flex items-center gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onPress={handleManageTest}
-                      isDisabled={manageFalTesting || manageFalKey.trim().length === 0}
-                      isPending={manageFalTesting}
+                    <BalinaButton
+                      variant="soft"
+                      onClick={handleManageTest}
+                      disabled={manageFalTesting || manageFalKey.trim().length === 0}
                       className="flex-1"
                     >
                       {manageFalTesting ? (
@@ -3793,42 +3761,35 @@ export default function StoresPage() {
                       ) : (
                         'Test Et'
                       )}
-                    </Button>
-                    <Button
+                    </BalinaButton>
+                    <BalinaButton
                       variant="primary"
-                      onPress={handleManageSave}
-                      isDisabled={isSavingFal || manageFalKey.trim().length === 0}
-                      isPending={isSavingFal}
+                      onClick={handleManageSave}
+                      disabled={isSavingFal || manageFalKey.trim().length === 0}
                       className="flex-1"
                     >
                       {isSavingFal ? 'Kaydediliyor...' : 'Kaydet'}
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Model seçim alt-modalı — Bağla modalı estetiğiyle, çoklu seçim. */}
-      <Modal
-        isOpen={modelPickerOpen}
+      <BalinaModal
+        open={modelPickerOpen}
         onOpenChange={(open) => {
           if (!open && !modelPickerSaving) setModelPickerOpen(false);
         }}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <FalMark className="h-6 w-6 rounded-md" />
+            Model Seç
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <FalMark className="h-6 w-6 rounded-md" />
-                  Model Seç
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-3">
                   <p className="text-sm text-muted">
                     Görsel ve video için birer model seçin (her türden en fazla 1 tane).
@@ -3836,18 +3797,14 @@ export default function StoresPage() {
                   </p>
 
                   {/* Search input — Entegrasyonlardaki varyantla aynı stil */}
-                  <SearchField
-                    variant="secondary"
+                  <BalinaInput
                     value={modelPickerSearch}
-                    onChange={setModelPickerSearch}
+                    onChange={(e) => setModelPickerSearch(e.target.value)}
                     aria-label="Model ara"
-                    className="w-full"
-                  >
-                    <SearchField.Group>
-                      <SearchField.SearchIcon />
-                      <SearchField.Input placeholder="Model adı veya id ile ara..." />
-                    </SearchField.Group>
-                  </SearchField>
+                    wrapperClassName="w-full"
+                    leftIcon={<BalinaSearchIcon className="h-4 w-4" />}
+                    placeholder="Model adı veya id ile ara..."
+                  />
 
                   {(() => {
                     const q = modelPickerSearch.trim().toLowerCase();
@@ -3904,16 +3861,11 @@ export default function StoresPage() {
                                     : 'cursor-pointer border-border hover:bg-surface-secondary/50'
                               }`}
                             >
-                              <Switch
-                                isSelected={checked}
-                                isDisabled={isDisabled}
-                                onChange={() => toggleModelPick(m.id)}
-                                aria-label={m.label}
-                              >
-                                <Switch.Control>
-                                  <Switch.Thumb />
-                                </Switch.Control>
-                              </Switch>
+                              <BalinaSwitch
+                                checked={checked}
+                                disabled={isDisabled}
+                                onCheckedChange={() => toggleModelPick(m.id)}
+                              />
                               <div className="flex flex-1 flex-col">
                                 <span className="text-sm font-medium text-foreground">
                                   {m.label}
@@ -3933,89 +3885,83 @@ export default function StoresPage() {
                   })()}
 
                   <div className="flex items-center justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onPress={() => setModelPickerOpen(false)}
-                      isDisabled={modelPickerSaving}
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      onClick={() => setModelPickerOpen(false)}
+                      disabled={modelPickerSaving}
                     >
                       Vazgeç
-                    </Button>
-                    <Button
+                    </BalinaButton>
+                    <BalinaButton
                       variant="primary"
-                      size="sm"
-                      onPress={handleModelPickerSave}
-                      isDisabled={modelPickerSaving || modelPickerSelection.size === 0}
-                      isPending={modelPickerSaving}
+                      size="small"
+                      onClick={handleModelPickerSave}
+                      disabled={modelPickerSaving || modelPickerSelection.size === 0}
                     >
                       {modelPickerSaving ? 'Kaydediliyor...' : 'Kaydet'}
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
-      <Modal
-        isOpen={showSuggestionsDialog}
+      <BalinaModal
+        open={showSuggestionsDialog}
         onOpenChange={(open) => {
           if (!open && !isAutoMatching) {
             setShowSuggestionsDialog(false);
             setSuggestionsCount(0);
           }
         }}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-accent" />
+            SKU Eşleşmesi Bulundu
+          </span>
+        }
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              className="flex-1"
+              disabled={isAutoMatching}
+              onClick={() => {
+                if (!isAutoMatching) {
+                  setShowSuggestionsDialog(false);
+                  setSuggestionsCount(0);
+                }
+              }}
+            >
+              Belki Sonra
+            </BalinaButton>
+            <BalinaButton
+              className="flex-1"
+              onClick={handleAutoMatch}
+              disabled={isAutoMatching}
+            >
+              {isAutoMatching ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Eşleştiriliyor...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4" />
+                  Otomatik Eşleştir
+                </>
+              )}
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-accent" />
-                  SKU Eşleşmesi Bulundu
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="flex flex-col gap-4">
                 <p className="text-sm text-muted">
                   Mağazalarınız arasında <span className="font-medium text-foreground">{suggestionsCount}</span>{' '}
                   SKU eşleşmesi tespit edildi. Otomatik olarak eşleştirilsin mi? Stok ve fiyat değişimleri
                   bağlı mağazalarda senkron tutulacak.
                 </p>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  className="flex-1"
-                  isDisabled={isAutoMatching}
-                >
-                  Belki Sonra
-                </Button>
-                <Button
-                  className="flex-1"
-                  onPress={handleAutoMatch}
-                  isDisabled={isAutoMatching}
-                  isPending={isAutoMatching}
-                >
-                  {isAutoMatching ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Eşleştiriliyor...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Otomatik Eşleştir
-                    </>
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      </BalinaModal>
 
       <UpgradePlanModal
         isOpen={showUpgradeDialog}
@@ -4023,11 +3969,12 @@ export default function StoresPage() {
         description="Maalesef Free plan'da 1 mağazadan fazla ekleyemezsiniz. Daha fazla mağaza eklemek için planınızı yükseltin."
       />
 
-      <Modal
-        isOpen={!!settingsModalStoreId}
+      <BalinaModal
+        open={!!settingsModalStoreId}
         onOpenChange={(open) => {
           if (!open) {
             setSettingsModalStoreId(null);
+            setSettingsTab('general');
             setWcscState({
               apiKey: '',
               apiSecret: '',
@@ -4039,15 +3986,10 @@ export default function StoresPage() {
             });
           }
         }}
+        className="sm:max-w-lg"
+        title="Mağaza Ayarları"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-lg">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Mağaza Ayarları</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 {settingsModalStoreId &&
                   settingsState[settingsModalStoreId] &&
                   (() => {
@@ -4064,32 +4006,31 @@ export default function StoresPage() {
                     // "Genel" dışında ek tab varsa (WCSC veya Trendyol) tab list
                     // göster; tek başına Genel duruyorsa anlamsız → list gizli.
                     const hasExtraTabs = isWoocommerce || isTrendyol;
+                    const settingsTabItems: BalinaTabItem[] = [
+                      { id: 'general', label: 'Genel' },
+                      ...(isWoocommerce
+                        ? [{ id: 'wcsc', label: 'Stok Sync' }]
+                        : []),
+                      ...(isTrendyol
+                        ? [{ id: 'trendyol', label: 'Trendyol' }]
+                        : []),
+                    ];
+                    const currentSettingsTab = settingsTabItems.some(
+                      (t) => t.id === settingsTab,
+                    )
+                      ? settingsTab
+                      : 'general';
                     return (
-                      <Tabs defaultSelectedKey="general">
+                      <div>
                         {hasExtraTabs && (
-                          <Tabs.ListContainer>
-                            <Tabs.List aria-label="Ayar sekmeleri">
-                              <Tabs.Tab id="general">
-                                Genel
-                                <Tabs.Indicator />
-                              </Tabs.Tab>
-                              {isWoocommerce && (
-                                <Tabs.Tab id="wcsc">
-                                  Stok Sync
-                                  <Tabs.Indicator />
-                                </Tabs.Tab>
-                              )}
-                              {isTrendyol && (
-                                <Tabs.Tab id="trendyol">
-                                  Trendyol
-                                  <Tabs.Indicator />
-                                </Tabs.Tab>
-                              )}
-                            </Tabs.List>
-                          </Tabs.ListContainer>
+                          <BalinaTabs
+                            items={settingsTabItems}
+                            value={currentSettingsTab}
+                            onChange={setSettingsTab}
+                          />
                         )}
-                        <Tabs.Panel
-                          id="general"
+                        {currentSettingsTab === 'general' && (
+                        <div
                           className="mt-4 flex flex-col gap-4"
                         >
                           <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
@@ -4139,49 +4080,40 @@ export default function StoresPage() {
                                   : ''}
                               </p>
                             </div>
-                            <Switch
-                              isSelected={currentStore?.status === 'ACTIVE'}
-                              onChange={() =>
+                            <BalinaSwitch
+                              checked={currentStore?.status === 'ACTIVE'}
+                              onCheckedChange={() =>
                                 currentStore &&
                                 handleStatusToggle(currentStore.id, currentStore.status)
                               }
-                              aria-label="Aktif"
-                            >
-                              <Switch.Control>
-                                <Switch.Thumb />
-                              </Switch.Control>
-                            </Switch>
+                            />
                           </div>
                           <div className="flex flex-col gap-2">
-                            <TextField
+                            <BalinaTextField
+                              label="Komisyon Oranı"
                               value={settingsState[settingsModalStoreId].commissionRate}
                               onChange={(v) =>
                                 handleSettingsChange(settingsModalStoreId, 'commissionRate', v)
                               }
-                            >
-                              <Label>Komisyon Oranı</Label>
-                              <InputGroup variant="secondary">
-                                <InputGroup.Input placeholder="0" inputMode="decimal" />
-                                <InputGroup.Suffix>%</InputGroup.Suffix>
-                              </InputGroup>
-                            </TextField>
+                              inputMode="decimal"
+                              placeholder="0"
+                              rightIcon={<span className="text-[var(--balina-text-muted)]">%</span>}
+                            />
                             <p className="text-xs text-muted">
                               Pazaryeri komisyon oranı (0-100 arası)
                             </p>
                           </div>
                           <div className="flex flex-col gap-2">
-                            <TextField
+                            <BalinaTextField
+                              label="Kargo Maliyeti"
                               value={settingsState[settingsModalStoreId].shippingCost}
                               onChange={(v) =>
                                 handleSettingsChange(settingsModalStoreId, 'shippingCost', v)
                               }
-                            >
-                              <Label>Kargo Maliyeti</Label>
-                              <InputGroup variant="secondary">
-                                <InputGroup.Input placeholder="0" inputMode="decimal" />
-                                <InputGroup.Suffix>TL</InputGroup.Suffix>
-                              </InputGroup>
-                            </TextField>
+                              inputMode="decimal"
+                              placeholder="0"
+                              rightIcon={<span className="text-[var(--balina-text-muted)]">TL</span>}
+                            />
                             <p className="text-xs text-muted">
                               Sabit kargo maliyeti (sipariş başına)
                             </p>
@@ -4192,17 +4124,18 @@ export default function StoresPage() {
                             <span className="truncate text-foreground">
                               {formatDate(currentStore?.lastSyncAt ?? null)}
                             </span>
-                            <Button
-                              size="sm"
-                              onPress={() => currentStore && handleSync(currentStore.id)}
-                              isDisabled={
+                            <BalinaButton
+                              variant="soft"
+                              size="default"
+                              className="ml-auto"
+                              leftIcon={<RefreshCw className="h-3 w-3" />}
+                              onClick={() => currentStore && handleSync(currentStore.id)}
+                              disabled={
                                 currentStore?.status !== 'ACTIVE' || !!currentStore?.isSyncing
                               }
-                              className={`ml-auto ${pillBtnClass}`}
                             >
-                              <RefreshCw className="h-3 w-3" />
                               Senkronize Et
-                            </Button>
+                            </BalinaButton>
                           </div>
                           <p className="text-center text-xs text-muted">
                             Son güncelleme:{' '}
@@ -4211,21 +4144,21 @@ export default function StoresPage() {
                               : '-'}
                           </p>
                           <div className="flex gap-2">
-                            <Button
-                              variant="tertiary"
-                              onPress={() =>
+                            <BalinaButton
+                              variant="soft"
+                              size="default"
+                              className="flex-1 text-danger"
+                              leftIcon={<Trash2 className="h-4 w-4" />}
+                              onClick={() =>
                                 currentStore && setDeleteConfirmStoreId(currentStore.id)
                               }
-                              className={`flex-1 text-danger ${pillBtnClass}`}
                             >
-                              <Trash2 className="h-4 w-4" />
                               Mağazayı Sil
-                            </Button>
-                            <Button
+                            </BalinaButton>
+                            <BalinaButton
                               className="flex-1"
-                              onPress={() => handleSaveSettings(settingsModalStoreId)}
-                              isDisabled={settingsState[settingsModalStoreId].saving}
-                              isPending={settingsState[settingsModalStoreId].saving}
+                              onClick={() => handleSaveSettings(settingsModalStoreId)}
+                              disabled={settingsState[settingsModalStoreId].saving}
                             >
                               {settingsState[settingsModalStoreId].saving ? (
                                 <>
@@ -4235,12 +4168,12 @@ export default function StoresPage() {
                               ) : (
                                 'Kaydet'
                               )}
-                            </Button>
+                            </BalinaButton>
                           </div>
-                        </Tabs.Panel>
-                        {isWoocommerce && (
-                        <Tabs.Panel
-                          id="wcsc"
+                        </div>
+                        )}
+                        {isWoocommerce && currentSettingsTab === 'wcsc' && (
+                        <div
                           className="mt-4 flex flex-col gap-4"
                         >
                           {isConnected ? (
@@ -4255,31 +4188,28 @@ export default function StoresPage() {
                                 </p>
                               </div>
                               <div className="flex flex-col gap-2">
-                                <Label className="flex items-center gap-2">
+                                <label className="flex items-center gap-2 text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
                                   <LinkIcon className="h-4 w-4 text-muted" />
                                   Webhook URL
-                                </Label>
+                                </label>
                                 <div className="flex gap-2">
-                                  <TextField
+                                  <BalinaInput
                                     value={`${typeof window !== 'undefined' ? window.location.origin : ''}/api/webhook/stock-sync`}
-                                    isReadOnly
-                                    className="flex-1"
-                                  >
-                                    <Input className="font-mono text-xs" />
-                                  </TextField>
-                                  <Button
-                                    variant="outline"
-                                    size="md"
-                                    isIconOnly
+                                    readOnly
+                                    wrapperClassName="flex-1"
+                                    className="font-mono text-xs"
+                                  />
+                                  <BalinaButton
+                                    variant="soft"
                                     aria-label="Kopyala"
-                                    onPress={() =>
+                                    onClick={() =>
                                       copyToClipboard(
                                         `${window.location.origin}/api/webhook/stock-sync`
                                       )
                                     }
                                   >
                                     <Copy className="h-4 w-4" />
-                                  </Button>
+                                  </BalinaButton>
                                 </div>
                                 <p className="text-xs text-muted">
                                   Bu URL&apos;i WordPress eklentisindeki Dashboard URL alanına girin.
@@ -4291,12 +4221,11 @@ export default function StoresPage() {
                                   {new Date(currentStore.wcscLastSyncAt).toLocaleString('tr-TR')}
                                 </div>
                               )}
-                              <Button
+                              <BalinaButton
                                 variant="danger"
                                 fullWidth
-                                onPress={handleDisconnectWcsc}
-                                isDisabled={wcscState.disconnecting}
-                                isPending={wcscState.disconnecting}
+                                onClick={handleDisconnectWcsc}
+                                disabled={wcscState.disconnecting}
                               >
                                 {wcscState.disconnecting ? (
                                   <>
@@ -4306,7 +4235,7 @@ export default function StoresPage() {
                                 ) : (
                                   'Bağlantıyı Kes'
                                 )}
-                              </Button>
+                              </BalinaButton>
                             </>
                           ) : (
                             <>
@@ -4320,7 +4249,13 @@ export default function StoresPage() {
                                   aşağıdaki bilgileri girin.
                                 </p>
                               </div>
-                              <TextField
+                              <BalinaTextField
+                                label={
+                                  <span className="flex items-center gap-2">
+                                    <Key className="h-4 w-4 text-muted" />
+                                    API Key
+                                  </span>
+                                }
                                 value={wcscState.apiKey}
                                 onChange={(v) =>
                                   setWcscState((prev) => ({
@@ -4329,14 +4264,10 @@ export default function StoresPage() {
                                     testResult: null,
                                   }))
                                 }
-                              >
-                                <Label className="flex items-center gap-2">
-                                  <Key className="h-4 w-4 text-muted" />
-                                  API Key
-                                </Label>
-                                <Input placeholder="Eklentiden kopyalayın" />
-                              </TextField>
-                              <TextField
+                                placeholder="Eklentiden kopyalayın"
+                              />
+                              <BalinaTextField
+                                label="API Secret"
                                 value={wcscState.apiSecret}
                                 onChange={(v) =>
                                   setWcscState((prev) => ({
@@ -4346,33 +4277,29 @@ export default function StoresPage() {
                                   }))
                                 }
                                 type={wcscState.showSecret ? 'text' : 'password'}
-                              >
-                                <Label>API Secret</Label>
-                                <InputGroup variant="secondary">
-                                  <InputGroup.Input placeholder="Eklentiden kopyalayın" />
-                                  <InputGroup.Suffix>
-                                    <button
-                                      type="button"
-                                      aria-label={
-                                        wcscState.showSecret ? 'Gizle' : 'Göster'
-                                      }
-                                      onClick={() =>
-                                        setWcscState((prev) => ({
-                                          ...prev,
-                                          showSecret: !prev.showSecret,
-                                        }))
-                                      }
-                                      className="text-muted hover:text-foreground"
-                                    >
-                                      {wcscState.showSecret ? (
-                                        <EyeOff className="h-4 w-4" />
-                                      ) : (
-                                        <Eye className="h-4 w-4" />
-                                      )}
-                                    </button>
-                                  </InputGroup.Suffix>
-                                </InputGroup>
-                              </TextField>
+                                placeholder="Eklentiden kopyalayın"
+                                rightIcon={
+                                  <button
+                                    type="button"
+                                    aria-label={
+                                      wcscState.showSecret ? 'Gizle' : 'Göster'
+                                    }
+                                    onClick={() =>
+                                      setWcscState((prev) => ({
+                                        ...prev,
+                                        showSecret: !prev.showSecret,
+                                      }))
+                                    }
+                                    className="text-muted hover:text-foreground"
+                                  >
+                                    {wcscState.showSecret ? (
+                                      <EyeOff className="h-4 w-4" />
+                                    ) : (
+                                      <Eye className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                }
+                              />
                               {wcscState.testResult && (
                                 <div
                                   className={`flex items-center gap-2 rounded-lg p-3 text-sm ${
@@ -4394,14 +4321,13 @@ export default function StoresPage() {
                                   )}
                                 </div>
                               )}
-                              <Button
-                                variant="outline"
+                              <BalinaButton
+                                variant="soft"
                                 fullWidth
-                                onPress={handleTestWcsc}
-                                isDisabled={
+                                onClick={handleTestWcsc}
+                                disabled={
                                   wcscState.testing || !wcscState.apiKey || !wcscState.apiSecret
                                 }
-                                isPending={wcscState.testing}
                               >
                                 {wcscState.testing ? (
                                   <>
@@ -4411,12 +4337,11 @@ export default function StoresPage() {
                                 ) : (
                                   'Bağlantıyı Test Et'
                                 )}
-                              </Button>
-                              <Button
+                              </BalinaButton>
+                              <BalinaButton
                                 fullWidth
-                                onPress={handleConnectWcsc}
-                                isDisabled={wcscState.connecting || !wcscState.testResult?.success}
-                                isPending={wcscState.connecting}
+                                onClick={handleConnectWcsc}
+                                disabled={wcscState.connecting || !wcscState.testResult?.success}
                               >
                                 {wcscState.connecting ? (
                                   <>
@@ -4426,7 +4351,7 @@ export default function StoresPage() {
                                 ) : (
                                   'Eklentiyi Bağla'
                                 )}
-                              </Button>
+                              </BalinaButton>
                               <p className="text-center text-xs text-muted">
                                 Eklentiyi indirmek için{' '}
                                 <a href="#" className="text-accent hover:underline">
@@ -4435,11 +4360,10 @@ export default function StoresPage() {
                               </p>
                             </>
                           )}
-                        </Tabs.Panel>
+                        </div>
                         )}
-                        {isTrendyol && (
-                          <Tabs.Panel
-                            id="trendyol"
+                        {isTrendyol && currentSettingsTab === 'trendyol' && (
+                          <div
                             className="mt-4 flex flex-col gap-4"
                           >
                             <div className="rounded-lg border border-default/60 bg-surface-secondary/50 p-4">
@@ -4457,11 +4381,10 @@ export default function StoresPage() {
                                   </p>
                                 </div>
                               </div>
-                              <Button
-                                onPress={handleTrendyolWebhookSetup}
-                                isDisabled={trendyolActionState.webhookSetup}
-                                isPending={trendyolActionState.webhookSetup}
-                                variant="outline"
+                              <BalinaButton
+                                onClick={handleTrendyolWebhookSetup}
+                                disabled={trendyolActionState.webhookSetup}
+                                variant="soft"
                                 fullWidth
                                 className="mt-3"
                               >
@@ -4473,7 +4396,7 @@ export default function StoresPage() {
                                 ) : (
                                   "Webhook'u yeniden kur"
                                 )}
-                              </Button>
+                              </BalinaButton>
                             </div>
 
                             <div className="rounded-lg border border-default/60 bg-surface-secondary/50 p-4">
@@ -4490,11 +4413,10 @@ export default function StoresPage() {
                                   </p>
                                 </div>
                               </div>
-                              <Button
-                                onPress={handleTrendyolSyncRecentOrders}
-                                isDisabled={trendyolActionState.recentOrders}
-                                isPending={trendyolActionState.recentOrders}
-                                variant="outline"
+                              <BalinaButton
+                                onClick={handleTrendyolSyncRecentOrders}
+                                disabled={trendyolActionState.recentOrders}
+                                variant="soft"
                                 fullWidth
                                 className="mt-3"
                               >
@@ -4506,39 +4428,59 @@ export default function StoresPage() {
                                 ) : (
                                   'Son 24 saati senkronize et'
                                 )}
-                              </Button>
+                              </BalinaButton>
                             </div>
 
                             <p className="text-center text-xs text-muted">
                               Tam senkron için Genel sekmesindeki <strong>Senkronize Et</strong>
                               {' '}butonunu kullanabilirsiniz (son 30 günü kapsar).
                             </p>
-                          </Tabs.Panel>
+                          </div>
                         )}
-                      </Tabs>
+                      </div>
                     );
                   })()}
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
-      <Modal
-        isOpen={!!deleteConfirmStoreId}
+      <BalinaModal
+        open={!!deleteConfirmStoreId}
         onOpenChange={(open) => !open && setDeleteConfirmStoreId(null)}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <Trash2 className="h-5 w-5 text-danger" />
+            Mağazayı Sil
+          </span>
+        }
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              className="flex-1"
+              disabled={isDeleting}
+              onClick={() => !isDeleting && setDeleteConfirmStoreId(null)}
+            >
+              İptal
+            </BalinaButton>
+            <BalinaButton
+              variant="danger"
+              className="flex-1"
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Siliniyor...
+                </>
+              ) : (
+                'Evet, Sil'
+              )}
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <Trash2 className="h-5 w-5 text-danger" />
-                  Mağazayı Sil
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
                 {deleteConfirmStoreId && (
                   <p className="text-sm text-muted">
                     <span className="font-medium text-foreground">
@@ -4547,54 +4489,21 @@ export default function StoresPage() {
                     mağazasını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.
                   </p>
                 )}
-              </Modal.Body>
-              <Modal.Footer>
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  className="flex-1"
-                  isDisabled={isDeleting}
-                >
-                  İptal
-                </Button>
-                <Button
-                  variant="danger"
-                  className="flex-1"
-                  onPress={handleDeleteConfirm}
-                  isDisabled={isDeleting}
-                  isPending={isDeleting}
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Siliniyor...
-                    </>
-                  ) : (
-                    'Evet, Sil'
-                  )}
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+      </BalinaModal>
 
       {/* Bizim Hesap bağlama modalı — Fal.ai/DHL ile aynı stepper deseni. */}
-      <Modal
-        isOpen={isBizimhesapDialogOpen}
+      <BalinaModal
+        open={isBizimhesapDialogOpen}
         onOpenChange={(open) => !open && handleBizimhesapDialogClose()}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <BizimhesapMark className="h-6 w-6 rounded-md" />
+            Bizim Hesap Bağla
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <BizimhesapMark className="h-6 w-6 rounded-md" />
-                  Bizim Hesap Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 {bizimhesaps.length > 0 && (
                   <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground/80">
                     Mevcut bir Bizim Hesap bağlantınız zaten var. Bu form'u doldurup
@@ -4644,7 +4553,8 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isBizimhesapLastStep ? (
                             <div className="flex flex-col gap-3">
-                              <TextField
+                              <BalinaTextField
+                                label={step.label}
                                 value={bizimhesapForm[step.key]}
                                 onChange={(value) =>
                                   setBizimhesapForm((prev) => ({ ...prev, [step.key]: value }))
@@ -4657,16 +4567,14 @@ export default function StoresPage() {
                                     : 'text'
                                 }
                                 autoFocus
-                              >
-                                <Label>{step.label}</Label>
-                                {step.isPassword && setShow ? (
-                                  <div className="relative w-full">
-                                    <Input placeholder={step.placeholder} className="w-full pr-10" />
+                                placeholder={step.placeholder}
+                                rightIcon={
+                                  step.isPassword && setShow ? (
                                     <button
                                       type="button"
                                       onClick={() => setShow((v) => !v)}
                                       aria-label={showVisible ? 'Gizle' : 'Göster'}
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                      className="text-muted hover:text-foreground"
                                     >
                                       {showVisible ? (
                                         <EyeOff className="h-4 w-4" />
@@ -4674,15 +4582,13 @@ export default function StoresPage() {
                                         <Eye className="h-4 w-4" />
                                       )}
                                     </button>
-                                  </div>
-                                ) : (
-                                  <Input placeholder={step.placeholder} />
-                                )}
-                              </TextField>
+                                  ) : undefined
+                                }
+                              />
                               <p className="text-sm text-muted">{step.description}</p>
-                              <Button onPress={handleBizimhesapNext} fullWidth>
+                              <BalinaButton onClick={handleBizimhesapNext} fullWidth>
                                 İleri
-                              </Button>
+                              </BalinaButton>
                             </div>
                           ) : (
                             <button
@@ -4723,15 +4629,14 @@ export default function StoresPage() {
                     <div className="flex-1">
                       {isBizimhesapLastStep ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Bağlantı Testi</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Bağlantı Testi</label>
                           <p className="text-sm text-muted">
                             Girdiğiniz bilgilerle Bizim Hesap bağlantısını test edip kaydedin.
                           </p>
-                          <Button
-                            onPress={handleBizimhesapTest}
-                            isDisabled={isTestingBizimhesap}
-                            isPending={isTestingBizimhesap}
-                            variant="outline"
+                          <BalinaButton
+                            onClick={handleBizimhesapTest}
+                            disabled={isTestingBizimhesap}
+                            variant="soft"
                             fullWidth
                           >
                             {isTestingBizimhesap ? (
@@ -4742,23 +4647,22 @@ export default function StoresPage() {
                             ) : (
                               'Bağlantıyı Test Et'
                             )}
-                          </Button>
+                          </BalinaButton>
                           {bizimhesapTestResult && (
-                            <Alert status={bizimhesapTestResult.success ? 'success' : 'danger'}>
-                              <Alert.Indicator />
-                              <Alert.Content>
-                                <Alert.Title>
+                            <BalinaAlert status={bizimhesapTestResult.success ? 'success' : 'danger'}>
+                              <BalinaAlert.Indicator />
+                              <BalinaAlert.Content>
+                                <BalinaAlert.Title>
                                   {bizimhesapTestResult.success
                                     ? 'Bağlantı başarılı!'
                                     : bizimhesapTestResult.error || 'Bağlantı başarısız'}
-                                </Alert.Title>
-                              </Alert.Content>
-                            </Alert>
+                                </BalinaAlert.Title>
+                              </BalinaAlert.Content>
+                            </BalinaAlert>
                           )}
-                          <Button
-                            onPress={handleBizimhesapSave}
-                            isDisabled={isSavingInvoice}
-                            isPending={isSavingInvoice}
+                          <BalinaButton
+                            onClick={handleBizimhesapSave}
+                            disabled={isSavingInvoice}
                             fullWidth
                           >
                             {isSavingInvoice ? (
@@ -4769,7 +4673,7 @@ export default function StoresPage() {
                             ) : (
                               'Bağla'
                             )}
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <div className="pt-1.5">
@@ -4790,25 +4694,17 @@ export default function StoresPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Bizim Hesap yönet modalı. */}
-      <Modal
-        isOpen={manageBizimhesapId !== null}
+      <BalinaModal
+        open={manageBizimhesapId !== null}
         onOpenChange={(open) => !open && handleManageBizimhesapClose()}
+        className="sm:max-w-lg"
+        title="Hesap Ayarları"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-lg">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Hesap Ayarları</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-4">
                   {manageBizimhesap && (
                     <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
@@ -4825,57 +4721,45 @@ export default function StoresPage() {
                           Bizim Hesap • Firma {manageBizimhesap.config.firmId || '—'}
                         </p>
                       </div>
-                      <Switch
-                        isSelected={manageBizimhesapActive}
-                        onChange={setManageBizimhesapActive}
-                        aria-label="Aktif"
-                      >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch>
+                      <BalinaSwitch
+                        checked={manageBizimhesapActive}
+                        onCheckedChange={setManageBizimhesapActive}
+                      />
                     </div>
                   )}
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onPress={handleManageBizimhesapClose}
-                      isDisabled={isManagingBizimhesap}
+                    <BalinaButton
+                      variant="soft"
+                      onClick={handleManageBizimhesapClose}
+                      disabled={isManagingBizimhesap}
                     >
                       İptal
-                    </Button>
-                    <Button
-                      onPress={handleManageBizimhesapSave}
-                      isPending={isManagingBizimhesap}
-                      isDisabled={isManagingBizimhesap}
+                    </BalinaButton>
+                    <BalinaButton
+                      onClick={handleManageBizimhesapSave}
+                      disabled={isManagingBizimhesap}
                     >
                       Kaydet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Paraşüt bağlama modalı. */}
-      <Modal
-        isOpen={isParasutDialogOpen}
+      <BalinaModal
+        open={isParasutDialogOpen}
         onOpenChange={(open) => !open && handleParasutDialogClose()}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <ParasutMark className="h-6 w-6 rounded-md" />
+            Paraşüt Bağla
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <ParasutMark className="h-6 w-6 rounded-md" />
-                  Paraşüt Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 {parasuts.length > 0 && (
                   <div className="mb-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground/80">
                     Mevcut bir Paraşüt bağlantınız zaten var. Bu form'u doldurup
@@ -4925,7 +4809,8 @@ export default function StoresPage() {
                         <div className={`flex-1 ${isActive ? 'pb-6' : 'pb-4'}`}>
                           {isActive && !isParasutLastStep ? (
                             <div className="flex flex-col gap-3">
-                              <TextField
+                              <BalinaTextField
+                                label={step.label}
                                 value={parasutForm[step.key]}
                                 onChange={(value) =>
                                   setParasutForm((prev) => ({ ...prev, [step.key]: value }))
@@ -4938,16 +4823,14 @@ export default function StoresPage() {
                                     : 'text'
                                 }
                                 autoFocus
-                              >
-                                <Label>{step.label}</Label>
-                                {step.isPassword && setShow ? (
-                                  <div className="relative w-full">
-                                    <Input placeholder={step.placeholder} className="w-full pr-10" />
+                                placeholder={step.placeholder}
+                                rightIcon={
+                                  step.isPassword && setShow ? (
                                     <button
                                       type="button"
                                       onClick={() => setShow((v) => !v)}
                                       aria-label={showVisible ? 'Gizle' : 'Göster'}
-                                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                                      className="text-muted hover:text-foreground"
                                     >
                                       {showVisible ? (
                                         <EyeOff className="h-4 w-4" />
@@ -4955,15 +4838,13 @@ export default function StoresPage() {
                                         <Eye className="h-4 w-4" />
                                       )}
                                     </button>
-                                  </div>
-                                ) : (
-                                  <Input placeholder={step.placeholder} />
-                                )}
-                              </TextField>
+                                  ) : undefined
+                                }
+                              />
                               <p className="text-sm text-muted">{step.description}</p>
-                              <Button onPress={handleParasutNext} fullWidth>
+                              <BalinaButton onClick={handleParasutNext} fullWidth>
                                 İleri
-                              </Button>
+                              </BalinaButton>
                             </div>
                           ) : (
                             <button
@@ -5004,15 +4885,14 @@ export default function StoresPage() {
                     <div className="flex-1">
                       {isParasutLastStep ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Bağlantı Testi</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Bağlantı Testi</label>
                           <p className="text-sm text-muted">
                             Girdiğiniz bilgilerle Paraşüt OAuth bağlantısını test edip kaydedin.
                           </p>
-                          <Button
-                            onPress={handleParasutTest}
-                            isDisabled={isTestingParasut}
-                            isPending={isTestingParasut}
-                            variant="outline"
+                          <BalinaButton
+                            onClick={handleParasutTest}
+                            disabled={isTestingParasut}
+                            variant="soft"
                             fullWidth
                           >
                             {isTestingParasut ? (
@@ -5023,23 +4903,22 @@ export default function StoresPage() {
                             ) : (
                               'Bağlantıyı Test Et'
                             )}
-                          </Button>
+                          </BalinaButton>
                           {parasutTestResult && (
-                            <Alert status={parasutTestResult.success ? 'success' : 'danger'}>
-                              <Alert.Indicator />
-                              <Alert.Content>
-                                <Alert.Title>
+                            <BalinaAlert status={parasutTestResult.success ? 'success' : 'danger'}>
+                              <BalinaAlert.Indicator />
+                              <BalinaAlert.Content>
+                                <BalinaAlert.Title>
                                   {parasutTestResult.success
                                     ? 'Bağlantı başarılı!'
                                     : parasutTestResult.error || 'Bağlantı başarısız'}
-                                </Alert.Title>
-                              </Alert.Content>
-                            </Alert>
+                                </BalinaAlert.Title>
+                              </BalinaAlert.Content>
+                            </BalinaAlert>
                           )}
-                          <Button
-                            onPress={handleParasutSave}
-                            isDisabled={isSavingInvoice}
-                            isPending={isSavingInvoice}
+                          <BalinaButton
+                            onClick={handleParasutSave}
+                            disabled={isSavingInvoice}
                             fullWidth
                           >
                             {isSavingInvoice ? (
@@ -5050,7 +4929,7 @@ export default function StoresPage() {
                             ) : (
                               'Bağla'
                             )}
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <div className="pt-1.5">
@@ -5071,25 +4950,17 @@ export default function StoresPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Paraşüt yönet modalı. */}
-      <Modal
-        isOpen={manageParasutId !== null}
+      <BalinaModal
+        open={manageParasutId !== null}
         onOpenChange={(open) => !open && handleManageParasutClose()}
+        className="sm:max-w-lg"
+        title="Hesap Ayarları"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-lg">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Hesap Ayarları</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-4">
                   {manageParasut && (
                     <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
@@ -5106,56 +4977,42 @@ export default function StoresPage() {
                           Paraşüt • Şirket {manageParasut.config.parasutCompanyId || '—'}
                         </p>
                       </div>
-                      <Switch
-                        isSelected={manageParasutActive}
-                        onChange={setManageParasutActive}
-                        aria-label="Aktif"
-                      >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch>
+                      <BalinaSwitch
+                        checked={manageParasutActive}
+                        onCheckedChange={setManageParasutActive}
+                      />
                     </div>
                   )}
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      onPress={handleManageParasutClose}
-                      isDisabled={isManagingParasut}
+                    <BalinaButton
+                      variant="soft"
+                      onClick={handleManageParasutClose}
+                      disabled={isManagingParasut}
                     >
                       İptal
-                    </Button>
-                    <Button
-                      onPress={handleManageParasutSave}
-                      isPending={isManagingParasut}
-                      isDisabled={isManagingParasut}
+                    </BalinaButton>
+                    <BalinaButton
+                      onClick={handleManageParasutSave}
+                      disabled={isManagingParasut}
                     >
                       Kaydet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Kargo (DHL/MNG) yönet modalı — şifre rotasyonu + müşteri no / kimlik
       türü güncellemesi için. Şifre alanı boş bırakılırsa mevcut şifre korunur;
       diğer alanlar değişirse backend mevcut şifreyle re-test eder. */}
-      <Modal
-        isOpen={manageCargoId !== null}
+      <BalinaModal
+        open={manageCargoId !== null}
         onOpenChange={(open) => !open && handleManageCargoClose()}
+        className="sm:max-w-lg"
+        title="Kargo Hesabı Ayarları"
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-lg">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Kargo Hesabı Ayarları</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body style={{ marginTop: 0 }}>
+              <div>
                 <div className="flex flex-col gap-4">
                   {manageCargo && (
                     <div className="flex items-center gap-3 rounded-lg bg-surface-secondary/50 p-3">
@@ -5178,41 +5035,31 @@ export default function StoresPage() {
                             : manageCargo.apiUsername || manageCargo.provider}
                         </p>
                       </div>
-                      <Switch
-                        isSelected={manageCargoActive}
-                        onChange={setManageCargoActive}
-                        aria-label="Aktif"
-                      >
-                        <Switch.Control>
-                          <Switch.Thumb />
-                        </Switch.Control>
-                      </Switch>
+                      <BalinaSwitch
+                        checked={manageCargoActive}
+                        onCheckedChange={setManageCargoActive}
+                      />
                     </div>
                   )}
 
-                  <TextField
+                  <BalinaTextField
+                    label="Müşteri Numarası"
                     value={manageCargoForm.customerNumber}
                     onChange={(v) =>
                       setManageCargoForm((p) => ({ ...p, customerNumber: v }))
                     }
-                  >
-                    <Label>Müşteri Numarası</Label>
-                    <Input placeholder="DHL müşteri numaranız" />
-                  </TextField>
+                    placeholder="DHL müşteri numaranız"
+                  />
 
-                  <TextField
+                  <BalinaTextField
+                    label="Yeni Şifre (opsiyonel)"
                     value={manageCargoForm.password}
                     onChange={(v) =>
                       setManageCargoForm((p) => ({ ...p, password: v }))
                     }
                     type={manageCargoShowPassword ? 'text' : 'password'}
-                  >
-                    <Label>Yeni Şifre (opsiyonel)</Label>
-                    <div className="relative w-full">
-                      <Input
-                        placeholder="Değiştirmek istemiyorsanız boş bırakın"
-                        className="w-full pr-10"
-                      />
+                    placeholder="Değiştirmek istemiyorsanız boş bırakın"
+                    rightIcon={
                       <button
                         type="button"
                         onClick={() =>
@@ -5223,7 +5070,7 @@ export default function StoresPage() {
                             ? 'Şifreyi gizle'
                             : 'Şifreyi göster'
                         }
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+                        className="text-muted hover:text-foreground"
                       >
                         {manageCargoShowPassword ? (
                           <EyeOff className="h-4 w-4" />
@@ -5231,8 +5078,8 @@ export default function StoresPage() {
                           <Eye className="h-4 w-4" />
                         )}
                       </button>
-                    </div>
-                  </TextField>
+                    }
+                  />
                   <p className="text-xs text-muted">
                     Müşteri no veya kimlik tipi değişirse, mevcut şifreyle MNG
                     portal üzerinden tekrar test edilir. Hata alırsanız yeni
@@ -5240,48 +5087,42 @@ export default function StoresPage() {
                   </p>
 
                   <div className="flex gap-2 pt-2">
-                    <Button
-                      variant="tertiary"
-                      onPress={handleManageCargoDelete}
-                      isDisabled={isManagingCargo}
-                      className={`flex-1 text-danger ${pillBtnClass}`}
+                    <BalinaButton
+                      variant="soft"
+                      size="default"
+                      className="flex-1 text-danger"
+                      leftIcon={<Trash2 className="h-4 w-4" />}
+                      onClick={handleManageCargoDelete}
+                      disabled={isManagingCargo}
                     >
-                      <Trash2 className="h-4 w-4" />
                       Bağlantıyı Sil
-                    </Button>
-                    <Button
+                    </BalinaButton>
+                    <BalinaButton
                       className="flex-1"
-                      onPress={handleManageCargoSave}
-                      isPending={isManagingCargo}
-                      isDisabled={isManagingCargo}
+                      onClick={handleManageCargoSave}
+                      disabled={isManagingCargo}
                     >
                       Kaydet
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* TikTok bağlama modal — mağaza listesi; her mağaza için Bağlan/Kaldır.
           Bağlan → Login Kit OAuth'a yönlendirir, dönüşte ?tiktok=connected. */}
-      <Modal
-        isOpen={isTiktokDialogOpen}
+      <BalinaModal
+        open={isTiktokDialogOpen}
         onOpenChange={(o) => !o && handleTiktokDialogClose()}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            <TiktokMark className="h-6 w-6 rounded-md" />
+            TikTok Bağla
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  <TiktokMark className="h-6 w-6 rounded-md" />
-                  TikTok Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 <div className="flex flex-col gap-2 py-2">
                   {stores.length === 0 ? (
                     <p className="text-sm text-muted">
@@ -5314,25 +5155,24 @@ export default function StoresPage() {
                             )}
                           </div>
                           {connected ? (
-                            <Button
-                              variant="danger"
-                              size="sm"
-                              className={pillBtnClass}
-                              isDisabled={disconnecting}
-                              onPress={() => void handleTtDisconnect(store.id)}
+                            <BalinaButton
+                              variant="soft"
+                              size="default"
+                              className="text-danger"
+                              disabled={disconnecting}
+                              onClick={() => void handleTtDisconnect(store.id)}
                             >
                               {disconnecting ? 'Kaldırılıyor...' : 'Kaldır'}
-                            </Button>
+                            </BalinaButton>
                           ) : (
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              className={pillBtnClass}
-                              isDisabled={busy}
-                              onPress={() => void handleConnectTiktok(store.id)}
+                            <BalinaButton
+                              variant="soft"
+                              size="default"
+                              disabled={busy}
+                              onClick={() => void handleConnectTiktok(store.id)}
                             >
                               {busy ? 'Yönlendiriliyor...' : 'Bağlan'}
-                            </Button>
+                            </BalinaButton>
                           )}
                         </div>
                       );
@@ -5343,34 +5183,28 @@ export default function StoresPage() {
                     için kullanılır.
                   </p>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Instagram bağlama modal — Shopify/Trendyol stepper deseni:
           numaralı adımlar + dikey çizgi, her adım açılıp kapanır. */}
-      <Modal
-        isOpen={isInstagramDialogOpen}
+      <BalinaModal
+        open={isInstagramDialogOpen}
         onOpenChange={(o) => !o && handleIgDialogClose()}
+        className="sm:max-w-md"
+        title={
+          <span className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/figma/integrations/instagram.png"
+              alt="Instagram"
+              className="h-6 w-6 object-contain"
+            />
+            Instagram Bağla
+          </span>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-md">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading className="flex items-center gap-2">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src="/figma/integrations/instagram.png"
-                    alt="Instagram"
-                    className="h-6 w-6 object-contain"
-                  />
-                  Instagram Bağla
-                </Modal.Heading>
-              </Modal.Header>
-              <Modal.Body>
+              <div>
                 <div className="py-2">
                   {/* Step 1: Mağaza Seç */}
                   <div className="flex gap-4">
@@ -5400,7 +5234,7 @@ export default function StoresPage() {
                     >
                       {igCurrentStep === 0 ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Mağaza Seç</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Mağaza Seç</label>
                           {stores.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-foreground/[0.10] bg-foreground/[0.02] p-4 text-center text-xs text-muted">
                               Önce bir mağaza bağla, sonra Instagram hesabını
@@ -5442,13 +5276,12 @@ export default function StoresPage() {
                                       )}
                                     </div>
                                     {connected && (
-                                      <Chip
-                                        color="success"
-                                        variant="soft"
+                                      <BalinaChip
+                                        variant="success"
                                         size="sm"
                                       >
                                         Bağlı
-                                      </Chip>
+                                      </BalinaChip>
                                     )}
                                   </button>
                                 );
@@ -5458,13 +5291,13 @@ export default function StoresPage() {
                           <p className="text-sm text-muted">
                             Instagram hesabını bağlayacağın mağazayı seç.
                           </p>
-                          <Button
-                            onPress={() => setIgCurrentStep(1)}
-                            isDisabled={!igSelectedStoreId}
+                          <BalinaButton
+                            onClick={() => setIgCurrentStep(1)}
+                            disabled={!igSelectedStoreId}
                             fullWidth
                           >
                             İleri
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <button
@@ -5502,14 +5335,14 @@ export default function StoresPage() {
                     <div className="flex-1">
                       {igIsLastStep ? (
                         <div className="flex flex-col gap-3">
-                          <Label>Meta&apos;ya yönlendir</Label>
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Meta&apos;ya yönlendir</label>
                           <p className="text-sm text-muted">
                             Sonraki adımda Instagram giriş ekranına
                             gideceksin. Hesabı onayladıktan sonra otomatik
                             olarak geri döneceksin.
                           </p>
-                          <Card>
-                            <Card.Content className="flex flex-col gap-1 text-sm">
+                          <BalinaCard>
+                            <BalinaCard.Content className="flex flex-col gap-1 text-sm">
                               <p>
                                 <span className="text-muted">Mağaza:</span>{' '}
                                 {
@@ -5518,22 +5351,21 @@ export default function StoresPage() {
                                   )?.name
                                 }
                               </p>
-                            </Card.Content>
-                          </Card>
-                          <Button
-                            onPress={() =>
+                            </BalinaCard.Content>
+                          </BalinaCard>
+                          <BalinaButton
+                            onClick={() =>
                               igSelectedStoreId &&
                               handleConnectInstagram(igSelectedStoreId)
                             }
-                            isPending={!!igBusyStoreId}
-                            isDisabled={
+                            disabled={
                               !!igBusyStoreId || !igSelectedStoreId
                             }
                             fullWidth
+                            leftIcon={<Plug className="h-4 w-4" />}
                           >
-                            <Plug className="h-4 w-4" />
                             Instagram&apos;a Git
-                          </Button>
+                          </BalinaButton>
                         </div>
                       ) : (
                         <div className="pt-1.5">
@@ -5556,11 +5388,8 @@ export default function StoresPage() {
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
-              </Modal.Body>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+              </div>
+      </BalinaModal>
 
       {/* Instagram chatbot ayarları — bağlı her mağaza için Yönet butonu açar */}
       {manageIgStoreId && igConfigs[manageIgStoreId] && (
@@ -5591,44 +5420,24 @@ export default function StoresPage() {
       )}
 
       {/* Instagram bağlantısını kaldır — confirm */}
-      <AlertDialog
-        isOpen={disconnectIgStoreId !== null}
+      <BalinaConfirmDialog
+        open={disconnectIgStoreId !== null}
         onOpenChange={(open) => {
           if (!igDisconnecting && !open) setDisconnectIgStoreId(null);
         }}
+        title="Bağlantıyı kaldır"
+        titleIcon={<Trash2 className="h-5 w-5 text-danger" />}
+        confirmLabel="Kaldır"
+        cancelLabel="Vazgeç"
+        danger
+        loading={igDisconnecting}
+        onConfirm={handleIgDisconnect}
       >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Bağlantıyı kaldır</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                Instagram bağlantısı kaldırıldığında chatbot kapanır ve yeni
-                gelen mesajlar işlenmez. Mevcut sohbet geçmişi silinmez.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={igDisconnecting}
-                >
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleIgDisconnect}
-                  isPending={igDisconnecting}
-                  isDisabled={igDisconnecting}
-                >
-                  Kaldır
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        <p className="text-sm text-muted">
+          Instagram bağlantısı kaldırıldığında chatbot kapanır ve yeni
+          gelen mesajlar işlenmez. Mevcut sohbet geçmişi silinmez.
+        </p>
+      </BalinaConfirmDialog>
     </>
   );
 }
@@ -5696,15 +5505,27 @@ function ChatbotSettingsModal({
   ]);
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[560px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Chatbot ayarları</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="px-4">
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={(o) => !o && onClose()}
+      className="sm:max-w-[560px]"
+      title="Chatbot ayarları"
+      footer={
+        <>
+          <BalinaButton variant="soft" disabled={saving} onClick={() => !saving && onClose()}>
+            Vazgeç
+          </BalinaButton>
+          <BalinaButton
+            variant="primary"
+            onClick={handleSubmit}
+            disabled={saving}
+            leftIcon={<Check className="h-3.5 w-3.5" />}
+          >
+            Kaydet
+          </BalinaButton>
+        </>
+      }
+    >
               <div className="flex flex-col gap-3">
                 {/* Hesap özeti */}
                 <div className="flex items-center justify-between rounded-xl bg-foreground/[0.04] p-3">
@@ -5719,26 +5540,24 @@ function ChatbotSettingsModal({
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button
-                      variant="tertiary"
-                      size="sm"
-                      onPress={onTest}
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      onClick={onTest}
                       aria-label="Bağlantıyı test et"
-                      isIconOnly
-                      className="h-8 w-8 rounded-full bg-foreground/[0.06]"
+                      className="h-8 w-8 bg-foreground/[0.06]"
                     >
                       <RefreshCw className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
+                    </BalinaButton>
+                    <BalinaButton
                       variant="danger"
-                      size="sm"
-                      isIconOnly
-                      onPress={onDisconnect}
+                      size="small"
+                      onClick={onDisconnect}
                       aria-label="Bağlantıyı kaldır"
-                      className="h-8 w-8 rounded-full"
+                      className="h-8 w-8"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    </BalinaButton>
                   </div>
                 </div>
 
@@ -5752,14 +5571,10 @@ function ChatbotSettingsModal({
                       AI cevap üretmez.
                     </div>
                   </div>
-                  <Switch
-                    isSelected={chatbotActive}
-                    onChange={setChatbotActive}
-                  >
-                    <Switch.Control>
-                      <Switch.Thumb />
-                    </Switch.Control>
-                  </Switch>
+                  <BalinaSwitch
+                    checked={chatbotActive}
+                    onCheckedChange={setChatbotActive}
+                  />
                 </div>
 
                 {/* Çalışma modu — Learning (gözlem) vs Live (AI aktif). */}
@@ -5794,39 +5609,26 @@ function ChatbotSettingsModal({
                   </div>
                 </div>
 
-                <TextField
+                <BalinaTextField
+                  label="Admin Instagram ID"
                   value={adminInstagramId}
                   onChange={setAdminInstagramId}
                   aria-label="Admin Instagram PSID"
-                >
-                  <Label>Admin Instagram ID</Label>
-                  <Input placeholder="26701310816144690" />
-                </TextField>
+                  placeholder="26701310816144690"
+                />
 
                 <div className="grid grid-cols-2 gap-2">
-                  <TextField value={iban} onChange={setIban}>
-                    <Label>IBAN</Label>
-                    <Input placeholder="TR70 0020 ..." />
-                  </TextField>
-                  <TextField value={accountName} onChange={setAccountName}>
-                    <Label>Hesap sahibi</Label>
-                    <Input placeholder="İsim Soyisim" />
-                  </TextField>
+                  <BalinaTextField label="IBAN" value={iban} onChange={setIban} placeholder="TR70 0020 ..." />
+                  <BalinaTextField label="Hesap sahibi" value={accountName} onChange={setAccountName} placeholder="İsim Soyisim" />
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <TextField value={dhlCode} onChange={setDhlCode}>
-                    <Label>DHL kodu</Label>
-                    <Input placeholder="915737309" />
-                  </TextField>
-                  <TextField value={defaultModel} onChange={setDefaultModel}>
-                    <Label>Varsayılan model</Label>
-                    <Input placeholder="gpt-4o" />
-                  </TextField>
+                  <BalinaTextField label="DHL kodu" value={dhlCode} onChange={setDhlCode} placeholder="915737309" />
+                  <BalinaTextField label="Varsayılan model" value={defaultModel} onChange={setDefaultModel} placeholder="gpt-4o" />
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Label>Sistem promptu (özelleştirme)</Label>
+                  <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Sistem promptu (özelleştirme)</label>
                   <button
                     type="button"
                     onClick={() => setShowPrompt((v) => !v)}
@@ -5844,33 +5646,15 @@ function ChatbotSettingsModal({
                   </button>
                 </div>
                 {showPrompt && (
-                  <TextField value={sysPrompt} onChange={setSysPrompt}>
-                    <TextArea
-                      rows={8}
-                      placeholder="Boş bırakırsan varsayılan prompt kullanılır."
-                      className="font-mono text-xs"
-                    />
-                  </TextField>
+                  <BalinaTextarea
+                    value={sysPrompt}
+                    onChange={(e) => setSysPrompt(e.target.value)}
+                    rows={8}
+                    placeholder="Boş bırakırsan varsayılan prompt kullanılır."
+                    className="font-mono text-xs"
+                  />
                 )}
               </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="tertiary" slot="close" isDisabled={saving}>
-                Vazgeç
-              </Button>
-              <Button
-                variant="primary"
-                onPress={handleSubmit}
-                isPending={saving}
-                isDisabled={saving}
-              >
-                <Check className="h-3.5 w-3.5" />
-                Kaydet
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    </BalinaModal>
   );
 }

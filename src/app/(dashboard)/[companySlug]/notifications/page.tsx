@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Bell, Box as Package, TriangleExclamation as AlertTriangle, TrashBin as Trash2, Check, ChevronLeft } from '@gravity-ui/icons';
 import { ShoppingCart, ChartLine as TrendingDown, CircleCheckFill as CheckCircle2, Clock, ArrowsRotateRight as RefreshCw, CircleXmark as XCircle, ChevronRight, Calendar, Calendar as CalendarDays } from '@gravity-ui/icons';
-import { Button, ListBox, Select } from '@/components/ui';
+import { BalinaButton, BalinaSelect } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useNotificationStore, NotificationType } from '@/stores/notificationStore';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -128,54 +128,27 @@ export default function NotificationsPage() {
           <h1 className="text-lg font-semibold">Bildirimler</h1>
         </div>
         <div className="flex items-center gap-2">
-          <Select
-            selectedKey={filter}
-            onSelectionChange={(key) => setFilter(key as 'all' | 'unread')}
-            aria-label="Durum"
-            className="w-[140px]"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all" textValue="Tümü">
-                  Tümü
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                <ListBox.Item id="unread" textValue="Okunmamış">
-                  Okunmamış
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-              </ListBox>
-            </Select.Popover>
-          </Select>
-          <Select
-            selectedKey={typeFilter}
-            onSelectionChange={(key) => setTypeFilter(key as 'all' | NotificationType)}
-            aria-label="Bildirim Türü"
-            className="w-[180px]"
-          >
-            <Select.Trigger>
-              <Select.Value />
-              <Select.Indicator />
-            </Select.Trigger>
-            <Select.Popover>
-              <ListBox>
-                <ListBox.Item id="all" textValue="Tüm Türler">
-                  Tüm Türler
-                  <ListBox.ItemIndicator />
-                </ListBox.Item>
-                {Object.entries(notificationTypeLabels).map(([type, label]) => (
-                  <ListBox.Item key={type} id={type} textValue={label}>
-                    {label}
-                    <ListBox.ItemIndicator />
-                  </ListBox.Item>
-                ))}
-              </ListBox>
-            </Select.Popover>
-          </Select>
+          <BalinaSelect
+            value={filter}
+            onValueChange={(key) => setFilter(key as 'all' | 'unread')}
+            options={[
+              { value: 'all', label: 'Tümü' },
+              { value: 'unread', label: 'Okunmamış' },
+            ]}
+            className="w-[140px] max-w-[140px]"
+          />
+          <BalinaSelect
+            value={typeFilter}
+            onValueChange={(key) => setTypeFilter(key as 'all' | NotificationType)}
+            options={[
+              { value: 'all', label: 'Tüm Türler' },
+              ...Object.entries(notificationTypeLabels).map(([type, label]) => ({
+                value: type,
+                label,
+              })),
+            ]}
+            className="w-[180px] max-w-[180px]"
+          />
         </div>
       </div>
 
@@ -206,16 +179,24 @@ export default function NotificationsPage() {
       {(unreadCount > 0 || notifications.length > 0) && (
         <div className="flex items-center gap-2 border-b border-border bg-surface-secondary/30 px-4 py-3">
           {unreadCount > 0 && (
-            <Button variant="outline" size="sm" onPress={handleMarkAllAsRead}>
-              <Check className="h-4 w-4" />
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={handleMarkAllAsRead}
+              leftIcon={<Check className="h-4 w-4" />}
+            >
               Tümünü Okundu İşaretle
-            </Button>
+            </BalinaButton>
           )}
           {notifications.length > 0 && (
-            <Button variant="outline" size="sm" onPress={handleDeleteAll}>
-              <Trash2 className="h-4 w-4" />
+            <BalinaButton
+              variant="soft"
+              size="small"
+              onClick={handleDeleteAll}
+              leftIcon={<Trash2 className="h-4 w-4" />}
+            >
               Tümünü Temizle
-            </Button>
+            </BalinaButton>
           )}
         </div>
       )}
@@ -305,15 +286,14 @@ export default function NotificationsPage() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <Button
+                          <BalinaButton
                             variant="ghost"
-                            size="sm"
-                            isIconOnly
+                            size="small"
                             aria-label="Bildirimi sil"
-                            onPress={() => deleteNotification(notification.id)}
+                            onClick={() => deleteNotification(notification.id)}
                           >
                             <Trash2 className="h-4 w-4 text-muted" />
-                          </Button>
+                          </BalinaButton>
                         </td>
                       </tr>
                     );
@@ -328,26 +308,24 @@ export default function NotificationsPage() {
                   Sayfa {page} / {totalPages}
                 </span>
                 <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isIconOnly
+                  <BalinaButton
+                    variant="soft"
+                    size="small"
                     aria-label="Önceki sayfa"
-                    onPress={() => handlePageChange(page - 1)}
-                    isDisabled={page <= 1}
+                    onClick={() => handlePageChange(page - 1)}
+                    disabled={page <= 1}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    isIconOnly
+                  </BalinaButton>
+                  <BalinaButton
+                    variant="soft"
+                    size="small"
                     aria-label="Sonraki sayfa"
-                    onPress={() => handlePageChange(page + 1)}
-                    isDisabled={page >= totalPages}
+                    onClick={() => handlePageChange(page + 1)}
+                    disabled={page >= totalPages}
                   >
                     <ChevronRight className="h-4 w-4" />
-                  </Button>
+                  </BalinaButton>
                 </div>
               </div>
             )}

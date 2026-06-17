@@ -13,9 +13,17 @@ import {
   Tag,
   TrashBin,
 } from '@gravity-ui/icons';
-import { AlertDialog, Button, Checkbox, toast } from '@/components/ui';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
+import {
+  BalinaMailIcon,
+  BalinaButton,
+  BalinaCheckbox,
+  BalinaConfirmDialog,
+  BalinaModal,
+  BalinaTextField,
+  toast,
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
 import { useSavedFilterStore } from '@/stores/savedFilterStore';
@@ -422,89 +430,47 @@ export default function MarketingContactsPage() {
   return (
     <>
       {/* Bulk delete confirm dialog */}
-      <AlertDialog
-        isOpen={bulkDeleteOpen}
+      <BalinaConfirmDialog
+        open={bulkDeleteOpen}
         onOpenChange={(open) => {
           if (!isBulkDeleting && !open) setBulkDeleteOpen(false);
         }}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Kontakları sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                {selected.size} kontak kalıcı olarak silinecek. Geri alınamaz —
-                tekrar senkronize etmek istersen geçmiş siparişlerden yeniden
-                gelecektir.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button
-                  variant="tertiary"
-                  slot="close"
-                  isDisabled={isBulkDeleting}
-                >
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="danger"
-                  onPress={handleBulkDelete}
-                  isPending={isBulkDeleting}
-                  isDisabled={isBulkDeleting}
-                >
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Kontakları sil"
+        description={`${selected.size} kontak kalıcı olarak silinecek. Geri alınamaz — tekrar senkronize etmek istersen geçmiş siparişlerden yeniden gelecektir.`}
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleBulkDelete}
+        danger
+        loading={isBulkDeleting}
+      />
 
       {/* Saved filter sil onayı */}
-      <AlertDialog
-        isOpen={deleteSavedId !== null}
+      <BalinaConfirmDialog
+        open={deleteSavedId !== null}
         onOpenChange={(open) => {
           if (!open) setDeleteSavedId(null);
         }}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                Bu filtre seti kalıcı olarak silinecek.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close">
-                  Vazgeç
-                </Button>
-                <Button variant="danger" onPress={handleConfirmDeleteSaved}>
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Filtre setini sil"
+        description="Bu filtre seti kalıcı olarak silinecek."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleConfirmDeleteSaved}
+        danger
+      />
 
       <PageHeader
         title="Kontaklar"
+        icon={<BalinaMailIcon className="h-4 w-4" />}
         action={
-          <Button
-            variant="primary"
-            size="sm"
-            onPress={openAddContact}
-            isDisabled={!currentCompany?.id}
-            className="h-8 rounded-full px-3 text-xs"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            onClick={openAddContact}
+            disabled={!currentCompany?.id}
+            leftIcon={<Plus className="h-3.5 w-3.5" />}
           >
-            <Plus className="h-3.5 w-3.5" />
             Kontak ekle
-          </Button>
+          </BalinaButton>
         }
       />
 
@@ -632,9 +598,9 @@ export default function MarketingContactsPage() {
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
-                        <Checkbox
-                          isSelected={isChecked}
-                          onChange={(next) => {
+                        <BalinaCheckbox
+                          checked={isChecked}
+                          onCheckedChange={(next) => {
                             setSelected((prev) => {
                               const updated = new Set(prev);
                               if (next) updated.add(c.id);
@@ -642,12 +608,7 @@ export default function MarketingContactsPage() {
                               return updated;
                             });
                           }}
-                          aria-label={`${c.email} seç`}
-                        >
-                          <Checkbox.Control>
-                            <Checkbox.Indicator />
-                          </Checkbox.Control>
-                        </Checkbox>
+                        />
                       </div>
                       <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default text-muted">
                         <Person className="h-4 w-4" />
@@ -737,34 +698,28 @@ export default function MarketingContactsPage() {
                 <span className="px-3 text-xs text-muted">
                   {selected.size} kontak seçildi
                 </span>
-                <Button
-                  variant="tertiary"
-                  size="md"
-                  onPress={handleBulkUnsubscribe}
-                  isPending={isBulkUnsubscribing}
-                  isDisabled={isBulkUnsubscribing}
-                >
-                  {allSelectedUnsubscribed ? (
-                    <>
+                <BalinaButton
+                  variant="soft"
+                  size="default"
+                  onClick={handleBulkUnsubscribe}
+                  disabled={isBulkUnsubscribing}
+                  leftIcon={
+                    allSelectedUnsubscribed ? (
                       <Check className="h-4 w-4" />
-                      Tekrar dahil et
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <CircleXmark className="h-4 w-4" />
-                      Aboneliği iptal
-                    </>
-                  )}
-                </Button>
-                <Button
-                  variant="danger"
-                  size="md"
-                  isIconOnly
-                  onPress={() => setBulkDeleteOpen(true)}
-                  aria-label="Seçili kontakları sil"
+                    )
+                  }
                 >
-                  <TrashBin className="h-4 w-4" />
-                </Button>
+                  {allSelectedUnsubscribed ? 'Tekrar dahil et' : 'Aboneliği iptal'}
+                </BalinaButton>
+                <BalinaButton
+                  variant="danger"
+                  size="default"
+                  onClick={() => setBulkDeleteOpen(true)}
+                  aria-label="Seçili kontakları sil"
+                  leftIcon={<TrashBin className="h-4 w-4" />}
+                />
               </div>
             </div>
           )}
@@ -875,50 +830,45 @@ function RenameModal({
   isPending: boolean;
 }) {
   return (
-    <AlertDialog
-      isOpen={true}
+    <BalinaModal
+      open={true}
       onOpenChange={(open) => {
         if (!isPending && !open) onCancel();
       }}
+      title="Filtre setini adlandır"
+      footer={
+        <>
+          <BalinaButton
+            variant="soft"
+            size="large"
+            onClick={onCancel}
+            disabled={isPending}
+          >
+            Vazgeç
+          </BalinaButton>
+          <BalinaButton
+            variant="primary"
+            size="large"
+            onClick={onSubmit}
+            disabled={isPending}
+          >
+            Kaydet
+          </BalinaButton>
+        </>
+      }
     >
-      <AlertDialog.Backdrop>
-        <AlertDialog.Container>
-          <AlertDialog.Dialog>
-            <AlertDialog.Header>
-              <AlertDialog.Heading>Filtre setini adlandır</AlertDialog.Heading>
-            </AlertDialog.Header>
-            <div className="px-6 pb-4">
-              <input
-                type="text"
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    onSubmit();
-                  }
-                }}
-                placeholder="Filtre seti adı"
-                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
-              />
-            </div>
-            <AlertDialog.Footer>
-              <Button variant="tertiary" slot="close" isDisabled={isPending}>
-                Vazgeç
-              </Button>
-              <Button
-                variant="primary"
-                onPress={onSubmit}
-                isPending={isPending}
-                isDisabled={isPending}
-              >
-                Kaydet
-              </Button>
-            </AlertDialog.Footer>
-          </AlertDialog.Dialog>
-        </AlertDialog.Container>
-      </AlertDialog.Backdrop>
-    </AlertDialog>
+      <BalinaTextField
+        value={value}
+        onChange={onChange}
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
+        placeholder="Filtre seti adı"
+      />
+    </BalinaModal>
   );
 }

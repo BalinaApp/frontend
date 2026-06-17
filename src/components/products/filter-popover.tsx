@@ -4,9 +4,10 @@ import * as React from 'react';
 import {
   BarsDescendingAlignCenter,
   ChevronLeft,
+  ChevronRight,
   Plus,
 } from '@gravity-ui/icons';
-import { Calendar, Dropdown, TextField } from '@/components/ui';
+import { BalinaCalendar, BalinaPopover } from '@/components/balina';
 import { FilterDef, isFilterActive } from './filter-types';
 import { type DateRange } from '../date-range-input';
 
@@ -58,99 +59,98 @@ export function FilterPopover({
   const hasCustomTrigger = !!trigger;
 
   return (
-    <Dropdown isOpen={isOpen} onOpenChange={handleOpenChange}>
-      {hasCustomTrigger ? (
-        <Dropdown.Trigger
-          aria-label={triggerAriaLabel ?? 'Filtreler'}
-          className={[triggerClassName ?? '', className ?? ''].join(' ')}
-        >
-          {trigger}
-        </Dropdown.Trigger>
-      ) : (
-        // Entegrasyonlar sayfasındaki pill button stiline birebir.
-        // react-aria MenuTrigger native button child'ı kabul ediyor;
-        // Dropdown.Trigger semantiği için aynı element kullanılır.
-        <Dropdown.Trigger
-          aria-label={triggerAriaLabel ?? 'Filtreler'}
-          className={[
-            'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-foreground/[0.06] text-foreground transition-colors hover:bg-foreground/[0.10]',
-            className ?? '',
-          ].join(' ')}
-        >
-          <BarsDescendingAlignCenter />
-        </Dropdown.Trigger>
-      )}
-      <Dropdown.Popover
-        className="w-[206px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-        style={POPOVER_STYLE}
-      >
-        <div className="flex flex-col">
-          <PopoverHeader
-            value={search}
-            onChange={setSearch}
-            placeholder="Yeni filtre..."
-          />
-          {list.length === 0 ? (
-            <div className="px-3 py-4 text-center text-xs text-muted">
-              Sonuç bulunamadı
-            </div>
-          ) : (
-            <Dropdown.Menu
-              aria-label="Filtreler"
-              className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
-            >
-              {list.map((f) => {
-                // Aktif filtre: icon accent rengiyle vurgulanır (eskiden
-                // ayrı bir dot vardı, sol padding'i artırıyordu).
-                const isActive = isFilterActive(f);
-                return (
-                <Dropdown.SubmenuTrigger key={f.id}>
-                  <Dropdown.Item textValue={f.label} className={MENU_ITEM_CLASS}>
-                    {f.icon ? (
-                      <f.icon
-                        className={[
-                          'h-4 w-4 shrink-0 transition-colors',
-                          isActive ? 'text-accent' : 'text-foreground',
-                        ].join(' ')}
-                      />
-                    ) : null}
-                    <span className="flex-1 truncate">{f.label}</span>
-                    <Dropdown.SubmenuIndicator />
-                  </Dropdown.Item>
-                  <Dropdown.Popover
-                    className={[
-                      // Date-range widget — popover içeriğe göre büyüsün
-                      // (calendar kendi w-63 default'unu kullansın, kenarda
-                      // bol boşluk olmasın).
-                      f.type === 'text' && f.widget === 'date-range'
-                        ? 'w-fit'
-                        : 'w-[206px]',
-                      'overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]',
-                    ].join(' ')}
-                    style={POPOVER_STYLE}
-                  >
-                    <FilterDetailPanel
-                      def={f}
-                      onCommit={() => setIsOpen(false)}
-                      autoFocus={false}
-                    />
-                  </Dropdown.Popover>
-                </Dropdown.SubmenuTrigger>
-                );
-              })}
-            </Dropdown.Menu>
-          )}
-        </div>
-      </Dropdown.Popover>
-    </Dropdown>
+    <BalinaPopover
+      open={isOpen}
+      onOpenChange={handleOpenChange}
+      className="w-[206px] max-w-none overflow-hidden p-0"
+      trigger={
+        hasCustomTrigger ? (
+          <button
+            type="button"
+            aria-label={triggerAriaLabel ?? 'Filtreler'}
+            className={[triggerClassName ?? '', className ?? ''].join(' ')}
+          >
+            {trigger}
+          </button>
+        ) : (
+          // Entegrasyonlar sayfasındaki pill button stiline birebir.
+          <button
+            type="button"
+            aria-label={triggerAriaLabel ?? 'Filtreler'}
+            className={[
+              'inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-foreground/[0.06] text-foreground transition-colors hover:bg-foreground/[0.10]',
+              className ?? '',
+            ].join(' ')}
+          >
+            <BarsDescendingAlignCenter />
+          </button>
+        )
+      }
+    >
+      <div className="flex flex-col">
+        <PopoverHeader
+          value={search}
+          onChange={setSearch}
+          placeholder="Yeni filtre..."
+        />
+        {list.length === 0 ? (
+          <div className="px-3 py-4 text-center text-xs text-muted">
+            Sonuç bulunamadı
+          </div>
+        ) : (
+          <div
+            aria-label="Filtreler"
+            className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
+          >
+            {list.map((f) => {
+              // Aktif filtre: icon accent rengiyle vurgulanır (eskiden
+              // ayrı bir dot vardı, sol padding'i artırıyordu).
+              const isActive = isFilterActive(f);
+              return (
+                <BalinaPopover
+                  key={f.id}
+                  side="right"
+                  align="start"
+                  className={[
+                    // Date-range widget — popover içeriğe göre büyüsün.
+                    f.type === 'text' && f.widget === 'date-range'
+                      ? 'w-fit'
+                      : 'w-[206px]',
+                    'max-w-none overflow-hidden p-0',
+                  ].join(' ')}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label={f.label}
+                      className={MENU_ITEM_CLASS}
+                    >
+                      {f.icon ? (
+                        <f.icon
+                          className={[
+                            'h-4 w-4 shrink-0 transition-colors',
+                            isActive ? 'text-accent' : 'text-foreground',
+                          ].join(' ')}
+                        />
+                      ) : null}
+                      <span className="flex-1 truncate">{f.label}</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted" />
+                    </button>
+                  }
+                >
+                  <FilterDetailPanel
+                    def={f}
+                    onCommit={() => setIsOpen(false)}
+                    autoFocus={false}
+                  />
+                </BalinaPopover>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </BalinaPopover>
   );
 }
-
-const POPOVER_STYLE: React.CSSProperties = {
-  border: '1px solid var(--border)',
-  boxShadow:
-    '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-};
 
 // ---- Detail view (per-dimension popover) ---------------------------------
 
@@ -312,25 +312,25 @@ function SelectBody({
     );
   }
 
+  // Select view: tıklayınca filter uygulanıp popover kapansın.
+  // FilterDetailPanel `onCommit` ile dış state'i de senkronize ediyor.
+  // __add_new__ ise inline input moduna geçer (popover kapanmaz).
+  const handleAction = (key: string) => {
+    if (key === '__add_new__') {
+      setIsAddingNew(true);
+      return;
+    }
+    def.onChange(key);
+    onCommit?.();
+  };
+
   return options.length === 0 && !hasAddNew ? (
     <div className="px-3 py-4 text-center text-xs text-muted">
       Sonuç bulunamadı
     </div>
   ) : (
-    <Dropdown.Menu
+    <div
       aria-label={def.label}
-      // Select view: tıklayınca filter uygulanıp popover kapansın.
-      // FilterDetailPanel `onCommit` ile dış state'i de senkronize ediyor.
-      // __add_new__ ise inline input moduna geçer (popover kapanmaz).
-      onAction={(key) => {
-        const id = String(key);
-        if (id === '__add_new__') {
-          setIsAddingNew(true);
-          return;
-        }
-        def.onChange(id);
-        onCommit?.();
-      }}
       className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
     >
       {options.map((opt) => {
@@ -340,10 +340,11 @@ function SelectBody({
         const OptionIcon = opt.icon;
         const iconUrl = def.optionIconUrl ? def.optionIconUrl(opt.value) : null;
         return (
-          <Dropdown.Item
+          <button
             key={opt.value}
-            id={opt.value}
-            textValue={opt.label}
+            type="button"
+            aria-label={opt.label}
+            onClick={() => handleAction(opt.value)}
             className={MENU_ITEM_CLASS}
           >
             {OptionIcon ? (
@@ -359,21 +360,21 @@ function SelectBody({
               />
             ) : null}
             <span className="flex-1 truncate">{opt.label}</span>
-          </Dropdown.Item>
+          </button>
         );
       })}
       {hasAddNew ? (
-        <Dropdown.Item
-          id="__add_new__"
-          textValue={def.addNewLabel}
-          shouldCloseOnSelect={false}
+        <button
+          type="button"
+          aria-label={def.addNewLabel}
+          onClick={() => handleAction('__add_new__')}
           className={MENU_ITEM_CLASS}
         >
           <Plus className="h-4 w-4 shrink-0 text-foreground" />
           <span className="flex-1 truncate">{def.addNewLabel}</span>
-        </Dropdown.Item>
+        </button>
       ) : null}
-    </Dropdown.Menu>
+    </div>
   );
 }
 
@@ -391,32 +392,31 @@ function MultiSelectBody({
     ? def.options.filter((o) => o.label.toLowerCase().includes(q))
     : def.options;
 
+  const toggle = (value: string) => {
+    const next = new Set(def.value);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    def.onChange(next);
+  };
+
   return options.length === 0 ? (
     <div className="px-3 py-4 text-center text-xs text-muted">
       Sonuç bulunamadı
     </div>
   ) : (
-    <Dropdown.Menu
+    <div
       aria-label={def.label}
-      selectionMode="multiple"
-      shouldCloseOnSelect={false}
-      selectedKeys={def.value}
-      onSelectionChange={(keys) => {
-        if (keys === 'all') {
-          def.onChange(new Set(def.options.map((o) => o.value)));
-        } else {
-          def.onChange(new Set(Array.from(keys).map(String)));
-        }
-      }}
       className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
     >
       {options.map((opt) => {
         const isOn = def.value.has(opt.value);
         return (
-          <Dropdown.Item
+          <button
             key={opt.value}
-            id={opt.value}
-            textValue={opt.label}
+            type="button"
+            aria-label={opt.label}
+            aria-pressed={isOn}
+            onClick={() => toggle(opt.value)}
             className={[
               MENU_ITEM_CLASS,
               isOn ? 'text-foreground' : 'text-muted',
@@ -442,10 +442,10 @@ function MultiSelectBody({
               )}
             </span>
             <span className="flex-1 truncate">{opt.label}</span>
-          </Dropdown.Item>
+          </button>
         );
       })}
-    </Dropdown.Menu>
+    </div>
   );
 }
 
@@ -467,7 +467,7 @@ function TextBody({
     const parsed = parseDateRangeString(def.value);
     return (
       <div className="p-2">
-        <Calendar
+        <BalinaCalendar
           mode="range"
           numberOfMonths={1}
           className="w-56"
@@ -528,4 +528,4 @@ function parseDateRangeString(s: string): DateRange | null {
 // HeroUI'ın native MenuItem'ı kullanılırken Figma'daki 32×206 satır görünümü
 // (Inter 500 13px, padding 14px, gap 8px, hover bg) için ortak className.
 const MENU_ITEM_CLASS =
-  'flex h-8 cursor-pointer items-center gap-2 px-[14px] text-left text-[13px] font-medium leading-[1.193] text-foreground outline-none transition-colors data-[hovered=true]:bg-foreground/[0.04] data-[focused=true]:bg-foreground/[0.04]';
+  'flex h-8 w-full cursor-pointer items-center gap-2 px-[14px] text-left text-[13px] font-medium leading-[1.193] text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.04]';

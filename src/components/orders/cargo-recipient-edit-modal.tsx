@@ -2,14 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Button,
-  FieldError,
-  Input,
-  Label,
-  Modal,
-  TextField,
+  BalinaButton,
+  BalinaModal,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import { api } from '@/services/api';
 
 /**
@@ -149,15 +146,31 @@ export function CargoRecipientEditModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[520px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-            <Modal.Heading>Adresi Düzelt — #{orderNumber}</Modal.Heading>
-          </Modal.Header>
-          <Modal.Body className="flex flex-col gap-3">
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={(open) => !open && onClose()}
+      className="w-[90vw] max-w-[520px]"
+      title={`Adresi Düzelt — #${orderNumber}`}
+      footer={
+        <>
+          <BalinaButton
+            variant="ghost"
+            onClick={onClose}
+            disabled={saving}
+          >
+            İptal
+          </BalinaButton>
+          <BalinaButton
+            variant="primary"
+            onClick={handleSave}
+            disabled={loading || saving}
+          >
+            Kaydet
+          </BalinaButton>
+        </>
+      }
+    >
+          <div className="flex flex-col gap-3">
             <p className="text-xs text-muted">
               MNG kargo için alıcı bilgilerini düzelt. Kaydedince bir sonraki
               etiket basımında bu değerler kullanılacak.
@@ -189,27 +202,23 @@ export function CargoRecipientEditModal({
                     </div>
                   ))}
 
-                <TextField
+                <BalinaTextField
+                  label="Ad Soyad"
                   value={form.fullName}
                   onChange={(v) => setForm((p) => ({ ...p, fullName: v }))}
-                  isRequired
-                >
-                  <Label>Ad Soyad</Label>
-                  <Input />
-                </TextField>
+                />
 
                 <div className="grid grid-cols-2 gap-3">
-                  <TextField
+                  <BalinaTextField
+                    label="İl"
                     value={form.cityName}
                     onChange={(v) =>
                       setForm((p) => ({ ...p, cityName: v.toLocaleUpperCase('tr-TR') }))
                     }
-                    isRequired
-                  >
-                    <Label>İl</Label>
-                    <Input placeholder="İSTANBUL" />
-                  </TextField>
-                  <TextField
+                    placeholder="İSTANBUL"
+                  />
+                  <BalinaTextField
+                    label="İlçe"
                     value={form.districtName}
                     onChange={(v) =>
                       setForm((p) => ({
@@ -217,32 +226,26 @@ export function CargoRecipientEditModal({
                         districtName: v.toLocaleUpperCase('tr-TR'),
                       }))
                     }
-                    isRequired
-                  >
-                    <Label>İlçe</Label>
-                    <Input placeholder="KADIKÖY" />
-                  </TextField>
+                    placeholder="KADIKÖY"
+                  />
                 </div>
 
-                <TextField
+                <BalinaTextField
+                  label="Açık Adres"
                   value={form.address}
                   onChange={(v) => setForm((p) => ({ ...p, address: v }))}
-                  isRequired
-                >
-                  <Label>Açık Adres</Label>
-                  <Input placeholder="Mahalle, sokak, no" />
-                </TextField>
+                  placeholder="Mahalle, sokak, no"
+                />
 
                 <div className="grid grid-cols-2 gap-3">
-                  <TextField
+                  <BalinaTextField
+                    label="E-posta"
+                    type="email"
                     value={form.email}
                     onChange={(v) => setForm((p) => ({ ...p, email: v }))}
-                    isRequired
-                  >
-                    <Label>E-posta</Label>
-                    <Input type="email" />
-                  </TextField>
-                  <TextField
+                  />
+                  <BalinaTextField
+                    label="Cep Telefonu"
                     value={form.mobilePhoneNumber}
                     onChange={(v) =>
                       setForm((p) => ({
@@ -250,40 +253,17 @@ export function CargoRecipientEditModal({
                         mobilePhoneNumber: v.replace(/\D/g, '').slice(0, 10),
                       }))
                     }
-                    isRequired
-                  >
-                    <Label>Cep Telefonu</Label>
-                    <Input
-                      inputMode="numeric"
-                      placeholder="5XXXXXXXXX"
-                    />
-                  </TextField>
+                    inputMode="numeric"
+                    placeholder="5XXXXXXXXX"
+                  />
                 </div>
 
                 {err ? (
-                  <FieldError className="block text-xs text-danger">
-                    {err}
-                  </FieldError>
+                  <p className="block text-xs text-danger">{err}</p>
                 ) : null}
               </>
             )}
-          </Modal.Body>
-          <Modal.Footer>
-            <Button slot="close" variant="ghost" isDisabled={saving}>
-              İptal
-            </Button>
-            <Button
-              variant="primary"
-              onPress={handleSave}
-              isDisabled={loading || saving}
-              isPending={saving}
-            >
-              Kaydet
-            </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+          </div>
+    </BalinaModal>
   );
 }

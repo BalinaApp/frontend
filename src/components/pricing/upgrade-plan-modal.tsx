@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Check } from '@gravity-ui/icons';
-import { Button, Modal, toast } from '@/components/ui';
+import { BalinaButton, BalinaModal, toast } from '@/components/balina';
 import { usePricingStore, type Plan } from '@/stores/pricingStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { LemonCheckoutModal } from './lemon-checkout-modal';
@@ -238,14 +238,11 @@ export function UpgradePlanModal({
 
   return (
     <>
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog
-            className="sm:max-w-[496px] !rounded-[12px] !bg-white/[0.24] !shadow-[0_8px_32px_-2px_rgba(0,0,0,0.16)] backdrop-blur-[40px]"
-          >
-            <Modal.CloseTrigger />
-
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      className="w-[90vw] max-w-[496px] !rounded-[12px] !bg-white/[0.24] !p-0 !shadow-[0_8px_32px_-2px_rgba(0,0,0,0.16)] backdrop-blur-[40px]"
+    >
             {/* Header + body unified — Figma layout_4HAZKT: column, padding 24px, gap 12px */}
             <div className="flex flex-col gap-3 p-6">
               {/* Inner column — gap 24px */}
@@ -482,12 +479,11 @@ export function UpgradePlanModal({
             {/* Footer — tek aksiyon butonu. Modal'ın sağ üst X'i (CloseTrigger)
                 zaten kapatma sağladığı için ayrı "Kapat" butonu kaldırıldı. */}
             <div className="flex items-center justify-end px-6 py-4">
-              <Button
+              <BalinaButton
                 variant="primary"
                 fullWidth
-                isDisabled={!selectedPlan || isCurrentPlan || isMutating}
-                isPending={isMutating}
-                onPress={handleUpgrade}
+                disabled={!selectedPlan || isCurrentPlan || isMutating}
+                onClick={handleUpgrade}
               >
                 {isCurrentPlan
                   ? 'Mevcut Planınız'
@@ -496,12 +492,9 @@ export function UpgradePlanModal({
                       ? `${selectedPlan?.displayName ?? 'Pro'}'a Yükselt`
                       : `${selectedPlan?.displayName ?? 'Pro'}'a Geç`
                     : `${selectedPlan?.displayName ?? 'Pro'}'ya Geç`}
-              </Button>
+              </BalinaButton>
             </div>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    </BalinaModal>
 
     {/* LemonSqueezy checkout — iframe overlay; upgrade modal'dan ayrı tutuluyor
         ki parent modal kapansa bile iframe modal mount'ta kalsın. */}

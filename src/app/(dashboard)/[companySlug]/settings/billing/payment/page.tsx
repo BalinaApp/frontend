@@ -7,7 +7,7 @@ import {
   ChevronLeft,
   CreditCard,
 } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -82,16 +82,15 @@ export default function PaymentSettingsPage() {
     <>
       {/* Section header */}
       <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
+        <BalinaButton
+          variant="soft"
+          size="small"
           aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings/billing`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
+          onClick={() => router.push(`/${slug}/settings/billing`)}
+          className="h-8 w-8 cursor-pointer bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
         >
           <ChevronLeft className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
         <h2 className="text-sm font-medium text-foreground">Ödeme Detayları</h2>
       </div>
 

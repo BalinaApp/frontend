@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Alert, Button } from '@/components/ui';
+import { BalinaAlert, BalinaButton } from '@/components/balina';
 import {
   ArrowsRotateRight as Loader2,
   Check,
@@ -145,18 +145,20 @@ function Inner() {
   if (!stateParam) {
     return (
       <Centered>
-        <Alert status="danger">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Geçersiz dönüş bağlantısı</Alert.Title>
-            <Alert.Description>
+        <BalinaAlert status="danger">
+          <BalinaAlert.Indicator>
+            <AlertCircle className="h-4 w-4" />
+          </BalinaAlert.Indicator>
+          <BalinaAlert.Content>
+            <BalinaAlert.Title>Geçersiz dönüş bağlantısı</BalinaAlert.Title>
+            <BalinaAlert.Description>
               `state` parametresi bulunamadı. Mağaza bağlama akışını yeniden başlatın.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
-        <Button onPress={goBackToStores} fullWidth>
+            </BalinaAlert.Description>
+          </BalinaAlert.Content>
+        </BalinaAlert>
+        <BalinaButton variant="primary" onClick={goBackToStores} fullWidth>
           Mağazalara dön
-        </Button>
+        </BalinaButton>
       </Centered>
     );
   }
@@ -164,15 +166,17 @@ function Inner() {
   if (!companyId) {
     return (
       <Centered>
-        <Alert status="warning">
-          <Alert.Indicator />
-          <Alert.Content>
-            <Alert.Title>Şirket bilgisi yüklenemedi</Alert.Title>
-            <Alert.Description>
+        <BalinaAlert status="warning">
+          <BalinaAlert.Indicator>
+            <AlertCircle className="h-4 w-4" />
+          </BalinaAlert.Indicator>
+          <BalinaAlert.Content>
+            <BalinaAlert.Title>Şirket bilgisi yüklenemedi</BalinaAlert.Title>
+            <BalinaAlert.Description>
               Lütfen tekrar giriş yapıp WooCommerce bağlantısını yeniden başlatın.
-            </Alert.Description>
-          </Alert.Content>
-        </Alert>
+            </BalinaAlert.Description>
+          </BalinaAlert.Content>
+        </BalinaAlert>
       </Centered>
     );
   }
@@ -202,9 +206,9 @@ function Inner() {
               Mağaza listesine yönlendiriliyorsunuz…
             </p>
           </div>
-          <Button onPress={goBackToStores} variant="outline" fullWidth>
+          <BalinaButton onClick={goBackToStores} variant="soft" fullWidth>
             Mağazalara dön
-          </Button>
+          </BalinaButton>
         </>
       )}
 
@@ -219,9 +223,9 @@ function Inner() {
               {errorMsg || 'WooCommerce bağlantısı tamamlanamadı.'}
             </p>
           </div>
-          <Button onPress={goBackToStores} fullWidth>
+          <BalinaButton variant="primary" onClick={goBackToStores} fullWidth>
             Tekrar dene
-          </Button>
+          </BalinaButton>
         </>
       )}
 
@@ -236,9 +240,9 @@ function Inner() {
               {errorMsg || 'Onay süresi 10 dakika içinde tamamlanmadı.'}
             </p>
           </div>
-          <Button onPress={goBackToStores} fullWidth>
+          <BalinaButton variant="primary" onClick={goBackToStores} fullWidth>
             Yeniden başlat
-          </Button>
+          </BalinaButton>
         </>
       )}
     </Centered>

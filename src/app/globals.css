@@ -4,6 +4,7 @@
    Arayüz token'ları (text-foreground, bg-surface, bg-field, …) buradan gelir. */
 @import "../styles/theme/variables.css";
 @import "../styles/theme/theme.css";
+@import "../styles/theme/balina.css";
 
 /* OTP caret animasyonu (tw-animate-css'te yoksa). */
 @keyframes caret-blink {
@@ -445,6 +446,65 @@ body[class*="theme-"] .integrations-blob {
 }
 .side-panel-enter {
   animation: side-panel-enter 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* Sidebar ikincil panel içerik takası — palet ↔ pazarlama ↔ ayarlar arası
+   geçişte (örn. "Geri dön") yeni menü soldan yumuşakça belirir. */
+@keyframes balina-menu-swap {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.balina-menu-swap {
+  animation: balina-menu-swap 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* balinaOS AI paneli — sağdan kayarak açılır/kapanır (transform tabanlı). */
+@keyframes balina-ai-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes balina-ai-slide-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+}
+/* Yüzen AI penceresi giriş/çıkış (scale + fade). */
+@keyframes balina-ai-float-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes balina-ai-float-out {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 @keyframes ai-pulse-ring {
   0%, 100% { transform: scale(1); opacity: 0.7; }

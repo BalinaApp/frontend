@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Check, ChevronLeft, Palette } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { AccentTheme, useThemeStore } from '@/stores/themeStore';
 import { usePageTitle } from '@/hooks/use-page-title';
@@ -45,16 +45,14 @@ export default function ThemeSettingsPage() {
     <>
       {/* Section header */}
       <div className="flex h-[61px] items-center gap-2 border-b border-black/[0.02] px-3.5">
-        <Button
-          variant="tertiary"
-          size="sm"
-          isIconOnly
+        <BalinaButton
+          variant="soft"
+          size="small"
           aria-label="Geri"
-          onPress={() => router.push(`/${slug}/settings`)}
-          className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10] data-[hovered=true]:bg-black/[0.10]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
+          onClick={() => router.push(`/${slug}/settings`)}
+          leftIcon={<ChevronLeft className="h-4 w-4" />}
+          className="h-8 w-8"
+        />
         <h2 className="text-sm font-medium text-foreground">Tema</h2>
       </div>
 

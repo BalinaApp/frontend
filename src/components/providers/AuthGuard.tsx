@@ -17,7 +17,7 @@ const companySetupPaths = ['/setup-company'];
 // Paths that handle their own auth flow — AuthGuard doesn't redirect to or
 // away from these. /invite reads a token, optionally bounces to /login,
 // then accepts the invite once the user is authenticated.
-const selfManagedPaths = ['/invite'];
+const selfManagedPaths = ['/invite', '/components'];
 
 function DashboardLoadingSkeleton() {
   // Neutral placeholder — no skeleton bars. Matches the dashboard layout's

@@ -3,15 +3,12 @@
 import * as React from 'react';
 import { Plus, Xmark } from '@gravity-ui/icons';
 import {
-  Button,
-  Dropdown,
-  FieldError,
-  Input,
-  Label,
-  Modal,
-  TextField,
+  BalinaButton,
+  BalinaModal,
+  BalinaPopover,
+  BalinaTextField,
   toast,
-} from '@/components/ui';
+} from '@/components/balina';
 import {
   arePayloadsEqual,
   captureFilterPayload,
@@ -185,63 +182,53 @@ export function ActiveFilterChips({
       </div>
 
       {/* Save modal — isim al + create() */}
-      <Modal
-        isOpen={saveOpen}
+      <BalinaModal
+        open={saveOpen}
         onOpenChange={(open) => {
           if (!isSaving) setSaveOpen(open);
         }}
+        className="sm:max-w-[420px]"
+        title="Filtre setini kaydet"
+        description="Bu filtre kombinasyonunu isim vererek kaydedin; daha sonra tek tıkla geri yükleyebilirsiniz."
+        footer={
+          <>
+            <BalinaButton
+              variant="soft"
+              size="large"
+              onClick={() => setSaveOpen(false)}
+              disabled={isSaving}
+            >
+              Vazgeç
+            </BalinaButton>
+            <BalinaButton
+              variant="primary"
+              size="large"
+              onClick={handleSubmitSave}
+              disabled={isSaving}
+            >
+              Kaydet
+            </BalinaButton>
+          </>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[420px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Filtre setini kaydet</Modal.Heading>
-                <p className="mt-1 text-sm text-muted">
-                  Bu filtre kombinasyonunu isim vererek kaydedin; daha sonra
-                  tek tıkla geri yükleyebilirsiniz.
-                </p>
-              </Modal.Header>
-              <Modal.Body>
-                <TextField
-                  value={saveName}
-                  onChange={(v) => {
-                    setSaveName(v);
-                    if (saveErr) setSaveErr(null);
-                  }}
-                  isInvalid={!!saveErr}
-                  autoFocus
-                >
-                  <Label>İsim</Label>
-                  <Input
-                    placeholder="örn. Pasif WC ürünleri"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleSubmitSave();
-                      }
-                    }}
-                  />
-                  {saveErr && <FieldError>{saveErr}</FieldError>}
-                </TextField>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={isSaving}>
-                  Vazgeç
-                </Button>
-                <Button
-                  variant="primary"
-                  onPress={handleSubmitSave}
-                  isPending={isSaving}
-                  isDisabled={isSaving}
-                >
-                  Kaydet
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <BalinaTextField
+          label="İsim"
+          value={saveName}
+          onChange={(v) => {
+            setSaveName(v);
+            if (saveErr) setSaveErr(null);
+          }}
+          error={saveErr ?? undefined}
+          placeholder="örn. Pasif WC ürünleri"
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              handleSubmitSave();
+            }
+          }}
+        />
+      </BalinaModal>
     </>
   );
 }
@@ -266,18 +253,22 @@ function SegmentedChip({ def }: { def: FilterDef }) {
       className="inline-flex h-8 items-stretch overflow-hidden rounded-2xl bg-surface shadow-[inset_0_0_0_1px_var(--border)]"
     >
       {/* Hücre 1 — icon + label */}
-      <Dropdown isOpen={labelOpen} onOpenChange={setLabelOpen}>
-        <Dropdown.Trigger
-          aria-label={`${def.label} filtresini düzenle`}
-          className="inline-flex h-8 items-center gap-1 px-3 text-sm font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.04]"
-        >
-          {Icon ? <Icon className="h-4 w-4 text-foreground" /> : null}
-          <span>{def.label}</span>
-        </Dropdown.Trigger>
-        <ChipDropdownPopover>
-          <FilterDetailPanel def={def} onCommit={() => setLabelOpen(false)} />
-        </ChipDropdownPopover>
-      </Dropdown>
+      <ChipDropdownPopover
+        open={labelOpen}
+        onOpenChange={setLabelOpen}
+        trigger={
+          <button
+            type="button"
+            aria-label={`${def.label} filtresini düzenle`}
+            className="inline-flex h-8 items-center gap-1 px-3 text-sm font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.04]"
+          >
+            {Icon ? <Icon className="h-4 w-4 text-foreground" /> : null}
+            <span>{def.label}</span>
+          </button>
+        }
+      >
+        <FilterDetailPanel def={def} onCommit={() => setLabelOpen(false)} />
+      </ChipDropdownPopover>
 
       {/* Hücre 2 — preposition (pasif metin, hover yok) */}
       <span className="inline-flex h-8 items-center px-2 text-sm font-medium leading-5 text-muted">
@@ -285,18 +276,22 @@ function SegmentedChip({ def }: { def: FilterDef }) {
       </span>
 
       {/* Hücre 3 — icon + summary (seçili değer) */}
-      <Dropdown isOpen={valueOpen} onOpenChange={setValueOpen}>
-        <Dropdown.Trigger
-          aria-label={`${def.label} değerini değiştir`}
-          className="inline-flex h-8 items-center gap-1 px-3 text-sm font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.04]"
-        >
-          {Icon ? <Icon className="h-4 w-4 text-foreground" /> : null}
-          <span className="max-w-[160px] truncate">{summary || '—'}</span>
-        </Dropdown.Trigger>
-        <ChipDropdownPopover>
-          <FilterDetailPanel def={def} onCommit={() => setValueOpen(false)} />
-        </ChipDropdownPopover>
-      </Dropdown>
+      <ChipDropdownPopover
+        open={valueOpen}
+        onOpenChange={setValueOpen}
+        trigger={
+          <button
+            type="button"
+            aria-label={`${def.label} değerini değiştir`}
+            className="inline-flex h-8 items-center gap-1 px-3 text-sm font-medium leading-5 text-foreground transition-colors hover:bg-foreground/[0.04]"
+          >
+            {Icon ? <Icon className="h-4 w-4 text-foreground" /> : null}
+            <span className="max-w-[160px] truncate">{summary || '—'}</span>
+          </button>
+        }
+      >
+        <FilterDetailPanel def={def} onCommit={() => setValueOpen(false)} />
+      </ChipDropdownPopover>
 
       {/* Hücre 4 — × (filtre silme) */}
       <button
@@ -312,17 +307,25 @@ function SegmentedChip({ def }: { def: FilterDef }) {
 }
 
 // Chip dropdown popover'ları için ortak görünüm (FilterPopover ile aynı).
-function ChipDropdownPopover({ children }: { children: React.ReactNode }) {
+function ChipDropdownPopover({
+  open,
+  onOpenChange,
+  trigger,
+  children,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  trigger: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <Dropdown.Popover
-      className="w-[206px] overflow-hidden bg-surface/95 p-0 backdrop-blur-[4px]"
-      style={{
-        border: '1px solid #F3F4F6',
-        boxShadow:
-          '0px 1px 1px 0px rgba(0,0,0,0.04), 0px 3px 9px 0px rgba(0,0,0,0.04), 0px 6px 18px 0px rgba(0,0,0,0.02)',
-      }}
+    <BalinaPopover
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={trigger}
+      className="w-[206px] max-w-none overflow-hidden p-0"
     >
       {children}
-    </Dropdown.Popover>
+    </BalinaPopover>
   );
 }

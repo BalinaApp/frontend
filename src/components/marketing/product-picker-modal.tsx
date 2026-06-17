@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Magnifier } from '@gravity-ui/icons';
-import { Button, Modal } from '@/components/ui';
+import { BalinaButton, BalinaModal } from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useInventoryStore } from '@/stores/inventoryStore';
@@ -44,15 +44,18 @@ export function ProductPickerModal({
     : products;
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(o) => !o && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[560px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading>Ürün seç</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="px-4 pb-0">
+    <BalinaModal
+      open={isOpen}
+      onOpenChange={(o) => !o && onClose()}
+      className="w-[90vw] max-w-[560px]"
+      title="Ürün seç"
+      footer={
+        <BalinaButton variant="soft" onClick={onClose}>
+          Kapat
+        </BalinaButton>
+      }
+    >
+            <div>
               <div className="mb-2 flex items-center gap-2 rounded-full border border-foreground/[0.06] bg-surface px-3 py-1.5">
                 <Magnifier className="h-3.5 w-3.5 text-muted" />
                 <input
@@ -110,15 +113,7 @@ export function ProductPickerModal({
                   ))
                 )}
               </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="tertiary" slot="close">
-                Kapat
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+            </div>
+    </BalinaModal>
   );
 }

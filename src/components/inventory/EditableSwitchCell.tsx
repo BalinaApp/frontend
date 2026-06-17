@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Switch } from '@/components/ui';
+import { BalinaSwitch } from '@/components/balina';
 
 interface EditableSwitchCellProps {
   value: boolean;
@@ -33,15 +33,12 @@ export function EditableSwitchCell({
   };
 
   return (
-    <Switch
-      isSelected={value}
-      onChange={handleChange}
-      isDisabled={disabled || pending}
-      aria-label={ariaLabel}
+    <BalinaSwitch
+      checked={value}
+      onCheckedChange={handleChange}
+      disabled={disabled || pending}
     >
-      <Switch.Control>
-        <Switch.Thumb />
-      </Switch.Control>
-    </Switch>
+      {ariaLabel ? <span className="sr-only">{ariaLabel}</span> : undefined}
+    </BalinaSwitch>
   );
 }

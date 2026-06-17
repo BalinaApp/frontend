@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Sparkles, Thunderbolt as Zap, CrownDiamond as Crown } from '@gravity-ui/icons';
-import { Button, Modal } from '@/components/ui';
+import { BalinaButton, BalinaModal } from '@/components/balina';
 import { usePricingStore, PlanFeatures } from '@/stores/pricingStore';
 import { UpgradePlanModal } from './upgrade-plan-modal';
 
@@ -90,18 +90,18 @@ function PlanCard({
           </li>
         ))}
       </ul>
-      <Button
+      <BalinaButton
         fullWidth
-        variant={isRecommended ? 'primary' : 'outline'}
-        onPress={onUpgrade}
-        isDisabled={isCurrent}
+        variant={isRecommended ? 'primary' : 'soft'}
+        onClick={onUpgrade}
+        disabled={isCurrent}
       >
         {isCurrent
           ? 'Mevcut Plan'
           : type === 'PRO'
             ? "Pro'ya Yükselt"
             : "Enterprise'a Yükselt"}
-      </Button>
+      </BalinaButton>
     </div>
   );
 }
@@ -124,54 +124,45 @@ export function UpgradeModal({
 
   return (
     <>
-    <Modal isOpen={open} onOpenChange={onOpenChange}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog className="sm:max-w-[600px]">
-            <Modal.CloseTrigger />
-            <Modal.Header>
-              <Modal.Heading className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-accent" />
-                Planınızı Yükseltin
-              </Modal.Heading>
-            </Modal.Header>
-            <Modal.Body>
-              <p className="mb-4 text-sm text-muted">
-                {feature
-                  ? `${featureLabels[feature]} özelliğini kullanmak için planınızı yükseltin.`
-                  : 'Daha fazla özellik ve limit için planınızı yükseltin.'}
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <PlanCard
-                  type="PRO"
-                  title="Pro"
-                  price="99 TL"
-                  features={planFeatures.PRO}
-                  iconBg="bg-accent/10 text-accent"
-                  Icon={Zap}
-                  isRecommended={requiredPlan === 'PRO'}
-                  isCurrent={
-                    currentPlanName === 'PRO' || currentPlanName === 'ENTERPRISE'
-                  }
-                  onUpgrade={() => handleUpgrade('PRO')}
-                />
-                <PlanCard
-                  type="ENTERPRISE"
-                  title="Enterprise"
-                  price="299 TL"
-                  features={planFeatures.ENTERPRISE}
-                  iconBg="bg-success/10 text-success"
-                  Icon={Crown}
-                  isRecommended={requiredPlan === 'ENTERPRISE'}
-                  isCurrent={currentPlanName === 'ENTERPRISE'}
-                  onUpgrade={() => handleUpgrade('ENTERPRISE')}
-                />
-              </div>
-            </Modal.Body>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <BalinaModal
+      open={open}
+      onOpenChange={onOpenChange}
+      className="max-w-[600px]"
+      title="Planınızı Yükseltin"
+      titleIcon={<Sparkles className="h-5 w-5 text-accent" />}
+    >
+      <p className="mb-4 text-sm text-muted">
+        {feature
+          ? `${featureLabels[feature]} özelliğini kullanmak için planınızı yükseltin.`
+          : 'Daha fazla özellik ve limit için planınızı yükseltin.'}
+      </p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <PlanCard
+          type="PRO"
+          title="Pro"
+          price="99 TL"
+          features={planFeatures.PRO}
+          iconBg="bg-accent/10 text-accent"
+          Icon={Zap}
+          isRecommended={requiredPlan === 'PRO'}
+          isCurrent={
+            currentPlanName === 'PRO' || currentPlanName === 'ENTERPRISE'
+          }
+          onUpgrade={() => handleUpgrade('PRO')}
+        />
+        <PlanCard
+          type="ENTERPRISE"
+          title="Enterprise"
+          price="299 TL"
+          features={planFeatures.ENTERPRISE}
+          iconBg="bg-success/10 text-success"
+          Icon={Crown}
+          isRecommended={requiredPlan === 'ENTERPRISE'}
+          isCurrent={currentPlanName === 'ENTERPRISE'}
+          onUpgrade={() => handleUpgrade('ENTERPRISE')}
+        />
+      </div>
+    </BalinaModal>
 
     {upgradePlan && (
       <UpgradePlanModal

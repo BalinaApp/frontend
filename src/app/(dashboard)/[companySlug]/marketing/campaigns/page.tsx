@@ -12,7 +12,6 @@ import {
   Envelope,
   Plus,
 } from '@gravity-ui/icons';
-import { AlertDialog, Button, Modal, toast } from '@/components/ui';
 import {
   compileBlocksToHtml,
   collectProductIds,
@@ -20,6 +19,14 @@ import {
 import { MAIL_TEMPLATES, type MailTemplate } from '@/components/marketing/mail-templates';
 import { usePageTitle } from '@/hooks/use-page-title';
 import { PageHeader } from '@/components/layout/page-header';
+import {
+  BalinaMailIcon,
+  BalinaButton,
+  BalinaConfirmDialog,
+  BalinaModal,
+  BalinaTextField,
+  toast,
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useSavedFilterStore } from '@/stores/savedFilterStore';
 import { SavedTab } from '@/components/products/saved-tab';
@@ -258,153 +265,120 @@ export default function MarketingCampaignsPage() {
   return (
     <>
       {/* Şablon seçim modal'ı — yeni kampanya akışı buradan başlar. */}
-      <Modal
-        isOpen={templatePickerOpen}
+      <BalinaModal
+        open={templatePickerOpen}
         onOpenChange={(o) => {
           if (!creating && !o) setTemplatePickerOpen(false);
         }}
+        className="max-w-[640px]"
+        title="Şablon seç"
+        footer={
+          <BalinaButton
+            variant="soft"
+            size="large"
+            onClick={() => setTemplatePickerOpen(false)}
+            disabled={creating}
+          >
+            Vazgeç
+          </BalinaButton>
+        }
       >
-        <Modal.Backdrop>
-          <Modal.Container>
-            <Modal.Dialog className="sm:max-w-[640px]">
-              <Modal.CloseTrigger />
-              <Modal.Header>
-                <Modal.Heading>Şablon seç</Modal.Heading>
-              </Modal.Header>
-              <Modal.Body className="px-4 pb-2">
-                <p className="mb-3 text-xs text-muted">
-                  Hızlı başlangıç için bir şablonla aç — sonra blokları
-                  düzenleyebilirsin.
-                </p>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {MAIL_TEMPLATES.map((tpl) => (
-                    <button
-                      key={tpl.id}
-                      type="button"
-                      onClick={() => handleCreateFromTemplate(tpl)}
-                      disabled={creating}
-                      className="flex flex-col items-start gap-1 rounded-xl border border-foreground/[0.06] bg-surface p-3 text-left transition-colors hover:bg-foreground/[0.04] disabled:opacity-50"
-                    >
-                      <span className="text-sm font-medium text-foreground">
-                        {tpl.name}
-                      </span>
-                      <span className="text-xs text-muted">{tpl.description}</span>
-                      <span className="mt-1 text-[10px] uppercase tracking-wide text-muted">
-                        {tpl.blocks.length} blok
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </Modal.Body>
-              <Modal.Footer>
-                <Button variant="tertiary" slot="close" isDisabled={creating}>
-                  Vazgeç
-                </Button>
-              </Modal.Footer>
-            </Modal.Dialog>
-          </Modal.Container>
-        </Modal.Backdrop>
-      </Modal>
+        <p className="mb-3 text-xs text-muted">
+          Hızlı başlangıç için bir şablonla aç — sonra blokları
+          düzenleyebilirsin.
+        </p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {MAIL_TEMPLATES.map((tpl) => (
+            <button
+              key={tpl.id}
+              type="button"
+              onClick={() => handleCreateFromTemplate(tpl)}
+              disabled={creating}
+              className="flex flex-col items-start gap-1 rounded-xl border border-foreground/[0.06] bg-surface p-3 text-left transition-colors hover:bg-foreground/[0.04] disabled:opacity-50"
+            >
+              <span className="text-sm font-medium text-foreground">
+                {tpl.name}
+              </span>
+              <span className="text-xs text-muted">{tpl.description}</span>
+              <span className="mt-1 text-[10px] uppercase tracking-wide text-muted">
+                {tpl.blocks.length} blok
+              </span>
+            </button>
+          ))}
+        </div>
+      </BalinaModal>
 
       {/* Saved filter sil onayı */}
-      <AlertDialog
-        isOpen={deleteSavedId !== null}
+      <BalinaConfirmDialog
+        open={deleteSavedId !== null}
         onOpenChange={(o) => {
           if (!o) setDeleteSavedId(null);
         }}
-      >
-        <AlertDialog.Backdrop>
-          <AlertDialog.Container>
-            <AlertDialog.Dialog className="sm:max-w-[420px]">
-              <AlertDialog.Header>
-                <AlertDialog.Icon status="danger" />
-                <AlertDialog.Heading>Filtre setini sil</AlertDialog.Heading>
-              </AlertDialog.Header>
-              <AlertDialog.Body className="px-2 pb-0">
-                Bu filtre seti kalıcı olarak silinecek.
-              </AlertDialog.Body>
-              <AlertDialog.Footer className="!mt-3 px-2">
-                <Button variant="tertiary" slot="close">
-                  Vazgeç
-                </Button>
-                <Button variant="danger" onPress={handleConfirmDeleteSaved}>
-                  Sil
-                </Button>
-              </AlertDialog.Footer>
-            </AlertDialog.Dialog>
-          </AlertDialog.Container>
-        </AlertDialog.Backdrop>
-      </AlertDialog>
+        title="Filtre setini sil"
+        description="Bu filtre seti kalıcı olarak silinecek."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        onConfirm={handleConfirmDeleteSaved}
+        danger
+      />
 
       {/* Saved filter rename modal */}
       {renameId !== null && (
-        <AlertDialog
-          isOpen={true}
+        <BalinaModal
+          open={true}
           onOpenChange={(o) => {
             if (!isRenaming && !o) setRenameId(null);
           }}
+          title="Filtre setini adlandır"
+          footer={
+            <>
+              <BalinaButton
+                variant="soft"
+                size="large"
+                onClick={() => setRenameId(null)}
+                disabled={isRenaming}
+              >
+                Vazgeç
+              </BalinaButton>
+              <BalinaButton
+                variant="primary"
+                size="large"
+                onClick={submitRename}
+                disabled={isRenaming}
+              >
+                Kaydet
+              </BalinaButton>
+            </>
+          }
         >
-          <AlertDialog.Backdrop>
-            <AlertDialog.Container>
-              <AlertDialog.Dialog className="sm:max-w-[420px]">
-                <AlertDialog.Header>
-                  <AlertDialog.Heading>
-                    Filtre setini adlandır
-                  </AlertDialog.Heading>
-                </AlertDialog.Header>
-                <div className="px-6 pb-4">
-                  <input
-                    type="text"
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        submitRename();
-                      }
-                    }}
-                    placeholder="Filtre seti adı"
-                    className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm text-foreground outline-none focus:border-accent"
-                  />
-                </div>
-                <AlertDialog.Footer>
-                  <Button
-                    variant="tertiary"
-                    slot="close"
-                    isDisabled={isRenaming}
-                  >
-                    Vazgeç
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onPress={submitRename}
-                    isPending={isRenaming}
-                    isDisabled={isRenaming}
-                  >
-                    Kaydet
-                  </Button>
-                </AlertDialog.Footer>
-              </AlertDialog.Dialog>
-            </AlertDialog.Container>
-          </AlertDialog.Backdrop>
-        </AlertDialog>
+          <BalinaTextField
+            value={renameValue}
+            onChange={setRenameValue}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                submitRename();
+              }
+            }}
+            placeholder="Filtre seti adı"
+          />
+        </BalinaModal>
       )}
 
       <PageHeader
         title="Kampanyalar"
+        icon={<BalinaMailIcon className="h-4 w-4" />}
         action={
-          <Button
-            variant="primary"
-            size="sm"
-            onPress={() => setTemplatePickerOpen(true)}
-            isPending={creating}
-            isDisabled={creating || !currentCompany?.id}
-            className="h-8 rounded-full px-3 text-xs"
+          <BalinaButton
+            variant="soft"
+            size="small"
+            onClick={() => setTemplatePickerOpen(true)}
+            disabled={creating || !currentCompany?.id}
+            leftIcon={<Plus className="h-3.5 w-3.5" />}
           >
-            <Plus className="h-3.5 w-3.5" />
             Yeni kampanya
-          </Button>
+          </BalinaButton>
         }
       />
 

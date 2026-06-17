@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { ArrowRightArrowLeft, Box, Check, TrashBin } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 
 interface BulkActionsBarProps {
   count: number;
@@ -41,32 +41,33 @@ export function BulkActionsBar({
         role="toolbar"
         aria-label={`${count} ürün için işlemler`}
       >
-        <Button variant="tertiary" size="md" onPress={onMap}>
-          <ArrowRightArrowLeft className="h-4 w-4" />
+        <BalinaButton
+          variant="soft"
+          onClick={onMap}
+          leftIcon={<ArrowRightArrowLeft className="h-4 w-4" />}
+        >
           Ürünleri Eşleştir
-        </Button>
-        <Button variant="tertiary" size="md" onPress={onToggleActive}>
-          {allSelectedInactive ? (
-            <>
+        </BalinaButton>
+        <BalinaButton
+          variant="soft"
+          onClick={onToggleActive}
+          leftIcon={
+            allSelectedInactive ? (
               <Check className="h-4 w-4" />
-              Tekrar Aktif Et
-            </>
-          ) : (
-            <>
+            ) : (
               <Box className="h-4 w-4" />
-              Satıştan Kaldır
-            </>
-          )}
-        </Button>
-        <Button
+            )
+          }
+        >
+          {allSelectedInactive ? 'Tekrar Aktif Et' : 'Satıştan Kaldır'}
+        </BalinaButton>
+        <BalinaButton
           variant="danger"
-          size="md"
-          isIconOnly
-          onPress={onDelete}
+          onClick={onDelete}
           aria-label="Seçili ürünleri sil"
         >
           <TrashBin className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
       </div>
     </div>
   );

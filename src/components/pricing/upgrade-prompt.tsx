@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Lock, ArrowRight } from '@gravity-ui/icons';
-import { Button } from '@/components/ui';
+import { BalinaButton } from '@/components/balina';
 import { PlanFeatures } from '@/stores/pricingStore';
 import { UpgradeModal } from './upgrade-modal';
 
@@ -38,10 +38,14 @@ export function UpgradePrompt({
   if (compact) {
     return (
       <>
-        <Button variant="outline" size="sm" onPress={() => setShowModal(true)}>
-          <Lock className="h-3 w-3" />
+        <BalinaButton
+          variant="soft"
+          size="small"
+          onClick={() => setShowModal(true)}
+          leftIcon={<Lock className="h-3 w-3" />}
+        >
           <span>{planLabel} Planı Gerekli</span>
-        </Button>
+        </BalinaButton>
         <UpgradeModal
           open={showModal}
           onOpenChange={setShowModal}
@@ -62,10 +66,13 @@ export function UpgradePrompt({
         <p className="mb-4 text-center text-sm text-muted">
           Bu özellik <span className="font-medium text-accent">{planLabel}</span> planında kullanılabilir.
         </p>
-        <Button onPress={() => setShowModal(true)}>
+        <BalinaButton
+          variant="primary"
+          onClick={() => setShowModal(true)}
+          rightIcon={<ArrowRight className="h-4 w-4" />}
+        >
           Plan Yükselt
-          <ArrowRight className="h-4 w-4" />
-        </Button>
+        </BalinaButton>
       </div>
       <UpgradeModal
         open={showModal}

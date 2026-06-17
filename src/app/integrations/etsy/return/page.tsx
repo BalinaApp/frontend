@@ -1,0 +1,293 @@
+'use client';
+
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { BalinaAlert, BalinaButton } from '@/components/balina';
+import {
+  ArrowsRotateRight as Loader2,
+  Check,
+  CircleExclamation as AlertCircle,
+} from '@gravity-ui/icons';
+import { api } from '@/services/api';
+import { useCompanyStore } from '@/stores/companyStore';
+import { useStoreStore } from '@/stores/storeStore';
+import { usePageTitle } from '@/hooks/use-page-title';
+
+type EtsyStatus = 'PENDING' | 'COMPLETED' | 'EXPIRED' | 'FAILED';
+
+const POLL_INTERVAL_MS = 2_000;
+const POLL_MAX_MS = 60_000;
+
+export default function EtsyReturnPage() {
+  usePageTitle('Etsy bağlanıyor');
+
+  return (
+    <Suspense
+      fallback={
+        <Centered>
+          <Spinner />
+        </Centered>
+      }
+    >
+      <Inner />
+    </Suspense>
+  );
+}
+
+function Inner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { currentCompany, companies } = useCompanyStore();
+  const { fetchStores, syncStore } = useStoreStore();
+
+  const stateParam = searchParams.get('state');
+  const successParam = searchParams.get('success');
+  const errorParam = searchParams.get('error');
+  const storeIdParam = searchParams.get('storeId');
+
+  // success=0 ile gelen hata URL'den türetilebiliyor; effect içinde senkron
+  // setState yapmamak için başlangıç durumunu burada hesaplıyoruz.
+  const [status, setStatus] = useState<EtsyStatus | null>(
+    successParam === '0' ? 'FAILED' : null,
+  );
+  const [errorMsg, setErrorMsg] = useState<string | null>(
+    errorParam ? decodeURIComponent(errorParam) : null,
+  );
+
+  // start fonksiyonu sessionStorage'a yazmıştı. Etsy roundtrip'i sırasında
+  // kullanıcı tab değiştirip currentCompany'i değiştirmiş olabilir; bu yüzden
+  // sessionStorage'ı önceliyoruz.
+  const persistedCompanyId =
+    typeof window !== 'undefined'
+      ? sessionStorage.getItem('etsyAuthCompanyId')
+      : null;
+  const companyId = persistedCompanyId || currentCompany?.id || null;
+
+  const stoppedRef = useRef(false);
+  const completedStoreIdRef = useRef<string | null>(storeIdParam);
+
+  useEffect(() => {
+    if (!stateParam || !companyId) return;
+
+    // Backend redirect'i success=0 ile error parametresi koyduysa status zaten
+    // FAILED olarak init edildi (yukarıda) — sadece polling'i durdur.
+    if (successParam === '0') {
+      stoppedRef.current = true;
+      return;
+    }
+
+    stoppedRef.current = false;
+    const startedAt = Date.now();
+
+    const poll = async () => {
+      if (stoppedRef.current) return;
+      try {
+        const res = await api.get(
+          `/company/${companyId}/stores/etsy/auth/status/${stateParam}`,
+        );
+        const data = res.data as {
+          status: EtsyStatus;
+          storeId?: string;
+          error?: string;
+        };
+
+        if (data.storeId) completedStoreIdRef.current = data.storeId;
+
+        if (data.status !== 'PENDING') {
+          stoppedRef.current = true;
+          setStatus(data.status);
+          if (data.error) setErrorMsg(data.error);
+          return;
+        }
+
+        setStatus('PENDING');
+        if (Date.now() - startedAt > POLL_MAX_MS) {
+          stoppedRef.current = true;
+          setStatus('EXPIRED');
+          return;
+        }
+        setTimeout(poll, POLL_INTERVAL_MS);
+      } catch (error: unknown) {
+        stoppedRef.current = true;
+        const err = error as {
+          response?: {
+            status?: number;
+            data?: { message?: string; error?: string };
+          };
+        };
+        const apiError =
+          err.response?.data?.message || err.response?.data?.error;
+        if (err.response?.status === 404) {
+          setStatus('EXPIRED');
+          setErrorMsg('Bağlantı kaydı bulunamadı veya süresi dolmuş.');
+        } else {
+          setStatus('FAILED');
+          setErrorMsg(apiError || 'Durum sorgusu başarısız.');
+        }
+      }
+    };
+
+    poll();
+    return () => {
+      stoppedRef.current = true;
+    };
+  }, [stateParam, companyId, successParam]);
+
+  // COMPLETED — store listesini tazele, ilk sync'i başlat, mağaza sayfasına geç.
+  useEffect(() => {
+    if (status !== 'COMPLETED' || !companyId) return;
+    const storeId = completedStoreIdRef.current;
+
+    void (async () => {
+      try {
+        await fetchStores(companyId);
+        if (storeId) {
+          syncStore(companyId, storeId).catch(() => undefined);
+        }
+      } catch {
+        // sessiz — mağaza listesi sayfasında zaten yeniden fetch oluyor.
+      }
+    })();
+
+    const slug = currentCompany?.slug || companies[0]?.slug;
+    const target = slug ? `/${slug}/stores` : '/';
+    const t = setTimeout(() => {
+      sessionStorage.removeItem('etsyAuthCompanyId');
+      sessionStorage.removeItem('etsyAuthState');
+      router.replace(target);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [
+    status,
+    companyId,
+    currentCompany,
+    companies,
+    router,
+    fetchStores,
+    syncStore,
+  ]);
+
+  const goBackToStores = () => {
+    sessionStorage.removeItem('etsyAuthCompanyId');
+    sessionStorage.removeItem('etsyAuthState');
+    const slug = currentCompany?.slug || companies[0]?.slug;
+    router.replace(slug ? `/${slug}/stores` : '/');
+  };
+
+  if (!stateParam) {
+    return (
+      <Centered>
+        <BalinaAlert status="danger">
+          <BalinaAlert.Indicator><AlertCircle className="h-4 w-4" /></BalinaAlert.Indicator>
+          <BalinaAlert.Content>
+            <BalinaAlert.Title>Geçersiz dönüş bağlantısı</BalinaAlert.Title>
+            <BalinaAlert.Description>
+              `state` parametresi bulunamadı. Mağaza bağlama akışını yeniden
+              başlatın.
+            </BalinaAlert.Description>
+          </BalinaAlert.Content>
+        </BalinaAlert>
+        <BalinaButton onClick={goBackToStores} fullWidth>
+          Mağazalara dön
+        </BalinaButton>
+      </Centered>
+    );
+  }
+
+  if (!companyId) {
+    return (
+      <Centered>
+        <BalinaAlert status="warning">
+          <BalinaAlert.Indicator><AlertCircle className="h-4 w-4" /></BalinaAlert.Indicator>
+          <BalinaAlert.Content>
+            <BalinaAlert.Title>Şirket bilgisi yüklenemedi</BalinaAlert.Title>
+            <BalinaAlert.Description>
+              Lütfen tekrar giriş yapıp Etsy bağlantısını yeniden başlatın.
+            </BalinaAlert.Description>
+          </BalinaAlert.Content>
+        </BalinaAlert>
+      </Centered>
+    );
+  }
+
+  return (
+    <Centered>
+      {(!status || status === 'PENDING') && (
+        <>
+          <Spinner />
+          <div className="text-center">
+            <h1 className="text-lg font-medium">Etsy bilgileri kaydediliyor</h1>
+            <p className="mt-1 text-sm text-muted">
+              Bu birkaç saniye sürebilir. Sayfayı kapatmayın.
+            </p>
+          </div>
+        </>
+      )}
+
+      {status === 'COMPLETED' && (
+        <>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/15 text-success">
+            <Check className="h-6 w-6" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-lg font-medium">Mağaza bağlandı</h1>
+            <p className="mt-1 text-sm text-muted">
+              Mağaza listesine yönlendiriliyorsunuz…
+            </p>
+          </div>
+          <BalinaButton onClick={goBackToStores} variant="soft" fullWidth>
+            Mağazalara dön
+          </BalinaButton>
+        </>
+      )}
+
+      {status === 'FAILED' && (
+        <>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-danger/15 text-danger">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-lg font-medium">Bağlantı başarısız</h1>
+            <p className="mt-1 text-sm text-muted">
+              {errorMsg || 'Etsy bağlantısı tamamlanamadı.'}
+            </p>
+          </div>
+          <BalinaButton onClick={goBackToStores} fullWidth>
+            Tekrar dene
+          </BalinaButton>
+        </>
+      )}
+
+      {status === 'EXPIRED' && (
+        <>
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning/15 text-warning">
+            <AlertCircle className="h-6 w-6" />
+          </div>
+          <div className="text-center">
+            <h1 className="text-lg font-medium">Süre doldu</h1>
+            <p className="mt-1 text-sm text-muted">
+              {errorMsg || 'Onay süresi 10 dakika içinde tamamlanmadı.'}
+            </p>
+          </div>
+          <BalinaButton onClick={goBackToStores} fullWidth>
+            Yeniden başlat
+          </BalinaButton>
+        </>
+      )}
+    </Centered>
+  );
+}
+
+function Centered({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-svh items-center justify-center bg-background p-6">
+      <div className="flex w-full max-w-sm flex-col items-center gap-5 rounded-lg bg-white/80 p-8 shadow-sm">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return <Loader2 className="h-10 w-10 animate-spin text-muted" />;
+}

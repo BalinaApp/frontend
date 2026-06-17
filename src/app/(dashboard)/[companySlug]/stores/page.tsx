@@ -438,6 +438,10 @@ export default function StoresPage() {
   const [manageFalImageModel, setManageFalImageModel] = useState(
     DEFAULT_FAL_IMAGE_MODEL,
   );
+  // Görsel ayarları (Fal yönet modalı): üretim modu / en-boy / çözünürlük.
+  const [manageFalImageMode, setManageFalImageMode] = useState('performance');
+  const [manageFalImageAspect, setManageFalImageAspect] = useState('9:16');
+  const [manageFalImageResolution, setManageFalImageResolution] = useState('2K');
   const [isManageSaving, setIsManageSaving] = useState(false);
   // Anahtar değiştirme alt-modalı — Yönet modalı içindeki butondan açılır.
   const [isChangeKeyOpen, setIsChangeKeyOpen] = useState(false);
@@ -1246,6 +1250,9 @@ export default function StoresPage() {
     setManageFalAspectRatio('9:16');
     setManageFalDuration('10');
     setManageFalImageModel(DEFAULT_FAL_IMAGE_MODEL);
+    setManageFalImageMode('performance');
+    setManageFalImageAspect('9:16');
+    setManageFalImageResolution('2K');
     setIsManageSaving(false);
   };
 
@@ -1347,8 +1354,19 @@ export default function StoresPage() {
       (manageFal.videoDuration ?? '10') !== manageFalDuration;
     const imageModelChanged =
       (manageFal.imageModel ?? DEFAULT_FAL_IMAGE_MODEL) !== manageFalImageModel;
+    const imageModeChanged =
+      (manageFal.imageGenerationMode ?? 'performance') !== manageFalImageMode;
+    const imageAspectChanged =
+      (manageFal.imageAspectRatio ?? '9:16') !== manageFalImageAspect;
+    const imageResolutionChanged =
+      (manageFal.imageResolution ?? '2K') !== manageFalImageResolution;
     const anyVideoChanged = videoModelChanged || aspectChanged || durationChanged;
-    if (activeChanged || anyVideoChanged || imageModelChanged) {
+    const anyImageChanged =
+      imageModelChanged ||
+      imageModeChanged ||
+      imageAspectChanged ||
+      imageResolutionChanged;
+    if (activeChanged || anyVideoChanged || anyImageChanged) {
       setIsManageSaving(true);
       const updated = await updateFalIntegration(currentCompany.id, manageFal.id, {
         ...(activeChanged ? { isActive: manageFalActive } : {}),
@@ -1356,6 +1374,11 @@ export default function StoresPage() {
         ...(aspectChanged ? { videoAspectRatio: manageFalAspectRatio } : {}),
         ...(durationChanged ? { videoDuration: manageFalDuration } : {}),
         ...(imageModelChanged ? { imageModel: manageFalImageModel } : {}),
+        ...(imageModeChanged ? { imageGenerationMode: manageFalImageMode } : {}),
+        ...(imageAspectChanged ? { imageAspectRatio: manageFalImageAspect } : {}),
+        ...(imageResolutionChanged
+          ? { imageResolution: manageFalImageResolution }
+          : {}),
       });
       setIsManageSaving(false);
       if (updated) {
@@ -2911,6 +2934,13 @@ export default function StoresPage() {
                         setManageFalImageModel(
                           fal.imageModel ?? DEFAULT_FAL_IMAGE_MODEL,
                         );
+                        setManageFalImageMode(
+                          fal.imageGenerationMode ?? 'performance',
+                        );
+                        setManageFalImageAspect(fal.imageAspectRatio ?? '9:16');
+                        setManageFalImageResolution(
+                          fal.imageResolution ?? '2K',
+                        );
                       }}
                     >
                       Yönet
@@ -3645,7 +3675,7 @@ export default function StoresPage() {
                           Fotoğraf ayarları
                         </label>
                         <p className="text-[11px] text-muted">
-                          Varsayılan görsel modeli. Çözünürlük her zaman 2K.
+                          Varsayılan görsel modeli ve üretim ayarları.
                         </p>
                       </div>
 
@@ -3674,10 +3704,62 @@ export default function StoresPage() {
                         />
                       </div>
 
+                      {/* Üretim modu (Generation Mode) — FASHN tryon `mode`. */}
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Üretim modu</label>
+                        <BalinaSelect
+                          value={manageFalImageMode}
+                          onValueChange={(key) =>
+                            setManageFalImageMode(key || 'performance')
+                          }
+                          className="w-full max-w-none"
+                          options={[
+                            { value: 'performance', label: 'Hızlı (Fast)' },
+                            { value: 'balanced', label: 'Dengeli (Balanced)' },
+                            { value: 'quality', label: 'Kalite (Quality)' },
+                          ]}
+                        />
+                      </div>
+
+                      {/* En boy oranı + Çözünürlük (tryon-dışı modellerde uygulanır). */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>
+                          <BalinaSelect
+                            value={manageFalImageAspect}
+                            onValueChange={(key) =>
+                              setManageFalImageAspect(key || '9:16')
+                            }
+                            className="w-full max-w-none"
+                            options={[
+                              { value: '9:16', label: '9:16 (Dikey)' },
+                              { value: '1:1', label: '1:1 (Kare)' },
+                              { value: '16:9', label: '16:9 (Yatay)' },
+                              { value: '3:4', label: '3:4' },
+                              { value: '4:3', label: '4:3' },
+                            ]}
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Çözünürlük</label>
+                          <BalinaSelect
+                            value={manageFalImageResolution}
+                            onValueChange={(key) =>
+                              setManageFalImageResolution(key || '2K')
+                            }
+                            className="w-full max-w-none"
+                            options={[
+                              { value: '1K', label: '1K' },
+                              { value: '2K', label: '2K' },
+                              { value: '4K', label: '4K' },
+                            ]}
+                          />
+                        </div>
+                      </div>
+
                       <p className="text-[11px] text-muted">
-                        Çıktı çözünürlüğü:{' '}
-                        <span className="font-medium text-foreground">2K</span>{' '}
-                        (sabit).
+                        En boy oranı ve çözünürlük yalnızca try-on dışı modellerde
+                        (Nano Banana, Flux) uygulanır.
                       </p>
                     </div>
                   )}

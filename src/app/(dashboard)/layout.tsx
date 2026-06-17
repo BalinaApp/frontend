@@ -8,7 +8,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { UsageWarning } from '@/components/pricing/usage-warning';
 import { AiChatDrawer } from '@/components/ai/ai-chat-drawer';
 import { useUIStore } from '@/stores/uiStore';
-import { useAiStore } from '@/stores/aiStore';
+import { useAiStore, maxImagesForModel, DEFAULT_IMAGE_MODEL_ID } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import {
   SidePanelProvider,
@@ -408,8 +408,8 @@ function DashboardLayoutInner({
     </div>
   );
 
-  // nano-banana-2 tek istekte 14 referans görsele kadar destekler.
-  const MAX_AI_IMAGES = 14;
+  // Varsayılan görsel modeli FASHN sanal deneme (kişi + kıyafet = 2 görsel).
+  const MAX_AI_IMAGES = maxImagesForModel(DEFAULT_IMAGE_MODEL_ID);
   const handleAiFiles = (files: File[]) => {
     setAiFiles((prev) => {
       const remaining = MAX_AI_IMAGES - prev.length;
@@ -464,8 +464,13 @@ function DashboardLayoutInner({
     setAiBusy(true);
     try {
       if (aiMode === 'image') {
-        // Görsel doğrudan üretilir — ürün kodu sorma akışı kaldırıldı.
-        const r = await generateImageRaw(aiCompanyId, { prompt, imageUrls });
+        // Görsel doğrudan üretilir (FASHN sanal deneme: imageUrls[0]=kişi,
+        // imageUrls[1]=kıyafet). Üretim modu Fast (performance).
+        const r = await generateImageRaw(aiCompanyId, {
+          prompt,
+          imageUrls,
+          generationMode: 'performance',
+        });
         if (r.url) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'image', url: r.url });
         else fail(r.error ?? 'Görsel oluşturulamadı');
       } else if (aiMode === 'video') {

@@ -34,6 +34,7 @@ import {
   useAiStore,
   MODEL_CATALOG,
   DEFAULT_IMAGE_MODEL,
+  maxImagesForModel,
 } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -234,8 +235,8 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
 
   /* ---------------- Image attach ---------------- */
 
-  // nano-banana-2 tek istekte 14 referans görsele kadar destekler.
-  const MAX_ATTACHED_IMAGES = 14;
+  // Seçili modele göre maks. referans görsel (FASHN tryon 2 · nano-banana 14).
+  const MAX_ATTACHED_IMAGES = maxImagesForModel(selectedImageModel);
 
   const handleAttachFiles = async (files: FileList | File[]) => {
     const list = Array.from(files).filter((f) => f.type.startsWith('image/'));
@@ -426,9 +427,14 @@ KURALLAR:
       redirectToIntegration('FAL_AI', 'Fal.ai');
       return;
     }
-    if (files.length < 1) {
+    // FASHN sanal deneme tam 2 görsel ister (kişi + kıyafet); diğer modeller ≥1.
+    const isFashnTryon = /fashn\/tryon/.test(selectedImageModel);
+    const minImages = isFashnTryon ? 2 : 1;
+    if (files.length < minImages) {
       pushBotError(
-        'Görsel üretimi için en az 1 referans görsel ekleyin (14 görsele kadar).',
+        isFashnTryon
+          ? 'FASHN sanal deneme için 2 görsel ekleyin: 1) kişi/manken, 2) kıyafet.'
+          : 'Görsel üretimi için en az 1 referans görsel ekleyin.',
       );
       return;
     }
@@ -438,6 +444,7 @@ KURALLAR:
       prompt,
       model: selectedImageModel,
       imageUrls: files,
+      generationMode: 'performance',
     });
     if (!result.url) {
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);

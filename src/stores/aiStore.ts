@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api } from '@/services/api';
 
 export type FalImageModel =
+  | 'fal-ai/fashn/tryon/v1.6'
   | 'fal-ai/nano-banana-2'
   | 'fal-ai/nano-banana-2/edit'
   | 'fal-ai/nano-banana'
@@ -10,6 +11,22 @@ export type FalImageModel =
   | 'fal-ai/flux/dev'
   | 'fal-ai/flux/schnell'
   | 'fal-ai/flux-pro/v1.1';
+
+/** Görsel üretim varsayılan modeli — FASHN sanal kıyafet deneme (Fal).
+ *  model_image (kişi) + garment_image (kıyafet) alır; tam 2 görsel. */
+export const DEFAULT_IMAGE_MODEL_ID = 'fal-ai/fashn/tryon/v1.6';
+
+/** FASHN tryon üretim modu (composer ayarı → backend `generationMode`). */
+export type FashnGenerationMode = 'performance' | 'balanced' | 'quality';
+
+/** Bir görsel modelinin kabul ettiği maksimum referans görsel sayısı. FASHN
+ *  tryon tam 2 (kişi + kıyafet) ister; nano-banana 14, diğerleri 4. */
+export function maxImagesForModel(modelId?: string): number {
+  if (!modelId) return 2;
+  if (/fashn\/tryon/.test(modelId)) return 2;
+  if (/nano-banana/.test(modelId)) return 14;
+  return 4;
+}
 
 export type FalVideoModel =
   | 'fal-ai/kling-video/v2.1/pro/image-to-video'
@@ -77,9 +94,15 @@ export interface FalIntegration {
   videoResolution?: string;
   /** Ses üretimi (yalnızca Veo). */
   videoGenerateAudio?: boolean;
-  /** ===== Görsel üretim varsayılanı ===== */
-  /** Varsayılan görsel modeli (Fal id). Boşsa nano-banana-2. Çıktı her zaman 2K. */
+  /** ===== Görsel üretim varsayılanları (Fal yönet modalı) ===== */
+  /** Varsayılan görsel modeli (Fal id). Boşsa FASHN sanal deneme. */
   imageModel?: string;
+  /** FASHN tryon üretim modu: 'performance'(Fast) | 'balanced' | 'quality'. */
+  imageGenerationMode?: string;
+  /** Görsel en-boy oranı (tryon-dışı modeller): '9:16' | '1:1' | '16:9' | ... */
+  imageAspectRatio?: string;
+  /** Görsel çözünürlüğü (tryon-dışı modeller): '1K' | '2K' | '4K'. */
+  imageResolution?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -112,12 +135,19 @@ export function getModelProvider(modelId: string): ModelProvider {
 export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   // ===== Görsel modelleri =====
   {
+    id: 'fal-ai/fashn/tryon/v1.6',
+    label: 'FASHN Sanal Deneme',
+    description:
+      'FASHN sanal kıyafet deneme (Fal) — kişi + kıyafet görselinden giydirilmiş görsel. Varsayılan.',
+    kind: 'image',
+    isDefault: true,
+  },
+  {
     id: 'fal-ai/nano-banana-2',
     label: 'Nano Banana 2',
     description:
-      'Google Nano Banana 2 — varsayılan, yüksek kalite, 14 referans görsele kadar.',
+      'Google Nano Banana 2 — yüksek kalite, 14 referans görsele kadar.',
     kind: 'image',
-    isDefault: true,
   },
   {
     id: 'fal-ai/nano-banana-2/edit',
@@ -514,6 +544,9 @@ interface AiState {
       videoResolution?: string;
       videoGenerateAudio?: boolean;
       imageModel?: string;
+      imageGenerationMode?: string;
+      imageAspectRatio?: string;
+      imageResolution?: string;
     }
   ) => Promise<AiIntegration | null>;
   removeIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -550,6 +583,9 @@ interface AiState {
       videoResolution?: string;
       videoGenerateAudio?: boolean;
       imageModel?: string;
+      imageGenerationMode?: string;
+      imageAspectRatio?: string;
+      imageResolution?: string;
     }
   ) => Promise<FalIntegration | null>;
   removeFalIntegration: (companyId: string, integrationId: string) => Promise<void>;
@@ -581,6 +617,8 @@ interface AiState {
       imageSize?: FalImageSize;
       integrationId?: string;
       imageUrls?: string[];
+      /** FASHN tryon üretim modu (performance|balanced|quality). */
+      generationMode?: FashnGenerationMode;
     }
   ) => Promise<{ url: string; error?: string }>;
 
@@ -1050,12 +1088,14 @@ export const useAiStore = create<AiState>((set, get) => ({
         `/company/${companyId}/ai/generate/image`,
         {
           prompt: args.prompt,
-          model: args.model,
+          // Model verilmezse varsayılan FASHN sanal deneme modeli.
+          model: args.model ?? DEFAULT_IMAGE_MODEL_ID,
           imageSize: args.imageSize,
           numImages: 1,
           integrationId:
             args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined,
           imageUrls: args.imageUrls,
+          generationMode: args.generationMode,
         },
         // Backend Fal queue'yu 3dk'ya kadar yoklayabiliyor; isteği son anda
         // kesmemek için 10sn tampon.

@@ -773,18 +773,26 @@ KURALLAR:
                   className="relative flex h-8 items-center gap-1.5 rounded-[0.5rem] px-1.5"
                   style={{ background: 'var(--balinaos-bg-dark-muted)' }}
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt=""
-                    className="h-5 w-5 rounded-full object-cover"
-                  />
-                  <span
-                    className="text-[13px] font-medium"
-                    style={{ color: 'var(--balinaos-text-shout)' }}
+                  {/* Thumbnail + etiket → tıklayınca fullscreen önizleme açar. */}
+                  <button
+                    type="button"
+                    onClick={() => setMediaPreview({ url, type: 'image' })}
+                    aria-label={`Görsel ${i + 1} önizle`}
+                    className="flex items-center gap-1.5 rounded-[0.5rem] transition-opacity hover:opacity-80"
                   >
-                    {`Görsel ${i + 1}`}
-                  </span>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={url}
+                      alt=""
+                      className="h-5 w-5 rounded-full object-cover"
+                    />
+                    <span
+                      className="text-[13px] font-medium"
+                      style={{ color: 'var(--balinaos-text-shout)' }}
+                    >
+                      {`Görsel ${i + 1}`}
+                    </span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => removeAttachedImage(i)}
@@ -796,6 +804,14 @@ KURALLAR:
                   </button>
                 </div>
               ))}
+              {/* Model-duyarlı sayaç — seçili modelin kabul ettiği maks. görsel
+                  (FASHN 2 · nano-banana 14 · diğerleri 4) anında görünsün. */}
+              <span
+                className="ml-1 text-[12px] font-medium tabular-nums"
+                style={{ color: 'var(--balinaos-text-muted)' }}
+              >
+                {attachedImages.length}/{MAX_ATTACHED_IMAGES}
+              </span>
             </div>
           )}
 

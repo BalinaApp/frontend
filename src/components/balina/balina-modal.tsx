@@ -58,10 +58,14 @@ export function BalinaModal({
               {title}
             </Dialog.Title>
           )}
-          {description && (
+          {description ? (
             <Dialog.Description className="text-body-default-regular text-[var(--balina-text-default)]">
               {description}
             </Dialog.Description>
+          ) : (
+            // Erişilebilirlik: açıklama verilmese de Radix'in beklediği
+            // Description'ı gizli olarak sağla (aria-describedby uyarısını önler).
+            <Dialog.Description className="sr-only">İçerik</Dialog.Description>
           )}
           {children}
           {footer && (

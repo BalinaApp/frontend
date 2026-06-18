@@ -19,6 +19,9 @@ const contentWidth: Record<BalinaSelectSize, string> = {
 export interface BalinaSelectOption {
   value: string;
   label: React.ReactNode;
+  /** Açılır listede ad'ın altında gösterilen ikincil açıklama. Trigger'da
+   *  gösterilmez (yalnızca `label` Select.Value'a yansır) — taşma olmaz. */
+  description?: React.ReactNode;
   icon?: React.ReactNode;
   disabled?: boolean;
 }
@@ -96,9 +99,17 @@ export function BalinaSelect({
             {options.map((opt) => (
               <Select.Item key={opt.value} value={opt.value} disabled={opt.disabled} className={itemClasses}>
                 {opt.icon && <span className={iconWrap}>{opt.icon}</span>}
-                <Select.ItemText asChild>
-                  <span className="text-body-small-medium flex-1 truncate px-2">{opt.label}</span>
-                </Select.ItemText>
+                <span className="flex min-w-0 flex-1 flex-col px-2">
+                  {/* Yalnızca ItemText trigger'a (Select.Value) yansır. */}
+                  <Select.ItemText asChild>
+                    <span className="text-body-small-medium truncate">{opt.label}</span>
+                  </Select.ItemText>
+                  {opt.description && (
+                    <span className="text-[11px] text-[var(--balina-text-muted)] line-clamp-2">
+                      {opt.description}
+                    </span>
+                  )}
+                </span>
                 <Select.ItemIndicator className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--balina-icon-loud)]">
                   <Check className="h-4 w-4" />
                 </Select.ItemIndicator>

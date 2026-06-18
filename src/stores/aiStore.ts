@@ -1088,8 +1088,9 @@ export const useAiStore = create<AiState>((set, get) => ({
         `/company/${companyId}/ai/generate/image`,
         {
           prompt: args.prompt,
-          // Model verilmezse varsayılan FASHN sanal deneme modeli.
-          model: args.model ?? DEFAULT_IMAGE_MODEL_ID,
+          // Model verilmezse backend entegrasyonun seçili görsel agent'ını
+          // (imageModel), o da yoksa FASHN sanal denemeyi kullanır.
+          model: args.model,
           imageSize: args.imageSize,
           numImages: 1,
           integrationId:

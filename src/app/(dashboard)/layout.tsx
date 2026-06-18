@@ -356,6 +356,7 @@ function DashboardLayoutInner({
   // AI sohbet bağlamı — ürün picker'ı (üstte) + dosya chip'leri (üstte).
   // Seçilen ürün, composer'a satır içi chip olarak eklenir (insertProduct).
   const aiCompanyId = useCompanyStore((s) => s.currentCompany?.id);
+  const aiIntegrations = useAiStore((s) => s.integrations);
   const generateImageRaw = useAiStore((s) => s.generateImageRaw);
   const generateVideoRaw = useAiStore((s) => s.generateVideoRaw);
   const generateText = useAiStore((s) => s.generateText);
@@ -408,8 +409,12 @@ function DashboardLayoutInner({
     </div>
   );
 
-  // Varsayılan görsel modeli FASHN sanal deneme (kişi + kıyafet = 2 görsel).
-  const MAX_AI_IMAGES = maxImagesForModel(DEFAULT_IMAGE_MODEL_ID);
+  // Aktif Fal entegrasyonunun seçili görsel agent'ına göre maks. görsel
+  // (FASHN tryon 2 · Nano Banana 14). Yoksa varsayılan (FASHN = 2).
+  const activeImageModel =
+    aiIntegrations.find((i) => i.provider === 'fal' && i.isActive)
+      ?.imageModel ?? DEFAULT_IMAGE_MODEL_ID;
+  const MAX_AI_IMAGES = maxImagesForModel(activeImageModel);
   const handleAiFiles = (files: File[]) => {
     setAiFiles((prev) => {
       const remaining = MAX_AI_IMAGES - prev.length;
@@ -465,12 +470,9 @@ function DashboardLayoutInner({
     try {
       if (aiMode === 'image') {
         // Görsel doğrudan üretilir (FASHN sanal deneme: imageUrls[0]=kişi,
-        // imageUrls[1]=kıyafet). Üretim modu Fast (performance).
-        const r = await generateImageRaw(aiCompanyId, {
-          prompt,
-          imageUrls,
-          generationMode: 'performance',
-        });
+        // imageUrls[1]=kıyafet). Model + üretim modu backend'de entegrasyon
+        // ayarından (seçili agent) gelir.
+        const r = await generateImageRaw(aiCompanyId, { prompt, imageUrls });
         if (r.url) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'image', url: r.url });
         else fail(r.error ?? 'Görsel oluşturulamadı');
       } else if (aiMode === 'video') {

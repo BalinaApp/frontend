@@ -29,9 +29,34 @@ const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/pro/image-to-video';
 /** Modaldaki "Varsayılan video modeli" Select'i için video katalogu. */
 const VIDEO_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'video');
 // ===== Fal görsel üretim varsayılanı (Yönet modalı) =====
-const DEFAULT_FAL_IMAGE_MODEL = 'fal-ai/nano-banana-2';
-/** Modaldaki "Varsayılan görsel modeli" Select'i için görsel katalogu. */
-const IMAGE_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'image');
+const DEFAULT_FAL_IMAGE_MODEL = 'fal-ai/fashn/tryon/v1.6';
+/** Kullanıcının seçebileceği iki görsel agent'ı (sadece image bölümü). Seçilen
+ *  agent'a göre modal'da ilgili ayarlar gösterilir. */
+const IMAGE_AGENT_OPTIONS: Array<{
+  value: string;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: 'fal-ai/fashn/tryon/v1.6',
+    label: 'FASHN Sanal Deneme',
+    description:
+      'FASHN sanal kıyafet deneme (Fal) — kişi + kıyafet görselinden giydirilmiş görsel.',
+  },
+  {
+    value: 'fal-ai/nano-banana-2/edit',
+    label: 'Nano Banana 2 — Edit',
+    description:
+      'Nano Banana 2 görsel-to-görsel (image-to-image) — referans görsellerle düzenleme, 14 görsele kadar.',
+  },
+];
+/** Kayıtlı görsel modeli id'sini 2 agent seçeneğinden birine indirger
+ *  (ör. eski 'nano-banana-2' → 'nano-banana-2/edit'). */
+function normalizeImageAgent(modelId?: string): string {
+  if (modelId && /fashn\/tryon/.test(modelId)) return 'fal-ai/fashn/tryon/v1.6';
+  if (modelId && /nano-banana/.test(modelId)) return 'fal-ai/nano-banana-2/edit';
+  return DEFAULT_FAL_IMAGE_MODEL;
+}
 // Kling 2.1: aspect 16:9|9:16|1:1, süre 5|10 sn. (Veo modelleri ek olarak
 // auto/720p/1080p/ses kullanır — bu seçenekler aşağıda korunur.)
 const VEO_ASPECT_OPTIONS = ['9:16', '16:9', '1:1', 'auto'] as const;
@@ -3619,14 +3644,8 @@ export default function StoresPage() {
                           className="w-full max-w-none"
                           options={VIDEO_MODEL_OPTIONS.map((m) => ({
                             value: m.id,
-                            label: (
-                              <div className="flex flex-col">
-                                <span>{m.label}</span>
-                                <span className="text-[11px] text-muted">
-                                  {m.description}
-                                </span>
-                              </div>
-                            ),
+                            label: m.label,
+                            description: m.description,
                           }))}
                         />
                       </div>
@@ -3679,88 +3698,120 @@ export default function StoresPage() {
                         </p>
                       </div>
 
-                      {/* Varsayılan görsel modeli */}
+                      {/* Görsel agent seçimi — 2 seçenek (FASHN / Nano Banana 2).
+                          Seçilen agent'a göre aşağıda ilgili ayarlar gösterilir.
+                          Trigger'da yalnızca ad gösterilir; açıklama altta. */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Varsayılan görsel modeli</label>
+                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Görsel agent</label>
                         <BalinaSelect
-                          value={manageFalImageModel}
+                          value={normalizeImageAgent(manageFalImageModel)}
                           onValueChange={(key) =>
-                            setManageFalImageModel(
-                              key || DEFAULT_FAL_IMAGE_MODEL,
-                            )
+                            setManageFalImageModel(key || DEFAULT_FAL_IMAGE_MODEL)
                           }
                           className="w-full max-w-none"
-                          options={IMAGE_MODEL_OPTIONS.map((m) => ({
-                            value: m.id,
-                            label: (
-                              <div className="flex flex-col">
-                                <span>{m.label}</span>
-                                <span className="text-[11px] text-muted">
-                                  {m.description}
-                                </span>
-                              </div>
-                            ),
+                          options={IMAGE_AGENT_OPTIONS.map((m) => ({
+                            value: m.value,
+                            label: m.label,
+                            description: m.description,
                           }))}
                         />
                       </div>
 
-                      {/* Üretim modu (Generation Mode) — FASHN tryon `mode`. */}
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Üretim modu</label>
-                        <BalinaSelect
-                          value={manageFalImageMode}
-                          onValueChange={(key) =>
-                            setManageFalImageMode(key || 'performance')
-                          }
-                          className="w-full max-w-none"
-                          options={[
-                            { value: 'performance', label: 'Hızlı (Fast)' },
-                            { value: 'balanced', label: 'Dengeli (Balanced)' },
-                            { value: 'quality', label: 'Kalite (Quality)' },
-                          ]}
-                        />
-                      </div>
-
-                      {/* En boy oranı + Çözünürlük (tryon-dışı modellerde uygulanır). */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>
-                          <BalinaSelect
-                            value={manageFalImageAspect}
-                            onValueChange={(key) =>
-                              setManageFalImageAspect(key || '9:16')
-                            }
-                            className="w-full max-w-none"
-                            options={[
-                              { value: '9:16', label: '9:16 (Dikey)' },
-                              { value: '1:1', label: '1:1 (Kare)' },
-                              { value: '16:9', label: '16:9 (Yatay)' },
-                              { value: '3:4', label: '3:4' },
-                              { value: '4:3', label: '4:3' },
-                            ]}
-                          />
+                      {/* Seçilen agent'a göre ayarlar */}
+                      {normalizeImageAgent(manageFalImageModel) ===
+                      'fal-ai/fashn/tryon/v1.6' ? (
+                        /* FASHN sanal deneme — üretim modu + en boy oranı + çözünürlük. */
+                        <>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Üretim modu</label>
+                            <BalinaSelect
+                              value={manageFalImageMode}
+                              onValueChange={(key) =>
+                                setManageFalImageMode(key || 'performance')
+                              }
+                              className="w-full max-w-none"
+                              options={[
+                                { value: 'performance', label: 'Hızlı (Fast)' },
+                                { value: 'balanced', label: 'Dengeli (Balanced)' },
+                                { value: 'quality', label: 'Kalite (Quality)' },
+                              ]}
+                            />
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>
+                              <BalinaSelect
+                                value={manageFalImageAspect}
+                                onValueChange={(key) =>
+                                  setManageFalImageAspect(key || '9:16')
+                                }
+                                className="w-full max-w-none"
+                                options={[
+                                  { value: '9:16', label: '9:16 (Dikey)' },
+                                  { value: '1:1', label: '1:1 (Kare)' },
+                                  { value: '16:9', label: '16:9 (Yatay)' },
+                                  { value: '3:4', label: '3:4' },
+                                  { value: '4:3', label: '4:3' },
+                                ]}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-1.5">
+                              <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Çözünürlük</label>
+                              <BalinaSelect
+                                value={manageFalImageResolution}
+                                onValueChange={(key) =>
+                                  setManageFalImageResolution(key || '2K')
+                                }
+                                className="w-full max-w-none"
+                                options={[
+                                  { value: '1K', label: '1K' },
+                                  { value: '2K', label: '2K' },
+                                  { value: '4K', label: '4K' },
+                                ]}
+                              />
+                            </div>
+                          </div>
+                          <p className="px-1 text-[11px] text-muted">
+                            Kişi + kıyafet görseli yükleyin.
+                          </p>
+                        </>
+                      ) : (
+                        /* Nano Banana 2 — en boy oranı + çözünürlük. */
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>
+                            <BalinaSelect
+                              value={manageFalImageAspect}
+                              onValueChange={(key) =>
+                                setManageFalImageAspect(key || '9:16')
+                              }
+                              className="w-full max-w-none"
+                              options={[
+                                { value: '9:16', label: '9:16 (Dikey)' },
+                                { value: '1:1', label: '1:1 (Kare)' },
+                                { value: '16:9', label: '16:9 (Yatay)' },
+                                { value: '3:4', label: '3:4' },
+                                { value: '4:3', label: '4:3' },
+                              ]}
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Çözünürlük</label>
+                            <BalinaSelect
+                              value={manageFalImageResolution}
+                              onValueChange={(key) =>
+                                setManageFalImageResolution(key || '2K')
+                              }
+                              className="w-full max-w-none"
+                              options={[
+                                { value: '1K', label: '1K' },
+                                { value: '2K', label: '2K' },
+                                { value: '4K', label: '4K' },
+                              ]}
+                            />
+                          </div>
                         </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">Çözünürlük</label>
-                          <BalinaSelect
-                            value={manageFalImageResolution}
-                            onValueChange={(key) =>
-                              setManageFalImageResolution(key || '2K')
-                            }
-                            className="w-full max-w-none"
-                            options={[
-                              { value: '1K', label: '1K' },
-                              { value: '2K', label: '2K' },
-                              { value: '4K', label: '4K' },
-                            ]}
-                          />
-                        </div>
-                      </div>
-
-                      <p className="text-[11px] text-muted">
-                        En boy oranı ve çözünürlük yalnızca try-on dışı modellerde
-                        (Nano Banana, Flux) uygulanır.
-                      </p>
+                      )}
                     </div>
                   )}
 

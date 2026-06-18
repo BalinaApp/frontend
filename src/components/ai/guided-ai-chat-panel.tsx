@@ -444,7 +444,6 @@ KURALLAR:
       prompt,
       model: selectedImageModel,
       imageUrls: files,
-      generationMode: 'performance',
     });
     if (!result.url) {
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);

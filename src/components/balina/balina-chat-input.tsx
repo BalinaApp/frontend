@@ -1,18 +1,24 @@
 'use client';
 
 import * as React from 'react';
-import { Video, Picture, CircleQuestion } from '@gravity-ui/icons';
 import { cn } from '@/components/ui/cn';
-import { BalinaAttachIcon, BalinaArrowUpIcon, BalinaDownIcon } from './icons';
+import {
+  BalinaAttachIcon,
+  BalinaArrowUpIcon,
+  BalinaDownIcon,
+  BalinaVideoIcon,
+  BalinaImageIcon,
+  BalinaSummarizeIcon,
+} from './icons';
 import { BalinaDropdown, BalinaDropdownItem } from './balina-dropdown';
 import { BalinaTooltip } from './balina-tooltip';
 
 export type BalinaChatMode = 'chat' | 'image' | 'video';
 
 const CHAT_MODES: { value: BalinaChatMode; label: string; icon: React.ReactNode }[] = [
-  { value: 'chat', label: 'Sohbet', icon: <CircleQuestion className="h-4 w-4" /> },
-  { value: 'image', label: 'Görsel', icon: <Picture className="h-4 w-4" /> },
-  { value: 'video', label: 'Video', icon: <Video className="h-4 w-4" /> },
+  { value: 'chat', label: 'Sohbet', icon: <BalinaSummarizeIcon className="h-4 w-4" /> },
+  { value: 'image', label: 'Görsel', icon: <BalinaImageIcon className="h-4 w-4" /> },
+  { value: 'video', label: 'Video', icon: <BalinaVideoIcon className="h-4 w-4" /> },
 ];
 
 /* Balina ChatInput — AI sohbet composer'ı. Bağlam satırı + contentEditable
@@ -43,11 +49,21 @@ export interface BalinaChatInputProps {
   onAttach?: () => void;
   /** Sürükle-bırak veya ataç ile dosya eklendiğinde. */
   onFiles?: (files: File[]) => void;
+  /** Sohbet (chat) modunda gösterilen model seçenekleri. Boşsa dropdown gizli. */
+  textModels?: { id: string; label: string }[];
+  /** Seçili text modeli id'si. */
+  textModel?: string;
+  /** Model değiştiğinde — anında geçiş; aynı konuşmaya devam edilir. */
+  onTextModelChange?: (id: string) => void;
   className?: string;
 }
 
 const CHIP_CLASS =
-  'balina-mention-chip group relative mx-0.5 inline-flex h-7 max-w-56 items-center gap-1 rounded-[0.625rem] bg-[var(--balina-background-dark-default)] p-0.5 align-middle text-body-default-regular transition-colors hover:bg-[var(--balina-background-dark-strong)]';
+  'balina-mention-chip group relative mx-0.5 inline-flex h-7 max-w-56 items-center gap-1 rounded-[0.625rem] bg-[var(--balina-background-dark-default)] py-0.5 pl-0.5 pr-2 align-middle text-body-default-regular transition-colors hover:bg-[var(--balina-background-dark-strong)]';
+
+// Bekleyen "@" mention göstergesi — bağlam chip'i gibi gri pill.
+const MENTION_MARKER_CLASS =
+  'balina-mention-marker inline-flex h-6 items-center rounded-[0.5rem] bg-[var(--balina-background-dark-default)] px-1.5 align-middle text-body-default-regular text-[var(--balina-text-loud)]';
 
 const CHIP_CLOSE_SVG =
   '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round"><path d="M5.16602 5.16675L10.8327 10.8334M10.8327 5.16675L5.16602 10.8334"/></svg>';
@@ -64,6 +80,9 @@ export const BalinaChatInput = React.forwardRef<BalinaChatInputHandle, BalinaCha
       contextSlot,
       onAttach,
       onFiles,
+      textModels,
+      textModel,
+      onTextModelChange,
       className,
     },
     ref,
@@ -75,9 +94,12 @@ export const BalinaChatInput = React.forwardRef<BalinaChatInputHandle, BalinaCha
       onModeChange?.(m);
     };
     const activeMode = CHAT_MODES.find((m) => m.value === mode) ?? CHAT_MODES[0];
+    const activeTextModel = textModels?.find((m) => m.id === textModel);
 
     const editorRef = React.useRef<HTMLDivElement>(null);
     const savedRange = React.useRef<Range | null>(null);
+    // Bekleyen "@" mention göstergesi (gri pill). Ürün seçilince chip ile değişir.
+    const mentionMarkerRef = React.useRef<HTMLElement | null>(null);
     const [empty, setEmpty] = React.useState(true);
     const [dragging, setDragging] = React.useState(false);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -138,11 +160,40 @@ export const BalinaChatInput = React.forwardRef<BalinaChatInputHandle, BalinaCha
         if (!el) return;
         el.focus();
         const sel = window.getSelection();
-        let range = savedRange.current;
-        if (!range || !el.contains(range.commonAncestorContainer)) {
+        let range: Range;
+        // "@" mention marker'ı (gri pill) varsa chip onun yerine geçsin: marker'ı
+        // ve hemen ardındaki zero-width-space'i kaldır, imleci oraya al.
+        const markers = Array.from(
+          el.querySelectorAll<HTMLElement>('.balina-mention-marker'),
+        );
+        if (markers.length > 0) {
           range = document.createRange();
-          range.selectNodeContents(el);
-          range.collapse(false);
+          range.setStartBefore(markers[0]);
+          range.collapse(true);
+          markers.forEach((mk) => {
+            const next = mk.nextSibling;
+            mk.remove();
+            if (next && next.nodeType === Node.TEXT_NODE && next.textContent === '\u200B') {
+              next.parentNode?.removeChild(next);
+            }
+          });
+          mentionMarkerRef.current = null;
+        } else {
+          range = savedRange.current ?? document.createRange();
+          if (!savedRange.current || !el.contains(range.commonAncestorContainer)) {
+            range = document.createRange();
+            range.selectNodeContents(el);
+            range.collapse(false);
+          }
+          // Marker yoksa (eski yol) caret önündeki düz "@" karakterini sil.
+          if (
+            range.collapsed &&
+            range.startContainer.nodeType === Node.TEXT_NODE &&
+            range.startOffset > 0 &&
+            (range.startContainer.textContent ?? '')[range.startOffset - 1] === '@'
+          ) {
+            range.setStart(range.startContainer, range.startOffset - 1);
+          }
         }
         sel?.removeAllRanges();
         sel?.addRange(range);
@@ -291,7 +342,31 @@ export const BalinaChatInput = React.forwardRef<BalinaChatInputHandle, BalinaCha
                 e.preventDefault();
                 send();
               } else if (e.key === '@' && onAddContext) {
+                // "@" composer'da görünür olsun (mention tetikleyici). preventDefault
+                // şart: picker açılınca Radix focus-scope arama input'unu senkron
+                // focuslar; engellemezsek tarayıcı "@"yı O input'a yazar. Bu yüzden
+                // "@"yı buraya ELLE ekliyoruz, sonra picker'ı açıyoruz.
                 e.preventDefault();
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+                  const range = sel.getRangeAt(0);
+                  range.deleteContents();
+                  // "@"yı gri pill (marker) olarak ekle — tamamlanınca chip olur.
+                  const marker = document.createElement('span');
+                  marker.className = MENTION_MARKER_CLASS;
+                  marker.textContent = '@';
+                  range.insertNode(marker);
+                  // Marker'dan sonra boşluk bırakıp imleci oraya al (marker'ın
+                  // içine yazılmasın; contentEditable kaçışı).
+                  const after = document.createTextNode('\u200B');
+                  marker.after(after);
+                  range.setStartAfter(after);
+                  range.collapse(true);
+                  sel.removeAllRanges();
+                  sel.addRange(range);
+                  mentionMarkerRef.current = marker;
+                }
+                notify();
                 saveSelection();
                 onAddContext();
               }
@@ -348,6 +423,35 @@ export const BalinaChatInput = React.forwardRef<BalinaChatInputHandle, BalinaCha
                 </BalinaDropdownItem>
               ))}
             </BalinaDropdown>
+
+            {/* Model seçici — yalnızca sohbet modunda; anında geçiş, devam eder. */}
+            {mode === 'chat' && textModels && textModels.length > 0 && (
+              <BalinaDropdown
+                side="top"
+                align="start"
+                size="default"
+                trigger={
+                  <button
+                    type="button"
+                    aria-label="Model seç"
+                    className="text-body-small-one-liner-medium flex h-8 cursor-pointer items-center gap-1 rounded-[0.625rem] px-1.5 text-[var(--balina-text-strong)] outline-none transition-colors hover:bg-[var(--balina-background-dark-default)] focus-visible:outline-none"
+                  >
+                    <span className="px-0.5">{activeTextModel?.label ?? 'Model'}</span>
+                    <BalinaDownIcon className="h-3.5 w-3.5 text-[var(--balina-icon-strong)]" />
+                  </button>
+                }
+              >
+                {textModels.map((m) => (
+                  <BalinaDropdownItem
+                    key={m.id}
+                    selected={m.id === textModel}
+                    onSelect={() => onTextModelChange?.(m.id)}
+                  >
+                    {m.label}
+                  </BalinaDropdownItem>
+                ))}
+              </BalinaDropdown>
+            )}
           </div>
 
           <button

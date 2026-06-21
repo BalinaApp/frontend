@@ -155,6 +155,7 @@ export {
   BalinaChatStatus,
   BalinaChatAiResponse,
   BalinaChatMedia,
+  BalinaChatMediaOverlay,
   BalinaChatTypingText,
 } from './balina-chat';
 export type { BalinaChatProps } from './balina-chat';

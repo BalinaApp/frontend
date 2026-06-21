@@ -13,6 +13,10 @@ interface UIState {
   isAiDrawerExpanded: boolean;
   setAiDrawerExpanded: (expanded: boolean) => void;
   toggleAiDrawerExpanded: () => void;
+  // Drawer'a dışarıdan (ör. search "Ask AI") gönderilecek bekleyen metin —
+  // layout tüketince otomatik olarak 'Sohbet' modunda gönderir ve temizler.
+  aiPendingPrompt: string | null;
+  setAiPendingPrompt: (prompt: string | null) => void;
 
   // balinaOS AI paneli (sidebar AI butonundan sağda açılan BalinaChat paneli).
   isBalinaAiOpen: boolean;
@@ -42,6 +46,8 @@ export const useUIStore = create<UIState>((set) => ({
   setAiDrawerExpanded: (expanded) => set({ isAiDrawerExpanded: expanded }),
   toggleAiDrawerExpanded: () =>
     set((s) => ({ isAiDrawerExpanded: !s.isAiDrawerExpanded })),
+  aiPendingPrompt: null,
+  setAiPendingPrompt: (prompt) => set({ aiPendingPrompt: prompt }),
 
   isBalinaAiOpen: false,
   setBalinaAiOpen: (open) => set({ isBalinaAiOpen: open }),

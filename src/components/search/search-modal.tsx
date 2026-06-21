@@ -26,6 +26,8 @@ export interface SearchItem {
   /** Başlık yanındaki komut rozeti (ör. from: @stripe). */
   pill?: { prefix?: string; value: string; icon?: React.ReactNode };
   onSelect?: () => void;
+  /** true ise seçim sonrası modal kapanmaz (ör. kayıtlı aramayı kutuya yükle). */
+  keepOpen?: boolean;
 }
 
 export interface SearchSection {
@@ -44,7 +46,8 @@ export interface SearchModalProps {
   sections: SearchSection[];
   emptyText?: string;
   onSaveSearch?: () => void;
-  onAskAi?: () => void;
+  /** "Ask AI" — yazılan sorgu metnini alır (boşsa tetiklenmez). */
+  onAskAi?: (query: string) => void;
 }
 
 export function SearchModal({
@@ -94,7 +97,7 @@ export function SearchModal({
     const item = flat[i];
     if (!item) return;
     item.onSelect?.();
-    onOpenChange(false);
+    if (!item.keepOpen) onOpenChange(false);
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -145,12 +148,16 @@ export function SearchModal({
                 />
                 <button
                   type="button"
-                  onClick={onAskAi}
-                  className="flex h-7 shrink-0 items-center gap-1 rounded-lg bg-[var(--balina-background-dark-muted)] px-1.5 transition-colors hover:bg-[var(--balina-background-dark-default)]"
+                  onClick={() => {
+                    const text = q.trim();
+                    if (text) onAskAi?.(text);
+                  }}
+                  disabled={!q.trim()}
+                  className="flex h-7 shrink-0 items-center gap-1 rounded-lg bg-[var(--balina-background-dark-muted)] px-1.5 transition-colors hover:bg-[var(--balina-background-dark-default)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <BalinaAiIcon className="h-4 w-4 text-[var(--balina-icon-strong)]" />
                   <span className="text-body-small-one-liner-medium px-0.5 text-[var(--balina-text-loud)]">
-                    Ask AI
+                    balinaOS AI
                   </span>
                 </button>
               </div>

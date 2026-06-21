@@ -63,8 +63,8 @@ function HeaderIconButton({
 /** Kullanıcı mesajı — sağa yaslı baloncuk. */
 export function BalinaChatUserMessage({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex justify-end px-2 py-1">
-      <div className="text-body-mail w-max max-w-[80%] rounded-3xl bg-[var(--balina-background-dark-default)] px-4 py-2.5 text-[var(--balina-text-shout)]">
+    <div className="flex justify-end px-3 py-1">
+      <div className="text-body-mail w-fit max-w-[80%] whitespace-pre-wrap break-words rounded-3xl bg-[var(--balina-background-dark-default)] px-4 py-2.5 text-[var(--balina-text-shout)]">
         {children}
       </div>
     </div>
@@ -206,6 +206,10 @@ export interface BalinaChatProps {
   /** Composer modu (sohbet/görsel/video) — kontrollü. */
   mode?: BalinaChatMode;
   onModeChange?: (mode: BalinaChatMode) => void;
+  /** Sohbet modunda gösterilen model seçenekleri (boşsa gizli). */
+  textModels?: { id: string; label: string }[];
+  textModel?: string;
+  onTextModelChange?: (id: string) => void;
   onClose?: () => void;
   className?: string;
 }
@@ -271,7 +275,7 @@ async function triggerDownload(url: string, filename: string): Promise<void> {
 
 /** Tam ekran medya önizlemesi — kaynak .PreviewFileOverlay_* spec'inin portu.
  *  Backdrop blur'lu zemin; tıklama / Escape / kapat butonu ile kapanır. */
-function BalinaChatMediaOverlay({
+export function BalinaChatMediaOverlay({
   url,
   type,
   filename,
@@ -470,6 +474,9 @@ export function BalinaChat({
   inputRef,
   mode,
   onModeChange,
+  textModels,
+  textModel,
+  onTextModelChange,
   onClose,
   className,
 }: BalinaChatProps) {
@@ -553,6 +560,9 @@ export function BalinaChat({
           onAddContext={onAddContext}
           mode={mode}
           onModeChange={onModeChange}
+          textModels={textModels}
+          textModel={textModel}
+          onTextModelChange={onTextModelChange}
         />
       </div>
     </div>

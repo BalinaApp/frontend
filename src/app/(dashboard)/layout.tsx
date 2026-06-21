@@ -2,11 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usePathname } from 'next/navigation';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { usePricingStore, type UsageInfo } from '@/stores/pricingStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { UsageWarning } from '@/components/pricing/usage-warning';
-import { AiChatDrawer } from '@/components/ai/ai-chat-drawer';
 import { useUIStore } from '@/stores/uiStore';
 import { useAiStore, maxImagesForModel, DEFAULT_IMAGE_MODEL_ID } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -24,16 +24,22 @@ import {
   BalinaChatUserMessage,
   BalinaChatStatus,
   BalinaChatMedia,
-  BalinaChatTypingText,
+  toast,
   type BalinaChatInputHandle,
   type BalinaChatMode,
 } from '@/components/balina';
 import { AiContextPicker, AiFileChip } from '@/components/ai/ai-context-picker';
 import { type Product } from '@/stores/inventoryStore';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
-import { toast } from 'sonner';
 
 /** balinaOS AI panel mesaj tipi. */
+// Mod seçilince composer'a önceden yazılan düzenlenebilir prompt'lar (kullanıcı
+// değiştirebilir). Backend de boş gelirse aynı default'ları uygular.
+const DEFAULT_IMAGE_PROMPT =
+  '1. görseldeki modele 2. görseldeki ürünü giydir. EN KRİTİK KURAL — DÜĞMELER: ürün görselindeki düğmeleri tek tek say ve çıktıda TAM OLARAK aynı sayıda düğme olsun. Ürün DÜĞMESİZ veya önden kapamasız ise (ör. yalnızca dik/hakim yaka var, pat yok; süsleme/boncuk/desen düğme değildir) ÇIKTIDA HİÇ DÜĞME OLMAMALI — öne dikey düğme sırası, pat ya da kapama ASLA ekleme, yakadan aşağı düğme oluşturma. Üründe düğme VARSA: fazladan düğme ekleme, düğme dizisi uydurma, simetrik veya dikey ekstra sıra OLUŞTURMA; düğmeler yalnızca üründe göründükleri yerde (ör. asimetrik/çapraz pat boyunca), aynı konum, aynı boyut ve aynı renkte (gold/metal vb.) olmalı. Kol detayları (uzunluk, büzgü/fırfır, manşet, katlama, dikiş), yaka biçimi, desen, baskı, logo, kumaş dokusu ve tüm dikiş çizgileri ürünle birebir aynı kalmalı. Şal/kuşak ve ayakkabı kuralı: 3. bir görsel verildiyse şalı/kuşağı o görseldeki ile değiştir (renk + model birebir); 4. bir görsel verildiyse ayakkabıyı o görseldeki ile değiştir (renk + model birebir); verilmediyse üründeki şal/kuşağı ve modeldeki ayakkabıyı aynı renk ve biçimde aynen koru. Modelin yüzünü, başörtüsünü, saç/ten rengini, duruşunu ve vücudunu aynen koru; üründe ya da modelde olmayan başörtüsü, eşarp, atkı, şapka, takı gibi hiçbir aksesuar EKLEME. Yalnızca belirtilen parçalar giydirilir/değiştirilir.';
+const DEFAULT_VIDEO_PROMPT =
+  'Subtle mirror-selfie video. The model keeps the phone steady in her right hand at the same height throughout — phone never lowers. She turns her torso slightly to the right, then slightly to the left in a gentle, slow swing (no full body rotation, no pivoting around her axis). The camera slowly pushes in by ~15%, as if she is zooming her phone closer to herself, framing the dress in more detail. Smooth, calm, controlled motion — no fast movements, no jitter.';
+
 type AiMsg =
   | { id: string; role: 'user'; text: string; images?: string[] }
   | { id: string; role: 'assistant'; kind: 'text'; text: string }
@@ -359,9 +365,13 @@ function DashboardLayoutInner({
   const aiIntegrations = useAiStore((s) => s.integrations);
   const generateImageRaw = useAiStore((s) => s.generateImageRaw);
   const generateVideoRaw = useAiStore((s) => s.generateVideoRaw);
-  const generateText = useAiStore((s) => s.generateText);
+  const generateTextStream = useAiStore((s) => s.generateTextStream);
+  const selectedTextModelId = useAiStore((s) => s.selectedTextModelId);
 
   const aiInputRef = useRef<BalinaChatInputHandle | null>(null);
+  // Search "Ask AI"den gelen bekleyen metin — balinaOS paneli açılınca otomatik gönderilir.
+  const aiPendingPrompt = useUIStore((s) => s.aiPendingPrompt);
+  const setAiPendingPrompt = useUIStore((s) => s.setAiPendingPrompt);
   const [aiContextOpen, setAiContextOpen] = useState(false);
   const [aiFiles, setAiFiles] = useState<File[]>([]);
   const aiProductsRef = useRef<Record<string, Product>>({});
@@ -402,6 +412,7 @@ function DashboardLayoutInner({
         <AiFileChip
           key={`${f.name}-${i}`}
           name={f.name}
+          file={f}
           removing={removingFiles.has(f)}
           onRemove={() => removeAiFile(f)}
         />
@@ -432,8 +443,11 @@ function DashboardLayoutInner({
     setAiMode((prev) => (prev === 'chat' ? 'image' : prev));
   };
 
-  const handleAiSend = async (prompt: string) => {
+  const handleAiSend = async (prompt: string, forceMode?: BalinaChatMode) => {
     if (!aiCompanyId || aiBusy) return;
+    // Search "Ask AI" gibi dış tetikleyiciler modu zorlayabilir (her zaman metin).
+    const mode = forceMode ?? aiMode;
+    if (forceMode && forceMode !== aiMode) setAiMode(forceMode);
 
     const push = (msg: AiMsg) => setAiMessages((prev) => [...prev, msg]);
     const fail = (text: string) => {
@@ -468,14 +482,14 @@ function DashboardLayoutInner({
 
     setAiBusy(true);
     try {
-      if (aiMode === 'image') {
+      if (mode === 'image') {
         // Görsel doğrudan üretilir (FASHN sanal deneme: imageUrls[0]=kişi,
         // imageUrls[1]=kıyafet). Model + üretim modu backend'de entegrasyon
         // ayarından (seçili agent) gelir.
         const r = await generateImageRaw(aiCompanyId, { prompt, imageUrls });
         if (r.url) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'image', url: r.url });
         else fail(r.error ?? 'Görsel oluşturulamadı');
-      } else if (aiMode === 'video') {
+      } else if (mode === 'video') {
         const r = await generateVideoRaw(aiCompanyId, {
           prompt,
           imageUrl: imageUrls[0],
@@ -484,11 +498,46 @@ function DashboardLayoutInner({
         if (r.url) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'video', url: r.url });
         else fail(r.error ?? 'Video oluşturulamadı');
       } else {
-        const r = await generateText(aiCompanyId, {
-          messages: [{ role: 'user', content: prompt }],
-        });
-        if (r.text) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'text', text: r.text });
-        else fail(r.error ?? 'Yanıt alınamadı');
+        // Geçmiş (yalnızca text mesajları) + yeni prompt → model değişse de
+        // aynı konuşmaya devam edilir. Yanıt token token akıtılır (streaming).
+        const history = aiMessages
+          .map((m) => {
+            if (m.role === 'user') return { role: 'user' as const, content: m.text };
+            if (m.role === 'assistant' && m.kind === 'text')
+              return { role: 'assistant' as const, content: m.text };
+            return null;
+          })
+          .filter(
+            (m): m is { role: 'user' | 'assistant'; content: string } =>
+              !!m && m.content.trim().length > 0,
+          );
+        const chatMessages = [...history, { role: 'user' as const, content: prompt }];
+        const assistantId = `a${++aiMsgId.current}`;
+        push({ id: assistantId, role: 'assistant', kind: 'text', text: '' });
+        const r = await generateTextStream(
+          aiCompanyId,
+          { messages: chatMessages, model: selectedTextModelId },
+          (delta) => {
+            setAiMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantId && m.role === 'assistant' && m.kind === 'text'
+                  ? { ...m, text: m.text + delta }
+                  : m,
+              ),
+            );
+          },
+        );
+        if (r.error || !r.text) {
+          const errText = r.error ?? 'Yanıt alınamadı';
+          setAiMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId && m.role === 'assistant'
+                ? { id: m.id, role: 'assistant', kind: 'error', text: errText }
+                : m,
+            ),
+          );
+          toast.error(errText);
+        }
       }
     } catch {
       fail('Bir hata oluştu, lütfen tekrar deneyin.');
@@ -497,11 +546,46 @@ function DashboardLayoutInner({
     }
   };
 
+  // Search "Ask AI" → bekleyen metin geldiğinde, balinaOS paneli açık ve şirket
+  // hazırsa 'Sohbet' modunda otomatik gönder ve pending'i temizle.
+  useEffect(() => {
+    if (!aiPendingPrompt || !isBalinaAiOpen || !aiCompanyId || aiBusy) return;
+    const prompt = aiPendingPrompt;
+    setAiPendingPrompt(null);
+    void handleAiSend(prompt, 'chat');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiPendingPrompt, isBalinaAiOpen, aiCompanyId, aiBusy]);
+
+  // Sayfa (route) değişince AI panelini kapat — kapanış sohbeti de sıfırlar.
+  const pathname = usePathname();
+  useEffect(() => {
+    setBalinaAiOpen(false);
+  }, [pathname, setBalinaAiOpen]);
+
+  // Panel kapanınca sohbeti sıfırla — tekrar açıldığında temiz başlasın.
+  // Kapanış animasyonu (AI_CLOSE_MS) bitince temizlenir; hızlı tekrar açılışta
+  // cleanup timeout'u iptal eder.
+  const wasBalinaAiOpenRef = useRef(isBalinaAiOpen);
+  useEffect(() => {
+    if (wasBalinaAiOpenRef.current && !isBalinaAiOpen) {
+      const t = setTimeout(() => {
+        setAiMessages([]);
+        setAiFiles([]);
+        setAiMode('chat');
+        aiProductsRef.current = {};
+        aiInputRef.current?.clear();
+      }, AI_CLOSE_MS);
+      wasBalinaAiOpenRef.current = isBalinaAiOpen;
+      return () => clearTimeout(t);
+    }
+    wasBalinaAiOpenRef.current = isBalinaAiOpen;
+  }, [isBalinaAiOpen]);
+
   const aiMessagesContent = (
     <>
       {aiMessages.map((m) =>
         m.role === 'user' ? (
-          <div key={m.id} className="flex flex-col items-end gap-1.5">
+          <div key={m.id} className="flex flex-col gap-1.5">
             {m.text && <BalinaChatUserMessage>{m.text}</BalinaChatUserMessage>}
             {m.images && m.images.length > 0 && (
               <div className="flex flex-wrap justify-end gap-1.5 px-2">
@@ -526,9 +610,9 @@ function DashboardLayoutInner({
         ) : (
           <div
             key={m.id}
-            className="px-3 py-2 text-body-default-regular text-[var(--balina-text-default)]"
+            className="whitespace-pre-wrap break-words px-3 py-2 text-body-default-regular text-[var(--balina-text-default)]"
           >
-            <BalinaChatTypingText text={m.text} />
+            {m.text}
           </div>
         ),
       )}
@@ -544,23 +628,33 @@ function DashboardLayoutInner({
     </>
   );
 
-  const aiQuickActions = (fill: (prompt: string) => void) => (
+  // Mod değiştir + composer'a o modun düzenlenebilir default prompt'unu yaz
+  // (kullanıcı değiştirebilir). Sohbette temizle ve odaklan.
+  const handleModeChange = (m: BalinaChatMode) => {
+    setAiMode(m);
+    const text =
+      m === 'image' ? DEFAULT_IMAGE_PROMPT : m === 'video' ? DEFAULT_VIDEO_PROMPT : '';
+    aiInputRef.current?.setText(text);
+    aiInputRef.current?.focus();
+  };
+
+  const aiQuickActions = () => (
     <>
       <BalinaChatQuickAction
         icon={<BalinaVideoIcon className="h-4 w-4" />}
-        onClick={() => fill('Şu ürün için bir tanıtım videosu oluştur: ')}
+        onClick={() => handleModeChange('video')}
       >
         Video oluştur
       </BalinaChatQuickAction>
       <BalinaChatQuickAction
         icon={<BalinaImageIcon className="h-4 w-4" />}
-        onClick={() => fill('Şu ürün için bir görsel oluştur: ')}
+        onClick={() => handleModeChange('image')}
       >
         Görsel oluştur
       </BalinaChatQuickAction>
       <BalinaChatQuickAction
         icon={<BalinaSummarizeIcon className="h-4 w-4" />}
-        onClick={() => fill('')}
+        onClick={() => handleModeChange('chat')}
       >
         Soru sor
       </BalinaChatQuickAction>
@@ -690,7 +784,7 @@ function DashboardLayoutInner({
                       onAddContext={() => setAiContextOpen(true)}
                       inputRef={aiInputRef}
                       mode={aiMode}
-                      onModeChange={setAiMode}
+                      onModeChange={handleModeChange}
                       onSend={handleAiSend}
                     >
                       {aiMessagesContent}
@@ -700,9 +794,6 @@ function DashboardLayoutInner({
               </div>
             )}
           </div>
-          {/* Drawer sadece OpenAI varsa mount edilir — yoksa fab tıklayınca
-              /stores'a yönlendirir. */}
-          {hasActiveAi && <AiChatDrawer />}
         </div>
         {/* Eski AI fab kaldırıldı (yeni AI paneline taşındı); plan/kullanım
             uyarısı artık sidebar'da footer'ın üstünde. */}
@@ -736,7 +827,7 @@ function DashboardLayoutInner({
               onAddContext={() => setAiContextOpen(true)}
               inputRef={aiInputRef}
               mode={aiMode}
-              onModeChange={setAiMode}
+              onModeChange={handleModeChange}
               onSend={handleAiSend}
             >
               {aiMessagesContent}

@@ -22,8 +22,17 @@ import {
   BalinaDropdownItem,
   BalinaIcons,
   BalinaThemePopover,
+  toast,
 } from '@/components/balina';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
+import {
+  Box,
+  ShoppingCart,
+  ShoppingBag,
+  Megaphone,
+  Bookmark,
+  ClockArrowRotateLeft,
+} from '@gravity-ui/icons';
 import { SearchModal, type SearchSection } from '@/components/search/search-modal';
 import { useAuthStore } from '@/stores/authStore';
 import { useCompanyStore } from '@/stores/companyStore';
@@ -31,6 +40,8 @@ import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore
 import { useSidebarPanelContent } from '@/components/providers/SidebarPanel';
 import { useUIStore } from '@/stores/uiStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useSearchStore, type SearchEntityType } from '@/stores/searchStore';
+import { useSavedFilterStore } from '@/stores/savedFilterStore';
 
 interface NavItemConfig {
   title: string;
@@ -48,6 +59,8 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
   const { currentCompany, fetchCompanies } = useCompanyStore();
   const toggleBalinaAi = useUIStore((s) => s.toggleBalinaAi);
   const isBalinaAiOpen = useUIStore((s) => s.isBalinaAiOpen);
+  const setBalinaAiOpen = useUIStore((s) => s.setBalinaAiOpen);
+  const setAiPendingPrompt = useUIStore((s) => s.setAiPendingPrompt);
   const themeColor = useThemeStore((s) => s.themeColor);
   const setThemeColor = useThemeStore((s) => s.setThemeColor);
   // Tema rengi sürükleme sırasında çok sık değişir — backend kaydını debounce et.
@@ -215,6 +228,19 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
       : () => router.push(`/${companySlug}`);
 
   const [searchOpen, setSearchOpen] = React.useState(false);
+  const [searchQuery, setSearchQuery] = React.useState('');
+  const companyId = currentCompany?.id;
+
+  // Global arama store'u + kayıtlı aramalar (context: 'search').
+  const searchResults = useSearchStore((s) => s.results);
+  const runSearch = useSearchStore((s) => s.search);
+  const clearSearchResults = useSearchStore((s) => s.clearResults);
+  const recentItems = useSearchStore((s) => s.recent);
+  const loadRecent = useSearchStore((s) => s.loadRecent);
+  const addRecent = useSearchStore((s) => s.addRecent);
+  const fetchSavedFilters = useSavedFilterStore((s) => s.fetch);
+  const createSavedFilter = useSavedFilterStore((s) => s.create);
+  const savedFilters = useSavedFilterStore((s) => s.filters);
 
   // Cmd/Ctrl + K ile arama modalını aç/kapat.
   React.useEffect(() => {
@@ -227,6 +253,30 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
+
+  // Modal açılınca: son kullanılanları yükle + kayıtlı aramaları çek.
+  React.useEffect(() => {
+    if (!searchOpen || !companyId) return;
+    loadRecent(companyId);
+    void fetchSavedFilters(companyId, 'search');
+  }, [searchOpen, companyId, loadRecent, fetchSavedFilters]);
+
+  // Sorgu değişince debounce'lu backend araması; boşsa sonuçları temizle.
+  React.useEffect(() => {
+    if (!searchOpen || !companyId) return;
+    const q = searchQuery.trim();
+    if (!q) {
+      clearSearchResults();
+      return;
+    }
+    const t = setTimeout(() => void runSearch(companyId, q), 250);
+    return () => clearTimeout(t);
+  }, [searchQuery, searchOpen, companyId, runSearch, clearSearchResults]);
+
+  // Modal kapanınca sorguyu sıfırla.
+  React.useEffect(() => {
+    if (!searchOpen) setSearchQuery('');
+  }, [searchOpen]);
 
   const accountMenu = (
     <>
@@ -251,21 +301,139 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
     </>
   );
 
-  const searchSections: SearchSection[] = [
-    {
-      title: 'Sayfalar',
-      items: visibleNavItems.map((item) => {
-        const Icon = item.icon;
-        return {
-          id: item.title,
-          title: item.title,
-          icon: <Icon className="h-4 w-4" />,
+  // Bir sonuç açıldığında: son kullanılanlara ekle + ilgili sayfaya git.
+  const openEntity = (type: SearchEntityType, id: string, title: string) => {
+    if (!companyId) return;
+    addRecent(companyId, { key: `${type}:${id}`, type, title });
+    const base = `/${companySlug}`;
+    const href =
+      type === 'product'
+        ? `${base}/products/${id}`
+        : type === 'order'
+          ? `${base}/orders`
+          : type === 'store'
+            ? `${base}/stores`
+            : `${base}/marketing/campaigns/${id}`;
+    router.push(href);
+  };
+
+  const entityIcon = (type: SearchEntityType) => {
+    const Icon =
+      type === 'product'
+        ? Box
+        : type === 'order'
+          ? ShoppingCart
+          : type === 'store'
+            ? ShoppingBag
+            : Megaphone;
+    return <Icon className="h-4 w-4" />;
+  };
+
+  const savedSearches = savedFilters.filter((f) => f.context === 'search');
+  const trimmedQuery = searchQuery.trim();
+  const searchSections: SearchSection[] = [];
+
+  if (!trimmedQuery) {
+    // Boş sorgu → kayıtlı aramalar + son kullanılanlar (Image #5).
+    if (savedSearches.length > 0) {
+      searchSections.push({
+        title: 'Kayıtlı aramalar',
+        items: savedSearches.map((f) => ({
+          id: `saved:${f.id}`,
+          title: f.name,
+          icon: <Bookmark className="h-4 w-4" />,
+          action: 'Ara',
+          keepOpen: true,
+          onSelect: () => {
+            const qv = typeof f.payload?.query === 'string' ? f.payload.query : f.name;
+            setSearchQuery(qv);
+          },
+        })),
+      });
+    }
+    if (recentItems.length > 0) {
+      searchSections.push({
+        title: 'Son kullanılanlar',
+        items: recentItems.map((r) => ({
+          id: r.key,
+          title: r.title,
+          icon: entityIcon(r.type),
           action: 'Aç',
-          onSelect: () => router.push(item.url),
-        };
-      }),
-    },
-  ];
+          onSelect: () => openEntity(r.type, r.key.slice(r.type.length + 1), r.title),
+        })),
+      });
+    }
+  } else {
+    // Dolu sorgu → backend sonuçları (ürün / sipariş / mağaza / kampanya).
+    const { products, orders, stores, campaigns } = searchResults;
+    if (products.length > 0) {
+      searchSections.push({
+        title: 'Ürünler',
+        items: products.map((p) => ({
+          id: `product:${p.id}`,
+          title: p.sku ? `${p.name} — ${p.sku}` : p.name,
+          icon: <Box className="h-4 w-4" />,
+          action: 'Aç',
+          onSelect: () => openEntity('product', p.id, p.name),
+        })),
+      });
+    }
+    if (orders.length > 0) {
+      searchSections.push({
+        title: 'Siparişler',
+        items: orders.map((o) => ({
+          id: `order:${o.id}`,
+          title: o.customerName
+            ? `#${o.orderNumber} — ${o.customerName}`
+            : `#${o.orderNumber}`,
+          icon: <ShoppingCart className="h-4 w-4" />,
+          action: 'Aç',
+          onSelect: () => openEntity('order', o.id, `Sipariş #${o.orderNumber}`),
+        })),
+      });
+    }
+    if (stores.length > 0) {
+      searchSections.push({
+        title: 'Mağazalar',
+        items: stores.map((s) => ({
+          id: `store:${s.id}`,
+          title: s.name,
+          icon: <ShoppingBag className="h-4 w-4" />,
+          action: 'Aç',
+          onSelect: () => openEntity('store', s.id, s.name),
+        })),
+      });
+    }
+    if (campaigns.length > 0) {
+      searchSections.push({
+        title: 'Kampanyalar',
+        items: campaigns.map((c) => ({
+          id: `campaign:${c.id}`,
+          title: c.name,
+          icon: <Megaphone className="h-4 w-4" />,
+          action: 'Aç',
+          onSelect: () => openEntity('campaign', c.id, c.name),
+        })),
+      });
+    }
+  }
+
+  // "Aramayı kaydet" — mevcut sorguyu kayıtlı aramalara ekler (context: 'search').
+  const handleSaveSearch = async () => {
+    if (!companyId || !trimmedQuery) {
+      toast.warning('Önce bir arama metni yazın');
+      return;
+    }
+    const created = await createSavedFilter(companyId, 'search', trimmedQuery, {
+      query: trimmedQuery,
+    });
+    if (created) {
+      toast.success('Arama kaydedildi');
+      setSearchQuery('');
+    } else {
+      toast.error('Arama kaydedilemedi');
+    }
+  };
 
   return (
     <>
@@ -313,8 +481,18 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
       <SearchModal
         isOpen={searchOpen}
         onOpenChange={setSearchOpen}
-        placeholder="Sayfa ara…"
+        placeholder="Ürün, sipariş, mağaza ara…"
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
         sections={searchSections}
+        emptyText="Aramaya başlamak için yazın"
+        onSaveSearch={handleSaveSearch}
+        onAskAi={(query) => {
+          // Yazılan metni balinaOS AI paneline aktar; panel açılınca otomatik gönderilir.
+          setAiPendingPrompt(query);
+          setBalinaAiOpen(true);
+          setSearchOpen(false);
+        }}
       />
     </>
   );

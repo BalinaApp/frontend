@@ -38,7 +38,6 @@ import {
 } from '@/stores/aiStore';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useUIStore } from '@/stores/uiStore';
-import { applySkuOverlayToImage } from '@/lib/sku-overlay';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 
@@ -449,24 +448,13 @@ KURALLAR:
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
       return;
     }
-    // explicitCode kod-bekleme akışından gelir; productCode store'a yeni
-    // yazıldıysa bu render'da henüz okunamayabilir, o yüzden parametre tercih.
-    const code = explicitCode?.trim() || productCode.trim();
-    const prefix = imageIntegration?.codePrefix?.trim() ?? '';
-    const sku = code ? (prefix ? `${prefix}-${code}` : code) : '';
-    const overlaid = sku
-      ? await applySkuOverlayToImage(result.url, sku)
-      : { url: result.url, embedded: false };
+    // SKU'yu görsele yazma özelliği kaldırıldı — üretilen görsel doğrudan gösterilir.
     appendMessage({
       id: '',
       kind: 'bot-image',
-      url: overlaid.url,
-      sku,
-      skuEmbedded: overlaid.embedded,
+      url: result.url,
       createdAt: Date.now(),
     });
-    // Bir sonraki ürün için kod tekrar sorulsun.
-    setProductCode('');
   };
 
   const runVideoGeneration = async (promptText: string, files: string[]) => {

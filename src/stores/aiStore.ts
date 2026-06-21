@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { api } from '@/services/api';
 
 export type FalImageModel =
+  | 'fal-ai/nano-banana-pro'
+  | 'fal-ai/nano-banana-pro/edit'
   | 'fal-ai/fashn/tryon/v1.6'
   | 'fal-ai/nano-banana-2'
   | 'fal-ai/nano-banana-2/edit'
@@ -12,9 +14,9 @@ export type FalImageModel =
   | 'fal-ai/flux/schnell'
   | 'fal-ai/flux-pro/v1.1';
 
-/** Görsel üretim varsayılan modeli — FASHN sanal kıyafet deneme (Fal).
- *  model_image (kişi) + garment_image (kıyafet) alır; tam 2 görsel. */
-export const DEFAULT_IMAGE_MODEL_ID = 'fal-ai/fashn/tryon/v1.6';
+/** Görsel üretim varsayılan modeli — Nano Banana Pro (Fal).
+ *  Metin→görsel + image-to-image (edit) destekler; 14 referans görsele kadar. */
+export const DEFAULT_IMAGE_MODEL_ID = 'fal-ai/nano-banana-pro';
 
 /** FASHN tryon üretim modu (composer ayarı → backend `generationMode`). */
 export type FashnGenerationMode = 'performance' | 'balanced' | 'quality';
@@ -135,12 +137,26 @@ export function getModelProvider(modelId: string): ModelProvider {
 export const FAL_MODEL_CATALOG: Array<Omit<ModelCatalogEntry, 'provider'>> = [
   // ===== Görsel modelleri =====
   {
+    id: 'fal-ai/nano-banana-pro',
+    label: 'Nano Banana Pro',
+    description:
+      'Google Nano Banana Pro (Fal) — en yüksek kalite, metin→görsel + düzenleme, 14 referans görsele kadar. Varsayılan.',
+    kind: 'image',
+    isDefault: true,
+  },
+  {
+    id: 'fal-ai/nano-banana-pro/edit',
+    label: 'Nano Banana Pro — Edit',
+    description:
+      'Nano Banana Pro image-to-image; referans görsellerle düzenleme (14 görsele kadar).',
+    kind: 'image',
+  },
+  {
     id: 'fal-ai/fashn/tryon/v1.6',
     label: 'FASHN Sanal Deneme',
     description:
-      'FASHN sanal kıyafet deneme (Fal) — kişi + kıyafet görselinden giydirilmiş görsel. Varsayılan.',
+      'FASHN sanal kıyafet deneme (Fal) — kişi + kıyafet görselinden giydirilmiş görsel.',
     kind: 'image',
-    isDefault: true,
   },
   {
     id: 'fal-ai/nano-banana-2',
@@ -652,6 +668,22 @@ interface AiState {
     }
   ) => Promise<{ text: string; error?: string }>;
 
+  /** Sohbet için seçili OpenAI text modeli (kullanıcı anında değiştirebilir). */
+  selectedTextModelId: string;
+  setSelectedTextModelId: (id: string) => void;
+
+  /** AI SDK streaming — yanıtı token token akıtır. `onDelta` her parçada çağrılır;
+   *  dönüş: birikmiş tam metin + opsiyonel hata. */
+  generateTextStream: (
+    companyId: string,
+    args: {
+      messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+      model?: string;
+      integrationId?: string;
+    },
+    onDelta: (delta: string) => void,
+  ) => Promise<{ text: string; error?: string }>;
+
   resetChat: () => void;
 
   // Conversations
@@ -669,6 +701,24 @@ const SELECTED_IMAGE_KEY = 'ai-selected-image-integration';
 const SELECTED_VIDEO_KEY = 'ai-selected-video-integration';
 const SELECTED_IMAGE_MODEL_KEY = 'ai-selected-image-model';
 const SELECTED_VIDEO_MODEL_KEY = 'ai-selected-video-model';
+const SELECTED_TEXT_MODEL_KEY = 'ai-selected-text-model';
+
+/** Sohbet (text) için seçilebilir OpenAI modelleri — composer dropdown'ı bunu
+ *  listeler. Kullanıcının hesabında erişimi olmayan model seçilirse backend
+ *  anlamlı hata döner. */
+export const TEXT_MODELS: { id: string; label: string }[] = [
+  { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
+  { id: 'gpt-4o', label: 'GPT-4o' },
+  { id: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+  { id: 'gpt-4.1', label: 'GPT-4.1' },
+];
+
+const DEFAULT_TEXT_MODEL_ID = 'gpt-4o-mini';
+
+function readTextModel(): string {
+  const id = readSelection(SELECTED_TEXT_MODEL_KEY);
+  return id && TEXT_MODELS.some((m) => m.id === id) ? id : DEFAULT_TEXT_MODEL_ID;
+}
 
 function readSelection(key: string): string | null {
   if (typeof window === 'undefined') return null;
@@ -1186,6 +1236,68 @@ export const useAiStore = create<AiState>((set, get) => ({
         'Bilinmeyen hata';
       console.error('[generateText] failed:', e?.response?.status, msg, err);
       return { text: '', error: msg };
+    }
+  },
+
+  selectedTextModelId: readTextModel(),
+  setSelectedTextModelId: (id) => {
+    writeSelection(SELECTED_TEXT_MODEL_KEY, id);
+    set({ selectedTextModelId: id });
+  },
+
+  generateTextStream: async (companyId, args, onDelta) => {
+    const base = api.defaults.baseURL ?? '';
+    let token: string | null = null;
+    try {
+      const raw = localStorage.getItem('auth-storage');
+      token = raw ? (JSON.parse(raw)?.state?.accessToken ?? null) : null;
+    } catch {
+      token = null;
+    }
+    try {
+      const res = await fetch(
+        `${base}/company/${companyId}/ai/generate/text/stream`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            messages: args.messages,
+            model: args.model,
+            integrationId: args.integrationId,
+          }),
+        },
+      );
+      if (!res.ok || !res.body) {
+        let msg = 'Yanıt alınamadı';
+        try {
+          const j = await res.json();
+          if (j?.message) msg = Array.isArray(j.message) ? j.message.join(', ') : j.message;
+        } catch {
+          /* gövde JSON değil */
+        }
+        return { text: '', error: msg };
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let text = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        if (chunk) {
+          text += chunk;
+          onDelta(chunk);
+        }
+      }
+      return { text };
+    } catch (err) {
+      return {
+        text: '',
+        error: err instanceof Error ? err.message : 'Bağlantı hatası',
+      };
     }
   },
 

@@ -2,7 +2,13 @@
 
 import * as React from 'react';
 import { Picture } from '@gravity-ui/icons';
-import { BalinaPopover, BalinaAtIcon, BalinaCloseIcon, BalinaSearchIcon } from '@/components/balina';
+import {
+  BalinaPopover,
+  BalinaAtIcon,
+  BalinaCloseIcon,
+  BalinaSearchIcon,
+  BalinaChatMediaOverlay,
+} from '@/components/balina';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useInventoryStore, type Product } from '@/stores/inventoryStore';
 
@@ -174,12 +180,15 @@ export function AiContextChip({
 export function AiContextItemChip({
   label,
   avatar,
+  onClick,
   onRemove,
   removing,
 }: {
   label: string;
   /** Sol ikon/avatar (verilmezse görsel-çerçeve ikonu). */
   avatar?: React.ReactNode;
+  /** Chip gövdesine tıklanınca (× hariç) — ör. önizleme aç. */
+  onClick?: () => void;
   onRemove?: () => void;
   /** Silinme animasyonu — içerik blur+scale+fade, dış kap genişlik çöker. */
   removing?: boolean;
@@ -191,7 +200,20 @@ export function AiContextItemChip({
       }`}
     >
     <span
-      className={`group relative flex h-8 max-w-[9.5rem] cursor-pointer items-center gap-1 rounded-[0.625rem] p-1 transition-[filter,transform,background-color] duration-[280ms] ease-in hover:bg-[var(--balina-background-dark-muted)] ${
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={
+        onClick
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onClick();
+              }
+            }
+          : undefined
+      }
+      className={`group relative flex h-8 max-w-[9.5rem] cursor-pointer items-center gap-1 rounded-[0.625rem] p-1 outline-none transition-[filter,transform,background-color] duration-[280ms] ease-in hover:bg-[var(--balina-background-dark-muted)] ${
         removing ? 'scale-[0.92] blur-[8px]' : ''
       }`}
     >
@@ -209,7 +231,10 @@ export function AiContextItemChip({
         <button
           type="button"
           aria-label={`${label} kaldır`}
-          onClick={onRemove}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove?.();
+          }}
           className="flex h-6 w-6 cursor-pointer items-center justify-center text-[var(--balina-icon-strong)] outline-none transition-colors hover:text-[var(--balina-icon-loud)] focus-visible:outline-none"
         >
           <BalinaCloseIcon className="h-4 w-4" />
@@ -220,15 +245,47 @@ export function AiContextItemChip({
   );
 }
 
-/** Yüklenen görsel dosyası — bağlam satırı chip'i. */
+/** Yüklenen görsel dosyası — bağlam satırı chip'i. `file` verilirse chip'e
+ *  tıklayınca tam ekran görsel önizlemesi açılır. */
 export function AiFileChip({
   name,
+  file,
   onRemove,
   removing,
 }: {
   name: string;
+  /** Önizleme için yüklenen görsel dosyası. */
+  file?: File;
   onRemove?: () => void;
   removing?: boolean;
 }) {
-  return <AiContextItemChip label={name} onRemove={onRemove} removing={removing} />;
+  const [open, setOpen] = React.useState(false);
+  // Dosya için object URL — sadece önizleme açıkken oluştur, kapanınca serbest bırak.
+  const previewUrl = React.useMemo(
+    () => (open && file ? URL.createObjectURL(file) : null),
+    [open, file],
+  );
+  React.useEffect(() => {
+    if (!previewUrl) return;
+    return () => URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+
+  return (
+    <>
+      <AiContextItemChip
+        label={name}
+        onClick={file ? () => setOpen(true) : undefined}
+        onRemove={onRemove}
+        removing={removing}
+      />
+      {open && previewUrl && (
+        <BalinaChatMediaOverlay
+          url={previewUrl}
+          type="image"
+          filename={name}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
 }

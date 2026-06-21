@@ -48,7 +48,7 @@ export function BalinaToast({
   return (
     <div
       className={cn(
-        'flex h-9 items-center gap-0.5 rounded-xl p-1 shadow-toast',
+        'flex min-h-9 max-w-[22rem] items-center gap-0.5 rounded-xl p-1 shadow-toast',
         'bg-[var(--balina-background-light-shout)]',
         className,
       )}
@@ -62,7 +62,7 @@ export function BalinaToast({
           {resolvedIcon}
         </span>
       )}
-      <span className="text-body-small-one-liner-medium flex flex-1 items-center px-1 text-[var(--balina-text-loud)]">
+      <span className="text-body-small-medium min-w-0 flex-1 break-words px-1 text-[var(--balina-text-loud)]">
         {children}
       </span>
       {action && <span className="shrink-0">{action}</span>}

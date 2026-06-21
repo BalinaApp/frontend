@@ -29,7 +29,7 @@ const DEFAULT_FAL_VIDEO_MODEL = 'fal-ai/kling-video/v2.1/pro/image-to-video';
 /** Modaldaki "Varsayılan video modeli" Select'i için video katalogu. */
 const VIDEO_MODEL_OPTIONS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'video');
 // ===== Fal görsel üretim varsayılanı (Yönet modalı) =====
-const DEFAULT_FAL_IMAGE_MODEL = 'fal-ai/fashn/tryon/v1.6';
+const DEFAULT_FAL_IMAGE_MODEL = 'fal-ai/nano-banana-pro';
 /** Kullanıcının seçebileceği iki görsel agent'ı (sadece image bölümü). Seçilen
  *  agent'a göre modal'da ilgili ayarlar gösterilir. */
 const IMAGE_AGENT_OPTIONS: Array<{
@@ -38,23 +38,23 @@ const IMAGE_AGENT_OPTIONS: Array<{
   description: string;
 }> = [
   {
+    value: 'fal-ai/nano-banana-pro',
+    label: 'Nano Banana Pro',
+    description:
+      'Google Nano Banana Pro (Fal) — en yüksek kalite, metin→görsel + düzenleme, 14 referans görsele kadar. Varsayılan.',
+  },
+  {
     value: 'fal-ai/fashn/tryon/v1.6',
     label: 'FASHN Sanal Deneme',
     description:
       'FASHN sanal kıyafet deneme (Fal) — kişi + kıyafet görselinden giydirilmiş görsel.',
   },
-  {
-    value: 'fal-ai/nano-banana-2/edit',
-    label: 'Nano Banana 2 — Edit',
-    description:
-      'Nano Banana 2 görsel-to-görsel (image-to-image) — referans görsellerle düzenleme, 14 görsele kadar.',
-  },
 ];
-/** Kayıtlı görsel modeli id'sini 2 agent seçeneğinden birine indirger
- *  (ör. eski 'nano-banana-2' → 'nano-banana-2/edit'). */
+/** Kayıtlı görsel modeli id'sini agent seçeneklerinden birine indirger
+ *  (ör. eski 'nano-banana-2/edit' → 'nano-banana-pro'). */
 function normalizeImageAgent(modelId?: string): string {
   if (modelId && /fashn\/tryon/.test(modelId)) return 'fal-ai/fashn/tryon/v1.6';
-  if (modelId && /nano-banana/.test(modelId)) return 'fal-ai/nano-banana-2/edit';
+  if (modelId && /nano-banana/.test(modelId)) return 'fal-ai/nano-banana-pro';
   return DEFAULT_FAL_IMAGE_MODEL;
 }
 // Kling 2.1: aspect 16:9|9:16|1:1, süre 5|10 sn. (Veo modelleri ek olarak
@@ -3698,7 +3698,7 @@ export default function StoresPage() {
                         </p>
                       </div>
 
-                      {/* Görsel agent seçimi — 2 seçenek (FASHN / Nano Banana 2).
+                      {/* Görsel agent seçimi — 2 seçenek (Nano Banana Pro / FASHN).
                           Seçilen agent'a göre aşağıda ilgili ayarlar gösterilir.
                           Trigger'da yalnızca ad gösterilir; açıklama altta. */}
                       <div className="flex flex-col gap-1.5">
@@ -3776,7 +3776,7 @@ export default function StoresPage() {
                           </p>
                         </>
                       ) : (
-                        /* Nano Banana 2 — en boy oranı + çözünürlük. */
+                        /* Nano Banana Pro — en boy oranı + çözünürlük. */
                         <div className="grid grid-cols-2 gap-3">
                           <div className="flex flex-col gap-1.5">
                             <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">En boy oranı</label>

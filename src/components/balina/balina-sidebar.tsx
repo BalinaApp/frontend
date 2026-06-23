@@ -42,6 +42,8 @@ export interface BalinaSidebarProps {
   /** AI paneli açık mı — açıkken AI ikonu dolu hale geçer. */
   aiActive?: boolean;
   onUserClick?: () => void;
+  /** Daraltma kontrollü kullanım için; verilmezse dahili state tutulur. */
+  collapsed?: boolean;
   /** Varsayılan üst aksiyon ikonlarının callback'leri. */
   onToggleSidebar?: () => void;
   onSearch?: () => void;
@@ -144,6 +146,7 @@ export function BalinaSidebar({
   footerExtra,
   aiActive = false,
   onUserClick,
+  collapsed: collapsedProp,
   onToggleSidebar,
   onSearch,
   onAi,
@@ -177,13 +180,18 @@ export function BalinaSidebar({
   };
   // Panel daraltma: collapsed iken sidebar layout'tan çıkar (içerik genişler);
   // sol kenara gelince revealed=true ile yüzen panel olarak kayar.
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsedInternal, setCollapsedInternal] = React.useState(false);
+  const collapsed = collapsedProp ?? collapsedInternal;
   const [revealed, setRevealed] = React.useState(false);
   const toggleCollapsed = () => {
-    setCollapsed((c) => {
-      if (c) setRevealed(false);
-      return !c;
-    });
+    if (collapsedProp === undefined) {
+      setCollapsedInternal((c) => {
+        if (c) setRevealed(false);
+        return !c;
+      });
+    } else if (collapsed) {
+      setRevealed(false);
+    }
     onToggleSidebar?.();
   };
 

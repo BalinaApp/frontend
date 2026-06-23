@@ -1,0 +1,18 @@
+<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect width="40" height="40" fill="#F1641E"/>
+<rect width="40" height="40" fill="url(#etsy_paint0_radial)" fill-opacity="0.2"/>
+<rect width="40" height="40" fill="url(#etsy_paint1_linear)" fill-opacity="0.3"/>
+<path d="M23.806 28.014H19.27C17.863 28.014 17.499 27.65 17.499 26.424V20.692H21.147C22.501 20.691 22.919 21.056 23.387 22.384L23.753 23.454C23.962 24.079 24.794 24.104 24.794 23.376C24.69 21.29 24.69 18.84 24.742 16.756C24.794 16.027 23.959 16.053 23.752 16.678L23.388 17.748C22.918 19.102 22.553 19.52 21.147 19.52H17.499V12.745C17.499 12.38 17.654 12.223 18.046 12.223H23.493C25.083 12.223 25.759 12.665 26.255 14.047L26.855 15.742C27.089 16.419 27.896 16.316 27.896 15.664L27.844 11.468C27.845 11.13 27.637 11 27.35 11H12.599C12.13 11 12 11.26 12 11.522C12 11.782 12.13 12.017 12.573 12.069C14.398 12.2 14.71 12.565 14.71 13.633V26.715C14.71 27.705 14.398 28.043 12.677 28.175C12.261 28.226 12.13 28.46 12.13 28.722C12.13 28.984 12.26 29.244 12.703 29.244H27.61C27.896 29.244 28.105 29.114 28.105 28.776L28.157 24.58C28.157 23.928 27.35 23.85 27.141 24.502L26.594 26.196C26.15 27.604 25.394 28.021 23.806 28.021" fill="white"/>
+<defs>
+<radialGradient id="etsy_paint0_radial" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(6 -1980) scale(52.4976)">
+<stop stop-color="white" stop-opacity="0.35"/>
+<stop offset="0.5" stop-color="white" stop-opacity="0"/>
+</radialGradient>
+<linearGradient id="etsy_paint1_linear" x1="0" y1="0" x2="40" y2="40" gradientUnits="userSpaceOnUse">
+<stop stop-color="white"/>
+<stop offset="0.42" stop-color="white" stop-opacity="0.35"/>
+<stop offset="0.62" stop-color="white" stop-opacity="0.35"/>
+<stop offset="1" stop-color="white"/>
+</linearGradient>
+</defs>
+</svg>

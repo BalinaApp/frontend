@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePathname } from 'next/navigation';
+import { WorkspaceTabs } from '@/components/layout/workspace-tabs';
 import { AppSidebar } from '@/components/layout/app-sidebar';
 import { usePricingStore, type UsageInfo } from '@/stores/pricingStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
@@ -556,30 +557,32 @@ function DashboardLayoutInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiPendingPrompt, isBalinaAiOpen, aiCompanyId, aiBusy]);
 
-  // Sayfa (route) değişince AI panelini kapat — kapanış sohbeti de sıfırlar.
+  // Sayfa (route) değişince AI panelini kapat (sohbet KORUNUR).
   const pathname = usePathname();
   useEffect(() => {
     setBalinaAiOpen(false);
   }, [pathname, setBalinaAiOpen]);
 
-  // Panel kapanınca sohbeti sıfırla — tekrar açıldığında temiz başlasın.
-  // Kapanış animasyonu (AI_CLOSE_MS) bitince temizlenir; hızlı tekrar açılışta
-  // cleanup timeout'u iptal eder.
-  const wasBalinaAiOpenRef = useRef(isBalinaAiOpen);
+  // Sohbeti sıfırla — yalnızca kullanıcı X ile kapatınca. Auto-close (route /
+  // side panel) bunu ÇAĞIRMAZ; böylece tekrar açıldığında konuşma kaybolmaz.
+  const resetAiChat = () => {
+    setAiMessages([]);
+    setAiFiles([]);
+    setAiMode('chat');
+    aiProductsRef.current = {};
+    aiInputRef.current?.clear();
+  };
+  const handleAiCloseAndReset = () => {
+    setBalinaAiOpen(false);
+    setTimeout(resetAiChat, AI_CLOSE_MS);
+  };
+
+  // Genişlik yönetimi: sağ tarafta bir side panel açılırsa AI panelini kapat
+  // (sohbet KORUNUR). İki sağ panel yan yana gelip taşmasın.
   useEffect(() => {
-    if (wasBalinaAiOpenRef.current && !isBalinaAiOpen) {
-      const t = setTimeout(() => {
-        setAiMessages([]);
-        setAiFiles([]);
-        setAiMode('chat');
-        aiProductsRef.current = {};
-        aiInputRef.current?.clear();
-      }, AI_CLOSE_MS);
-      wasBalinaAiOpenRef.current = isBalinaAiOpen;
-      return () => clearTimeout(t);
-    }
-    wasBalinaAiOpenRef.current = isBalinaAiOpen;
-  }, [isBalinaAiOpen]);
+    if (sidePanel && isBalinaAiOpen) setBalinaAiOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidePanel]);
 
   const aiMessagesContent = (
     <>
@@ -695,17 +698,14 @@ function DashboardLayoutInner({
               Side panel translucent white card, content kart ile aynı stil. */}
           <div className="flex min-h-0 flex-1">
             <div
-              className="shadow-panel-surface isolate flex min-w-0 flex-1 flex-col overflow-hidden rounded-[0.625rem]"
+              className="isolate flex min-w-0 flex-1 flex-col"
               style={{
-                backgroundImage: 'var(--balina-panel-surface)',
                 transform: isAiDrawerExpanded ? 'scale(0.98)' : 'scale(1)',
                 transition: 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)',
                 transformOrigin: 'center',
               }}
             >
-              <div className="scrollbar-none flex min-h-0 flex-1 flex-col overflow-auto">
-                {children}
-              </div>
+              <WorkspaceTabs>{children}</WorkspaceTabs>
             </div>
             {sidePanel && (
               <div className="flex shrink-0">
@@ -777,7 +777,7 @@ function DashboardLayoutInner({
                     <BalinaChat
                       floating={false}
                       onToggleFloating={toggleBalinaAiFloating}
-                      onClose={() => setBalinaAiOpen(false)}
+                      onClose={handleAiCloseAndReset}
                       quickActions={aiMessages.length === 0 ? aiQuickActions : undefined}
                       contextSlot={aiContextSlot}
                       onFiles={handleAiFiles}
@@ -820,7 +820,7 @@ function DashboardLayoutInner({
               floating
               onToggleFloating={toggleBalinaAiFloating}
               onHeaderPointerDown={startFloatDrag}
-              onClose={() => setBalinaAiOpen(false)}
+              onClose={handleAiCloseAndReset}
               quickActions={aiMessages.length === 0 ? aiQuickActions : undefined}
               contextSlot={aiContextSlot}
               onFiles={handleAiFiles}

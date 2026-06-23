@@ -61,6 +61,9 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
   const isBalinaAiOpen = useUIStore((s) => s.isBalinaAiOpen);
   const setBalinaAiOpen = useUIStore((s) => s.setBalinaAiOpen);
   const setAiPendingPrompt = useUIStore((s) => s.setAiPendingPrompt);
+  // Sol menü daraltma: AI paneli açıkken otomatik daralır (genişlik yönetimi);
+  // ayrıca kullanıcı elle daraltıp açabilir.
+  const [manualCollapsed, setManualCollapsed] = React.useState(false);
   const themeColor = useThemeStore((s) => s.themeColor);
   const setThemeColor = useThemeStore((s) => s.setThemeColor);
   // Tema rengi sürükleme sırasında çok sık değişir — backend kaydını debounce et.
@@ -446,6 +449,8 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
           <BalinaThemePopover value={themeColor ?? undefined} onChange={handleThemeChange} />
         }
         aiActive={isBalinaAiOpen}
+        collapsed={isBalinaAiOpen || manualCollapsed}
+        onToggleSidebar={() => setManualCollapsed((c) => !c)}
         onAi={toggleBalinaAi}
         onSearch={() => setSearchOpen(true)}
         footerExtra={belowNav}

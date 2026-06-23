@@ -84,7 +84,7 @@ export function AiContextPicker({ open, onOpenChange, onSelect, compact }: AiCon
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Ürün ara…"
-            className="text-body-small-one-liner-regular h-6 w-full bg-transparent text-[var(--balina-text-loud)] outline-none placeholder:text-[var(--balina-text-muted)]"
+            className="h-6 w-full bg-transparent text-xs text-[var(--balina-text-loud)] outline-none placeholder:text-[var(--balina-text-muted)]"
           />
         </div>
         {/* Liste */}

@@ -37,7 +37,7 @@ export function BalinaPaneHeader({
   return (
     <header
       className={cn(
-        'sticky top-0 z-[100] flex h-14 shrink-0 items-center justify-between gap-2 px-2.5',
+        'sticky top-0 z-[100] flex h-12 shrink-0 items-center justify-between gap-2 px-2.5',
         className,
       )}
     >

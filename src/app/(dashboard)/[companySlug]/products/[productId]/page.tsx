@@ -28,6 +28,10 @@ import { useCompanyStore } from '@/stores/companyStore';
 import { useAiStore } from '@/stores/aiStore';
 import { api } from '@/services/api';
 import { usePageTitle } from '@/hooks/use-page-title';
+import {
+  useWorkspaceTab,
+  useCloseCurrentTab,
+} from '@/components/layout/workspace-tabs';
 import { PageHeader } from '@/components/layout/page-header';
 import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { ProductAiImageModal } from '@/components/products/product-ai-image-modal';
@@ -408,6 +412,10 @@ export default function ProductEditPage() {
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Sekme başlığı = ürün adı, ikon = ürün görseli. Geri → sekmeyi kapat.
+  useWorkspaceTab({ title: name || undefined, image: imageUrls[0] ?? null });
+  const closeCurrentTab = useCloseCurrentTab();
+
   useEffect(() => {
     if (!selectedProduct) return;
     setName(selectedProduct.name);
@@ -635,7 +643,7 @@ export default function ProductEditPage() {
             size="small"
             aria-label="Geri"
             leftIcon={<ChevronLeft className="h-4 w-4" />}
-            onClick={() => router.push(`/${companySlug}/products`)}
+            onClick={closeCurrentTab}
             className="h-8 w-8 cursor-pointer rounded-2xl bg-black/[0.06] text-foreground hover:bg-black/[0.10]"
           />
         }

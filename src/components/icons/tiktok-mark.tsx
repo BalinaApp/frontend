@@ -1,7 +1,9 @@
 import * as React from 'react';
 
-/** TikTok marka tile'ı — siyah arka plan + beyaz nota glifi. */
+/** TikTok marka tile'ı — siyah arka plan + renkli (cyan/kırmızı glitch) nota glifi. */
 export function TiktokMark({ className, ...props }: React.SVGProps<SVGSVGElement>) {
+  const note =
+    'M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z';
   return (
     <svg
       width="40"
@@ -14,10 +16,10 @@ export function TiktokMark({ className, ...props }: React.SVGProps<SVGSVGElement
       {...props}
     >
       <rect width="40" height="40" fill="#010101" />
-      <path
-        d="M27.5 13.2c-1.4-.9-2.3-2.4-2.6-4.1h-3.2v13.9c0 1.7-1.4 3.1-3.1 3.1s-3.1-1.4-3.1-3.1 1.4-3.1 3.1-3.1c.3 0 .6 0 .9.1v-3.3c-.3 0-.6-.1-.9-.1-3.5 0-6.4 2.9-6.4 6.4s2.9 6.4 6.4 6.4 6.4-2.9 6.4-6.4v-7c1.2.9 2.7 1.4 4.3 1.4v-3.2c-.7 0-1.4-.2-2.1-.4z"
-        fill="#FFFFFF"
-      />
+      {/* cyan + kırmızı offset katmanlar → glitch; beyaz üstte. */}
+      <path d={note} fill="#25F4EE" transform="translate(11.4 11.2) scale(0.62)" />
+      <path d={note} fill="#FE2C55" transform="translate(13 12.4) scale(0.62)" />
+      <path d={note} fill="#FFFFFF" transform="translate(12.2 11.8) scale(0.62)" />
     </svg>
   );
 }

@@ -5,7 +5,8 @@ import { MobileSidebarToggle } from './mobile-sidebar-toggle';
 import { BalinaPaneHeader, type BalinaSegment } from '@/components/balina';
 
 interface PageHeaderProps {
-  title: string;
+  /** Başlık metni ya da özel düğüm (ör. breadcrumb). */
+  title: React.ReactNode;
   /** Başlık ikonu — başlıktan önce ikon + ayraç olarak gösterilir. */
   icon?: React.ReactNode;
   /** Optional element rendered before the title (e.g. back button). */

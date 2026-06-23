@@ -11,7 +11,7 @@ export type Marketplace = {
   // Backend `platform` enum — `id` is the UI-only identifier (e.g. legacy
   // 'WORDPRESS' for WooCommerce), so we keep `platform` separate to map
   // straight onto `/stores/marketplace/:platform/...` endpoints.
-  platform?: 'WOOCOMMERCE' | 'SHOPIFY' | 'TRENDYOL' | 'HEPSIBURADA';
+  platform?: 'WOOCOMMERCE' | 'SHOPIFY' | 'TRENDYOL' | 'HEPSIBURADA' | 'ETSY';
   steps?: Array<{
     key: string;
     label: string;
@@ -94,6 +94,21 @@ const trendyol: Marketplace = {
   helpUrl: 'https://developers.trendyol.com/docs',
 };
 
+const etsy: Marketplace = {
+  id: 'ETSY',
+  name: 'Etsy',
+  description: 'El yapımı ve vintage ürün pazaryeri.',
+  logo: '/figma/integrations/etsy.svg',
+  comingSoon: false,
+  platform: 'ETSY',
+  // One-click OAuth (PKCE): kullanıcı sadece isim girer, sonraki adım Etsy'ye
+  // yönlendirip Approve almak. Token swap + mağaza kaydı callback'te otomatik.
+  steps: [
+    { key: 'name', label: 'Mağaza Adı', placeholder: 'Mağaza adınız', description: 'Mağazanızı tanıyacağınız bir isim girin.' },
+  ],
+  helpUrl: 'https://developers.etsy.com/documentation/',
+};
+
 export const integrationCategories: IntegrationCategory[] = [
   {
     id: 'shops',
@@ -110,6 +125,7 @@ export const integrationCategories: IntegrationCategory[] = [
     items: [
       trendyol,
       hepsiburada,
+      etsy,
       { id: 'CICEKSEPETI', name: 'Çiçeksepeti', description: 'Çiçek ve hediye pazaryeri.', logo: '/figma/integrations/ciceksepeti.png', comingSoon: true },
     ],
   },
@@ -121,15 +137,28 @@ export const integrationCategories: IntegrationCategory[] = [
         id: 'BIZIMHESAP',
         name: 'Bizim Hesap',
         description: 'B2B fatura otomasyonu.',
-        logo: '',
+        logo: '/figma/integrations/bizimhesap.svg',
         comingSoon: false,
+        steps: [
+          { key: 'name', label: 'Hesap Adı', placeholder: 'Bizim Hesap Hesabım', description: 'Bu bağlantıyı tanıyacağınız bir isim.' },
+          { key: 'firmId', label: 'Firma ID', placeholder: 'Firma ID', description: 'Bizim Hesap firma (firm) ID bilginiz.' },
+          { key: 'token', label: 'Token', placeholder: 'Bizim Hesap token', type: 'password', description: 'Bizim Hesap API token bilginizi girin.' },
+        ],
       },
       {
         id: 'PARASUT',
         name: 'Paraşüt',
         description: 'Ön muhasebe ve e-fatura.',
-        logo: '',
+        logo: '/figma/integrations/parasut.svg',
         comingSoon: false,
+        steps: [
+          { key: 'name', label: 'Hesap Adı', placeholder: 'Paraşüt Hesabım', description: 'Bu bağlantıyı tanıyacağınız bir isim.' },
+          { key: 'parasutCompanyId', label: 'Şirket ID', placeholder: 'Paraşüt şirket ID', description: 'Paraşüt şirket (company) ID bilginiz.' },
+          { key: 'clientId', label: 'Client ID', placeholder: 'Paraşüt Client ID', description: 'Paraşüt uygulama Client ID bilginiz.' },
+          { key: 'clientSecret', label: 'Client Secret', placeholder: 'Paraşüt Client Secret', type: 'password', description: 'Paraşüt uygulama Client Secret bilginiz.' },
+          { key: 'username', label: 'Kullanıcı Adı', placeholder: 'Paraşüt e-posta', description: 'Paraşüt hesabınızın e-posta adresi.' },
+          { key: 'password', label: 'Şifre', placeholder: 'Paraşüt şifresi', type: 'password', description: 'Paraşüt hesabınızın şifresi.' },
+        ],
       },
     ],
   },
@@ -137,7 +166,17 @@ export const integrationCategories: IntegrationCategory[] = [
     id: 'shipping',
     title: 'Kargolar',
     items: [
-      { id: 'DHL', name: 'DHL', description: 'Uluslararası kargo gönderileri.', logo: '/figma/integrations/dhl.png', comingSoon: false },
+      {
+        id: 'DHL',
+        name: 'DHL',
+        description: 'Uluslararası kargo gönderileri.',
+        logo: '/figma/integrations/dhl.png',
+        comingSoon: false,
+        steps: [
+          { key: 'customerNumber', label: 'Müşteri Numarası', placeholder: 'MNG müşteri numaranız', description: 'MNG portal müşteri numaranızı girin.' },
+          { key: 'password', label: 'Şifre', placeholder: 'MNG portal şifresi', type: 'password', description: 'MNG portal şifrenizi girin.' },
+        ],
+      },
       { id: 'YURTICI', name: 'Yurtiçi Kargo', description: 'Yurt içi kargo hizmeti.', logo: '/figma/integrations/yurtici.png', comingSoon: true },
       { id: 'ARAS', name: 'Aras', description: 'Yurt içi kargo hizmeti.', logo: '/figma/integrations/aras.png', comingSoon: true },
       { id: 'SURAT', name: 'Sürat', description: 'Yurt içi kargo hizmeti.', logo: '/figma/integrations/surat.png', comingSoon: true },
@@ -148,7 +187,7 @@ export const integrationCategories: IntegrationCategory[] = [
     title: 'Sosyal Medya',
     items: [
       { id: 'INSTAGRAM', name: 'Instagram', description: 'Sosyal medya hesabınızı bağlayın.', logo: '/figma/integrations/instagram.png', comingSoon: false },
-      { id: 'TIKTOK', name: 'TikTok', description: 'TikTok hesabınızı bağlayın, video paylaşın.', logo: '', comingSoon: false },
+      { id: 'TIKTOK', name: 'TikTok', description: 'TikTok hesabınızı bağlayın, video paylaşın.', logo: '/figma/integrations/tiktok.svg', comingSoon: false },
       { id: 'WHATSAPP', name: 'WhatsApp', description: 'WhatsApp Business mesajlaşma.', logo: '/figma/integrations/whatsapp.png', comingSoon: true },
     ],
   },
@@ -160,17 +199,25 @@ export const integrationCategories: IntegrationCategory[] = [
         id: 'FAL_AI',
         name: 'Fal.ai',
         description: 'Flux modelleri ile görsel ve video üretimi.',
-        // Logo dosyası yok — render tarafında özel tile kullanılıyor
-        // (mor-pembe gradyan + Sparkles ikonu).
-        logo: '',
+        logo: '/figma/integrations/fal.svg',
         comingSoon: false,
+        steps: [
+          { key: 'name', label: 'Hesap Adı', placeholder: 'Hesabınızı tanıyacağınız ad', description: 'Bu hesabı tanıyacağınız bir isim girin (opsiyonel).' },
+          { key: 'apiKey', label: 'API Anahtarı', placeholder: 'fal_...', type: 'password', description: 'Fal.ai panelinizden aldığınız API anahtarını girin.' },
+        ],
+        helpUrl: 'https://fal.ai/dashboard/keys',
       },
       {
         id: 'OPENAI',
         name: 'OpenAI',
         description: 'GPT modelleri ile ürün açıklaması ve sohbet üretimi.',
-        logo: '',
+        logo: '/figma/integrations/openai.svg',
         comingSoon: false,
+        steps: [
+          { key: 'name', label: 'Hesap Adı', placeholder: 'Hesabınızı tanıyacağınız ad', description: 'Bu hesabı tanıyacağınız bir isim girin (opsiyonel).' },
+          { key: 'apiKey', label: 'API Anahtarı', placeholder: 'sk-...', type: 'password', description: 'OpenAI panelinizden aldığınız API anahtarını girin.' },
+        ],
+        helpUrl: 'https://platform.openai.com/api-keys',
       },
     ],
   },

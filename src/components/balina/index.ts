@@ -115,6 +115,24 @@ export type { BalinaAlertStatus } from './balina-alert';
 
 export { BalinaCard } from './balina-card';
 
+export { BalinaIntegrationRow } from './balina-integration-row';
+export type { BalinaIntegrationRowProps } from './balina-integration-row';
+
+export { BalinaTable } from './balina-table';
+
+export { BalinaSelectTag } from './balina-select-tag';
+export type { BalinaSelectTagProps, BalinaTagTone } from './balina-select-tag';
+
+export { BalinaPropertyMenu } from './balina-property-menu';
+export type { BalinaPropertyMenuProps, BalinaPropertyItem } from './balina-property-menu';
+
+export { BalinaViewSettings } from './balina-view-settings';
+export type {
+  BalinaViewSettingsProps,
+  BalinaViewLayout,
+  BalinaViewProperty,
+} from './balina-view-settings';
+
 export { BalinaChip } from './balina-chip';
 export type {
   BalinaChipProps,

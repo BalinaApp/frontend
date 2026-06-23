@@ -9,9 +9,10 @@ import { useBalinaScrollbar } from './use-balina-scrollbar';
 /* Balina Dropdown — kaynak .Dropdown_* + .MenuItem_* spec'lerinin portu
  * (Radix DropdownMenu üzerine, balina token'larıyla). */
 
-type DropdownSize = 'default' | 'medium' | 'large';
+type DropdownSize = 'small' | 'default' | 'medium' | 'large';
 
 const sizeWidth: Record<DropdownSize, string> = {
+  small: 'w-44', // 11rem — kısa menüler (Sırala/Filtre gibi)
   default: 'w-60', // 15rem
   medium: 'w-[15.75rem]',
   large: 'w-80', // 20rem

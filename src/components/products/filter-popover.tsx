@@ -7,7 +7,7 @@ import {
   ChevronRight,
   Plus,
 } from '@gravity-ui/icons';
-import { BalinaCalendar, BalinaPopover } from '@/components/balina';
+import { BalinaCalendar, BalinaPopover, BalinaSearchIcon } from '@/components/balina';
 import { FilterDef, isFilterActive } from './filter-types';
 import { type DateRange } from '../date-range-input';
 
@@ -62,16 +62,13 @@ export function FilterPopover({
     <BalinaPopover
       open={isOpen}
       onOpenChange={handleOpenChange}
-      className="w-[206px] max-w-none overflow-hidden p-0"
+      className="w-60 max-w-none overflow-hidden p-0"
       trigger={
         hasCustomTrigger ? (
-          <button
-            type="button"
-            aria-label={triggerAriaLabel ?? 'Filtreler'}
-            className={[triggerClassName ?? '', className ?? ''].join(' ')}
-          >
-            {trigger}
-          </button>
+          // Custom trigger zaten kendi buton elemanını taşır (ör. BalinaButton);
+          // burada tekrar <button>'a sarmıyoruz — aksi halde iç içe button olur
+          // (hydration hatası). BalinaPopover Popover.Trigger asChild ile sarar.
+          trigger
         ) : (
           // Entegrasyonlar sayfasındaki pill button stiline birebir.
           <button
@@ -100,7 +97,7 @@ export function FilterPopover({
         ) : (
           <div
             aria-label="Filtreler"
-            className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
+            className="flex max-h-[360px] flex-col gap-0 overflow-auto p-1 outline-none"
           >
             {list.map((f) => {
               // Aktif filtre: icon accent rengiyle vurgulanır (eskiden
@@ -115,7 +112,7 @@ export function FilterPopover({
                     // Date-range widget — popover içeriğe göre büyüsün.
                     f.type === 'text' && f.widget === 'date-range'
                       ? 'w-fit'
-                      : 'w-[206px]',
+                      : 'w-60',
                     'max-w-none overflow-hidden p-0',
                   ].join(' ')}
                   trigger={
@@ -232,14 +229,13 @@ function PopoverHeader({
   autoFocus?: boolean;
 }) {
   return (
-    <div
-      className="flex h-9 items-center gap-2 px-3.5 pr-3"
-      style={{ borderBottom: '0.5px solid var(--border)' }}
-    >
+    <div className="flex items-center gap-2 border-b border-[var(--balina-border-muted)] px-3 py-2">
       {leading}
-      {/* HeroUI Input/TextField focus ring'ini bastırmak yerine plain native
-          input kullanıyoruz — popover içi search satırı için zaten label /
-          description / validation gibi feature'lara ihtiyaç yok. */}
+      {/* Magnifier + plain input — diğer balina popover search'leri (entegrasyon
+          switcher, ai-context-picker) ile birebir aynı desen. */}
+      {!leading && (
+        <BalinaSearchIcon className="h-4 w-4 shrink-0 text-[var(--balina-icon-muted)]" />
+      )}
       <input
         type="text"
         value={value}
@@ -247,7 +243,7 @@ function PopoverHeader({
         placeholder={placeholder}
         aria-label={placeholder}
         autoFocus={autoFocus}
-        className="h-9 w-full border-0 bg-transparent p-0 text-[13px] font-normal text-foreground shadow-none outline-none ring-0 placeholder:text-muted focus:outline-none focus:ring-0"
+        className="h-6 w-full bg-transparent text-xs text-[var(--balina-text-loud)] outline-none placeholder:text-[var(--balina-text-muted)]"
       />
     </div>
   );
@@ -286,7 +282,7 @@ function SelectBody({
 
   if (isAddingNew) {
     return (
-      <div className="flex flex-col py-1">
+      <div className="flex flex-col p-1">
         <div className="flex h-8 items-center px-[14px]">
           <input
             type="text"
@@ -331,7 +327,7 @@ function SelectBody({
   ) : (
     <div
       aria-label={def.label}
-      className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
+      className="flex max-h-[360px] flex-col gap-0 overflow-auto p-1 outline-none"
     >
       {options.map((opt) => {
         // Figma 12249:4962 — her seçeneğin solunda 16×16 ikon; gap 8.
@@ -406,7 +402,7 @@ function MultiSelectBody({
   ) : (
     <div
       aria-label={def.label}
-      className="flex max-h-[360px] flex-col gap-0 overflow-auto py-1 outline-none"
+      className="flex max-h-[360px] flex-col gap-0 overflow-auto p-1 outline-none"
     >
       {options.map((opt) => {
         const isOn = def.value.has(opt.value);
@@ -525,7 +521,7 @@ function parseDateRangeString(s: string): DateRange | null {
 }
 
 // ---- Shared Dropdown.Item styling ----------------------------------------
-// HeroUI'ın native MenuItem'ı kullanılırken Figma'daki 32×206 satır görünümü
-// (Inter 500 13px, padding 14px, gap 8px, hover bg) için ortak className.
+// Design-system menü satırı — BalinaDropdownItem stiliyle uyumlu: yuvarlak
+// hover pill, balina token'ları. Liste kapsayıcısı p-1 verir (yan boşluk).
 const MENU_ITEM_CLASS =
-  'flex h-8 w-full cursor-pointer items-center gap-2 px-[14px] text-left text-[13px] font-medium leading-[1.193] text-foreground outline-none transition-colors hover:bg-foreground/[0.04] focus-visible:bg-foreground/[0.04]';
+  'text-body-small-medium flex h-8 w-full cursor-pointer items-center gap-2 rounded-[0.625rem] px-2 text-left text-[var(--balina-text-strong)] outline-none transition-colors hover:bg-[var(--balina-background-dark-muted)] focus-visible:bg-[var(--balina-background-dark-muted)]';

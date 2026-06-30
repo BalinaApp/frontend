@@ -15,6 +15,15 @@
   animation: caret-blink 1.25s ease-out infinite;
 }
 
+/* Entegrasyon hero'sundaki arka plan hayalet logoları — yumuşak süzülme. */
+@keyframes balina-hero-float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.04); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-balina-hero-float] { animation: none !important; }
+}
+
 /* ------------------------------------------------------------------
    Page background — neutral grey by default, soft 28%-alpha gradient
    when a theme accent is active. The dashboard wrapper consumes this

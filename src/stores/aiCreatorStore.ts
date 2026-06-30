@@ -33,6 +33,24 @@ export type GuidedMessage =
     }
   | {
       id: string;
+      kind: 'bot-image-set';
+      /** Aynı prompt'tan üretilen varyantlar (yan yana gösterilir). */
+      urls: string[];
+      /** Kullanıcının seçtiği varyant — pozlar buna uygulanır. */
+      selectedIndex?: number;
+      /** Poz sorusu cevaplandı mı (Evet/Hayır) — true ise soru gizlenir. */
+      posesResolved?: boolean;
+      createdAt?: number;
+    }
+  | {
+      id: string;
+      kind: 'bot-pose-set';
+      /** Poz başına üretilen sonuç (ad + görsel). */
+      items: { poseName: string; url: string }[];
+      createdAt?: number;
+    }
+  | {
+      id: string;
       kind: 'bot-video';
       url: string;
       caption?: string;
@@ -73,6 +91,7 @@ interface AiCreatorState {
   pushBot: (text: string) => void;
   pushUser: (text: string) => void;
   appendMessage: (message: GuidedMessage) => void;
+  updateMessage: (id: string, patch: Partial<GuidedMessage>) => void;
   removeMessage: (id: string) => void;
   setMode: (mode: ChatMode) => void;
   addAttachedImage: (url: string) => void;
@@ -88,6 +107,7 @@ const initialState: Omit<
   | 'pushBot'
   | 'pushUser'
   | 'appendMessage'
+  | 'updateMessage'
   | 'removeMessage'
   | 'setMode'
   | 'addAttachedImage'
@@ -127,6 +147,13 @@ export const useAiCreatorStore = create<AiCreatorState>()((set) => ({
 
   appendMessage: (message) =>
     set((s) => ({ messages: [...s.messages, { ...message, id: message.id || uid() }] })),
+
+  updateMessage: (id, patch) =>
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === id ? ({ ...m, ...patch } as GuidedMessage) : m,
+      ),
+    })),
 
   removeMessage: (id) =>
     set((s) => ({ messages: s.messages.filter((m) => m.id !== id) })),

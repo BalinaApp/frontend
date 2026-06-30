@@ -18,6 +18,7 @@ import {
   BalinaConfirmDialog,
   BalinaDropdown,
   BalinaDropdownItem,
+  BalinaInput,
   BalinaSwitch,
   BalinaTextarea,
   BalinaTextField,
@@ -48,13 +49,18 @@ const MAX_IMAGES = 8;
 function PriceField({
   value,
   onChange,
+  onCommit,
   placeholder = 'Ekle',
   ariaLabel,
+  readOnly = false,
 }: {
   value: string;
   onChange: (v: string) => void;
+  /** Blur/Enter'da canonical değerle çağrılır (kaydetme tetikleyici). */
+  onCommit?: (v: string) => void;
   placeholder?: string;
   ariaLabel?: string;
+  readOnly?: boolean;
 }) {
   const [focused, setFocused] = useState(false);
   const [draft, setDraft] = useState('');
@@ -78,29 +84,30 @@ function PriceField({
 
   const display = focused ? draft : formatTr(value);
 
+  // Design system input (BalinaInput) — ₺ leftIcon + tr formatlama + blur commit.
   return (
-    <div className="relative w-full">
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-zinc-500"
-      >
-        ₺
-      </span>
-      <input
-        type="text"
-        inputMode="decimal"
-        value={display}
-        onChange={(e) => handleChange(e.target.value)}
-        onFocus={() => {
-          setDraft(formatTr(value));
-          setFocused(true);
-        }}
-        onBlur={() => setFocused(false)}
-        aria-label={ariaLabel}
-        placeholder={placeholder}
-        className="h-9 w-full rounded-xl bg-transparent pl-8 pr-3 text-sm text-foreground outline-none transition-colors placeholder:text-zinc-500 hover:bg-foreground/[0.04] focus:bg-foreground/[0.06]"
-      />
-    </div>
+    <BalinaInput
+      value={display}
+      inputMode="decimal"
+      readOnly={readOnly}
+      aria-label={ariaLabel}
+      placeholder={placeholder}
+      leftIcon={<span className="text-sm text-[var(--balina-text-muted)]">₺</span>}
+      wrapperClassName="w-full max-w-[16rem]"
+      onChange={(e) => handleChange(e.target.value)}
+      onFocus={() => {
+        if (readOnly) return;
+        setDraft(formatTr(value));
+        setFocused(true);
+      }}
+      onBlur={() => {
+        setFocused(false);
+        if (!readOnly) onCommit?.(value);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+      }}
+    />
   );
 }
 
@@ -280,7 +287,24 @@ export default function ProductEditPage() {
     clearSelectedProduct,
     updateProduct,
     updateVariationStock,
+    updateVariationPrice,
+    updateStoreProductPrice,
   } = useInventoryStore();
+  // Per-pazaryeri fiyat taslakları (productId → string). Boşsa s.price gösterilir.
+  const [storePriceDrafts, setStorePriceDrafts] = useState<Record<string, string>>({});
+  const commitStorePrice = async (pid: string, raw: string) => {
+    if (!currentCompany?.id) return;
+    const parsed = Number(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    const res = await updateStoreProductPrice(currentCompany.id, pid, parsed);
+    if (!res) {
+      toast.danger('Fiyat güncellenemedi');
+      return;
+    }
+    if (res.pushed) toast.success('Fiyat güncellendi ve pazaryerine gönderildi');
+    else if (res.pushError) toast.warning(`Balina'da güncellendi · ${res.pushError}`);
+    else toast.success('Fiyat güncellendi');
+  };
 
   const aiIntegrations = useAiStore((s) => s.integrations);
   const fetchAiIntegrations = useAiStore((s) => s.fetchIntegrations);
@@ -398,6 +422,9 @@ export default function ProductEditPage() {
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [isActive, setIsActive] = useState(true);
   const [variationStockEdits, setVariationStockEdits] = useState<
+    Record<string, string>
+  >({});
+  const [variationPriceEdits, setVariationPriceEdits] = useState<
     Record<string, string>
   >({});
   const [groupingAxis, setGroupingAxis] = useState<string>('');
@@ -863,23 +890,51 @@ export default function ProductEditPage() {
                 <PriceField
                   value={price}
                   onChange={setPrice}
+                  onCommit={(v) => {
+                    // Tekil mağaza ürünü — fiyatı kaydet + (mümkünse) pazaryerine push.
+                    const cur =
+                      selectedProduct.price != null
+                        ? String(selectedProduct.price)
+                        : '';
+                    if (v !== cur) commitStorePrice(selectedProduct.id, v);
+                  }}
+                  readOnly={selectedProduct.productType === 'variable'}
+                  placeholder={
+                    selectedProduct.productType === 'variable'
+                      ? 'Varyasyon fiyatları'
+                      : 'Ekle'
+                  }
                   ariaLabel="Mağaza fiyatı"
                 />
               </FieldRow>
             ) : (
-              mappingStores.map((s) => (
-                <FieldRow
-                  key={s.storeId}
-                  icon={<StoreIcon name={s.storeName} />}
-                  label={storeFiyatLabel({ name: s.storeName })}
-                >
-                  <PriceField
-                    value={price}
-                    onChange={setPrice}
-                    ariaLabel={`${s.storeName} fiyatı`}
-                  />
-                </FieldRow>
-              ))
+              mappingStores.map((s) => {
+                const isVariable = s.productType === 'variable';
+                const draft =
+                  storePriceDrafts[s.productId] ??
+                  (s.price != null ? String(s.price) : '');
+                return (
+                  <FieldRow
+                    key={s.storeId}
+                    icon={<StoreIcon name={s.storeName} />}
+                    label={storeFiyatLabel({ name: s.storeName })}
+                  >
+                    <PriceField
+                      value={draft}
+                      readOnly={isVariable}
+                      placeholder={isVariable ? 'Varyasyon fiyatları' : 'Ekle'}
+                      onChange={(v) =>
+                        setStorePriceDrafts((prev) => ({ ...prev, [s.productId]: v }))
+                      }
+                      onCommit={(v) => {
+                        const cur = s.price != null ? String(s.price) : '';
+                        if (v !== cur) commitStorePrice(s.productId, v);
+                      }}
+                      ariaLabel={`${s.storeName} fiyatı`}
+                    />
+                  </FieldRow>
+                );
+              })
             )}
             <FieldRow
               icon={<Box className="h-4 w-4 text-foreground/70" />}
@@ -922,6 +977,9 @@ export default function ProductEditPage() {
                         stock:
                           variationStockEdits[v.id] ??
                           v.stockQuantity.toString(),
+                        price:
+                          variationPriceEdits[v.id] ??
+                          (v.price != null ? v.price.toString() : ''),
                       };
                     }),
                   }),
@@ -953,6 +1011,40 @@ export default function ProductEditPage() {
                     ...prev,
                     [key]: value,
                   }));
+                }}
+                onPriceChange={(key, value) => {
+                  setVariationPriceEdits((prev) => ({
+                    ...prev,
+                    [key]: value,
+                  }));
+                }}
+                onPriceCommit={async (key) => {
+                  if (!currentCompany?.id) return;
+                  const raw = variationPriceEdits[key];
+                  if (raw === undefined) return;
+                  const parsed = Number(raw);
+                  if (!Number.isFinite(parsed) || parsed < 0) {
+                    toast.danger('Geçersiz fiyat');
+                    return;
+                  }
+                  const ok = await updateVariationPrice(
+                    currentCompany.id,
+                    key,
+                    parsed,
+                  );
+                  if (ok) {
+                    toast.success('Fiyat güncellendi');
+                    setVariationPriceEdits((prev) => {
+                      const next = { ...prev };
+                      delete next[key];
+                      return next;
+                    });
+                  } else {
+                    toast.danger(
+                      useInventoryStore.getState().error ||
+                        'Fiyat güncellenemedi',
+                    );
+                  }
                 }}
                 onImageAi={() => openAiImageModalOrRedirect()}
                 onImageFile={() => handleFilePick()}

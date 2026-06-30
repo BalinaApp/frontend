@@ -75,12 +75,24 @@ export interface ProductType {
   prompt?: string;
 }
 
+/** Poz şablonu — kullanıcı entegrasyon ayarından ekler. Görsel üretiminde
+ *  seçilen kaynak görselin aynısı her poz için yeniden üretilir. */
+export interface ImagePose {
+  id: string;
+  /** Poz adı (Önden, Yandan, ...). Boş bırakılabilir. */
+  name?: string;
+  /** Poz referans görseli — data URL veya kalıcı URL. */
+  referenceImageUrl: string;
+}
+
 export interface FalIntegration {
   id: string;
   name: string;
   apiKeyTail: string | null;
   models: string[];
   productTypes: ProductType[];
+  /** Poz şablonları — entegrasyon ayarından eklenir. */
+  imagePoses?: ImagePose[];
   isActive: boolean;
   /** Üretilen görsellerin SKU prefix'i (örn 'KZ'). Chat'te kullanıcı kod
    *  girer; tam SKU `${codePrefix}-${productCode}` olur. */
@@ -96,6 +108,8 @@ export interface FalIntegration {
   videoResolution?: string;
   /** Ses üretimi (yalnızca Veo). */
   videoGenerateAudio?: boolean;
+  /** Video üretiminde kullanılacak poz id (imagePoses içinden). */
+  videoPoseId?: string;
   /** ===== Görsel üretim varsayılanları (Fal yönet modalı) ===== */
   /** Varsayılan görsel modeli (Fal id). Boşsa FASHN sanal deneme. */
   imageModel?: string;
@@ -553,12 +567,14 @@ interface AiState {
       models?: string[];
       isActive?: boolean;
       productTypes?: ProductType[];
+      imagePoses?: ImagePose[];
       codePrefix?: string;
       videoModel?: string;
       videoAspectRatio?: string;
       videoDuration?: string;
       videoResolution?: string;
       videoGenerateAudio?: boolean;
+      videoPoseId?: string;
       imageModel?: string;
       imageGenerationMode?: string;
       imageAspectRatio?: string;
@@ -592,12 +608,14 @@ interface AiState {
       models?: string[];
       isActive?: boolean;
       productTypes?: ProductType[];
+      imagePoses?: ImagePose[];
       codePrefix?: string;
       videoModel?: string;
       videoAspectRatio?: string;
       videoDuration?: string;
       videoResolution?: string;
       videoGenerateAudio?: boolean;
+      videoPoseId?: string;
       imageModel?: string;
       imageGenerationMode?: string;
       imageAspectRatio?: string;
@@ -638,6 +656,37 @@ interface AiState {
     }
   ) => Promise<{ url: string; error?: string }>;
 
+  /** Guided akış — aynı girdiyle `count` adet (varsayılan 3) paralel görsel
+   *  üretir, varyantları yan yana göstermek için url dizisi döner. */
+  generateImagesRaw: (
+    companyId: string,
+    args: {
+      prompt: string;
+      model?: string;
+      imageSize?: FalImageSize;
+      integrationId?: string;
+      imageUrls?: string[];
+      generationMode?: FashnGenerationMode;
+    },
+    count?: number,
+  ) => Promise<{ urls: string[]; error?: string }>;
+
+  /** Seçilen kaynak görseli, entegrasyonda kayıtlı her poz için yeniden üretir.
+   *  Backend `/generate/poses` çağrılır; poz başına bir sonuç döner. */
+  generatePoseVariantsRaw: (
+    companyId: string,
+    args: {
+      sourceImageUrl: string;
+      prompt?: string;
+      integrationId?: string;
+      /** Yalnızca bu poz id'leri (tek/bir kısım yeniden üretim). Boşsa hepsi. */
+      poseIds?: string[];
+    },
+  ) => Promise<{
+    results: { poseId: string; poseName: string; url: string }[];
+    error?: string;
+  }>;
+
   /** Guided akış için Kling video üretimi.
    *  - `imageUrl`     → start frame (1. üretilen görsel)
    *  - `middleImageUrl` → orta frame (2. üretilen — yakın çekim)
@@ -653,6 +702,13 @@ interface AiState {
       integrationId?: string;
     }
   ) => Promise<{ url: string; error?: string }>;
+
+  /** Üretilen videonun üzerine sabit kod (pill PNG) bastırır (backend ffmpeg).
+   *  Başarısızsa orijinal url döner. */
+  stampVideoCodeRaw: (
+    companyId: string,
+    args: { videoUrl: string; pillPng: string }
+  ) => Promise<{ url: string }>;
 
   /** OpenAI chat completions — metin üretici (açıklama, sohbet vs.). */
   generateText: (
@@ -1170,6 +1226,103 @@ export const useAiStore = create<AiState>((set, get) => ({
     }
   },
 
+  generateImagesRaw: async (companyId, args, count = 3) => {
+    const { selectedImageIntegrationId, selectedFalId } = get();
+    const integrationId =
+      args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined;
+    const extractMsg = (err: unknown) => {
+      const e = err as {
+        response?: { data?: { message?: string | string[] } };
+        message?: string;
+      };
+      return (
+        (Array.isArray(e?.response?.data?.message)
+          ? e.response.data.message.join(', ')
+          : e?.response?.data?.message) ||
+        e?.message ||
+        'Bilinmeyen hata'
+      );
+    };
+    // Her varyant bağımsız tek bir istek (numImages:1) — varyantların farklı
+    // çıkması ve tek başarısızlığın diğerlerini düşürmemesi için paralel.
+    const reqs = Array.from({ length: Math.max(1, count) }, () =>
+      api.post<{ images: AiGeneratedImage[] }>(
+        `/company/${companyId}/ai/generate/image`,
+        {
+          prompt: args.prompt,
+          model: args.model,
+          imageSize: args.imageSize,
+          numImages: 1,
+          integrationId,
+          imageUrls: args.imageUrls,
+          generationMode: args.generationMode,
+        },
+        { timeout: 190_000 },
+      ),
+    );
+    const settled = await Promise.allSettled(reqs);
+    const urls: string[] = [];
+    let firstError: string | undefined;
+    for (const s of settled) {
+      if (s.status === 'fulfilled') {
+        const url = s.value.data.images?.[0]?.url;
+        if (url) urls.push(url);
+      } else if (!firstError) {
+        firstError = extractMsg(s.reason);
+      }
+    }
+    return urls.length ? { urls } : { urls: [], error: firstError ?? 'Üretim başarısız' };
+  },
+
+  generatePoseVariantsRaw: async (companyId, args) => {
+    const { selectedImageIntegrationId, selectedFalId } = get();
+    try {
+      const { data } = await api.post<{
+        results: {
+          poseId: string;
+          poseName: string;
+          image: AiGeneratedImage | null;
+          error?: string;
+        }[];
+      }>(
+        `/company/${companyId}/ai/generate/poses`,
+        {
+          sourceImageUrl: args.sourceImageUrl,
+          prompt: args.prompt,
+          poseIds: args.poseIds,
+          integrationId:
+            args.integrationId ?? selectedImageIntegrationId ?? selectedFalId ?? undefined,
+        },
+        // Pozlar backend'de paralel üretilir; nano-banana-pro yavaş + FAL kuyruğu
+        // olabildiğinden frontend erken pes etmesin (backend HTTP 12dk). 11dk veriyoruz.
+        { timeout: 11 * 60_000 },
+      );
+      const results = (data.results ?? [])
+        .map((r) => ({
+          poseId: r.poseId,
+          poseName: r.poseName,
+          url: r.image?.url ?? '',
+        }))
+        .filter((r) => r.url);
+      return results.length
+        ? { results }
+        : { results: [], error: 'Poz üretimi başarısız' };
+    } catch (err: unknown) {
+      const e = err as {
+        response?: { data?: { message?: string | string[] } };
+        message?: string;
+      };
+      const msg =
+        (Array.isArray(e?.response?.data?.message)
+          ? e.response.data.message.join(', ')
+          : e?.response?.data?.message) ||
+        e?.message ||
+        'Bilinmeyen hata';
+      console.error('[generatePoseVariantsRaw] failed:', msg, err);
+      return { results: [], error: msg };
+    }
+  },
+
   generateVideoRaw: async (companyId, args) => {
     const { selectedVideoIntegrationId, selectedFalId } = get();
     try {
@@ -1205,6 +1358,21 @@ export const useAiStore = create<AiState>((set, get) => ({
         'Bilinmeyen hata';
       console.error('[generateVideoRaw] failed:', e?.response?.status, msg, err);
       return { url: '', error: msg };
+    }
+  },
+
+  stampVideoCodeRaw: async (companyId, args) => {
+    try {
+      const { data } = await api.post<{ url: string }>(
+        `/company/${companyId}/ai/generate/video/stamp-code`,
+        { videoUrl: args.videoUrl, pillPng: args.pillPng },
+        { timeout: 5 * 60_000 },
+      );
+      return { url: data.url || args.videoUrl };
+    } catch (err) {
+      // Hata olursa kodsuz videoyu kaybetme — orijinali döndür.
+      console.error('[stampVideoCodeRaw] failed:', err);
+      return { url: args.videoUrl };
     }
   },
 

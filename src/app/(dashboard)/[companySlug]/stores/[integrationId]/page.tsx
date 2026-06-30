@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Check,
@@ -8,10 +9,25 @@ import {
   ChevronDown,
   ArrowUpRightFromSquare as ExternalLink,
   ArrowsRotateRight as Loader2,
+  At,
+  Globe,
+  Hashtag,
+  Key,
+  Link,
+  MagnifierPlus,
+  Pencil,
+  Person,
+  Picture,
+  Plus,
+  Tag,
+  TrashBin,
+  Video,
+  Xmark,
 } from '@gravity-ui/icons';
 import {
   BalinaAlert,
   BalinaButton,
+  BalinaConfirmDialog,
   BalinaInput,
   BalinaIntegrationIcon,
   BalinaPopover,
@@ -26,12 +42,12 @@ import { FalMark } from '@/components/icons/fal-mark';
 import { BizimhesapMark } from '@/components/icons/bizimhesap-mark';
 import { ParasutMark } from '@/components/icons/parasut-mark';
 import { TiktokMark } from '@/components/icons/tiktok-mark';
-import { BalinaOsMark } from '@/components/icons/balinaos-mark';
 import { PageHeader } from '@/components/layout/page-header';
 import { useWorkspaceTab } from '@/components/layout/workspace-tabs';
 import { useCompanyStore } from '@/stores/companyStore';
 import { useStoreStore } from '@/stores/storeStore';
-import { useAiStore, FAL_MODEL_CATALOG, type AiIntegration } from '@/stores/aiStore';
+import { useAiStore, FAL_MODEL_CATALOG, type AiIntegration, type ImagePose } from '@/stores/aiStore';
+import { resizeImageToDataUrl } from '@/lib/image-resize';
 import { useInvoiceIntegrationStore } from '@/stores/invoiceIntegrationStore';
 import { useInstagramIntegrationStore } from '@/stores/instagramIntegrationStore';
 import { useTiktokIntegrationStore } from '@/stores/tiktokIntegrationStore';
@@ -75,16 +91,18 @@ const INITIAL_FORM = {
   customerNumber: '',
 };
 
-type TileSize = 'header' | 'sm' | 'pill';
+type TileSize = 'hero' | 'header' | 'sm' | 'pill';
 
 /** Entegrasyon logosu — Etsy özel mark, diğerleri görsel. */
 function IntegrationTile({ item, size }: { item: Marketplace; size: TileSize }) {
   const cls =
-    size === 'header'
-      ? 'h-12 w-12 rounded-2xl'
-      : size === 'sm'
-        ? 'h-7 w-7 rounded-lg'
-        : 'h-5 w-5 rounded-md';
+    size === 'hero'
+      ? 'h-20 w-20 rounded-[1.4rem]'
+      : size === 'header'
+        ? 'h-12 w-12 rounded-2xl'
+        : size === 'sm'
+          ? 'h-7 w-7 rounded-lg'
+          : 'h-5 w-5 rounded-md';
   if (item.id === 'ETSY') return <EtsyMark className={cls} role="img" aria-label={item.name} />;
   if (item.id === 'FAL_AI') return <FalMark className={cls} role="img" aria-label={item.name} />;
   if (item.id === 'TIKTOK') return <TiktokMark className={cls} role="img" aria-label={item.name} />;
@@ -94,7 +112,7 @@ function IntegrationTile({ item, size }: { item: Marketplace; size: TileSize }) 
   if (!src) {
     return (
       <div className={`${cls} flex items-center justify-center bg-[var(--balina-background-dark-muted)] text-[var(--balina-icon-muted)]`}>
-        <BalinaIntegrationIcon className={size === 'header' ? 'h-6 w-6' : size === 'sm' ? 'h-4 w-4' : 'h-3 w-3'} />
+        <BalinaIntegrationIcon className={size === 'hero' ? 'h-10 w-10' : size === 'header' ? 'h-6 w-6' : size === 'sm' ? 'h-4 w-4' : 'h-3 w-3'} />
       </div>
     );
   }
@@ -120,6 +138,149 @@ function BackButton({ onClick }: { onClick: () => void }) {
   );
 }
 
+const HERO_GRADIENT =
+  'bg-[radial-gradient(80%_110%_at_12%_10%,#cfe0ff_0%,transparent_55%),radial-gradient(70%_100%_at_92%_88%,#ffe0cf_0%,transparent_55%),radial-gradient(60%_90%_at_55%_50%,#efe6fb_0%,transparent_60%),linear-gradient(135deg,#eef3ff_0%,#f4f1fb_50%,#f6f4f1_100%)]';
+
+/** Tam ekranı kaplayan görsel büyütme overlay'i — AI panelindeki önizleme gibi.
+ *  ESC veya boşluğa/X'e tıklayınca kapanır. document.body'ye portal'lanır ki
+ *  sidebar dahil tüm ekranı kaplasın. */
+function ImageZoomOverlay({ src, onClose }: { src: string; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+  if (typeof document === 'undefined') return null;
+  return createPortal(
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-6 backdrop-blur-xl sm:p-12"
+    >
+      <BalinaButton
+        variant="soft"
+        size="large"
+        aria-label="Kapat"
+        onClick={onClose}
+        className="absolute right-4 top-4 z-10"
+        leftIcon={<Xmark className="h-4 w-4" />}
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[85vh] max-w-full rounded-lg object-contain"
+      />
+    </div>,
+    document.body,
+  );
+}
+
+/** Entegrasyon hero kartı — büyük logo (soluk hayalet kopyalarla) + altta bilgi
+ *  şeridi. Bağlıysa "Bağlandı · Tarih · Durum (Aktif)"; bağlı değilse "Bağlı değil".
+ *  Tüm (sosyal olmayan) entegrasyonlarda, bağlı olsun olmasın gösterilir. */
+function ConnectedHero({
+  item,
+  label,
+  date,
+  active,
+  connected,
+}: {
+  item: Marketplace;
+  label: string;
+  date: string | null;
+  active: boolean;
+  connected: boolean;
+}) {
+  const dateText = date
+    ? new Date(date).toLocaleDateString('tr-TR', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—';
+
+  return (
+    <div className="relative overflow-hidden rounded-[1.5rem] shadow-[0_0_0_0.5px_rgba(0,0,0,0.06)]">
+      <div className={`absolute inset-0 ${HERO_GRADIENT}`} />
+      {/* Logo sahnesi — merkez büyük + arka planda yumuşak süzülen hayalet kopyalar. */}
+      <div className="relative flex h-60 items-center justify-center">
+        <div className="pointer-events-none absolute left-[24%] top-1/2 -translate-y-1/2">
+          <div
+            data-balina-hero-float
+            className="opacity-30 blur-[1px]"
+            style={{ animation: 'balina-hero-float 7s ease-in-out infinite' }}
+          >
+            <IntegrationTile item={item} size="header" />
+          </div>
+        </div>
+        <div className="pointer-events-none absolute right-[24%] top-1/2 -translate-y-1/2">
+          <div
+            data-balina-hero-float
+            className="opacity-30 blur-[1px]"
+            style={{ animation: 'balina-hero-float 7s ease-in-out infinite', animationDelay: '-3.5s' }}
+          >
+            <IntegrationTile item={item} size="header" />
+          </div>
+        </div>
+        <div className="pointer-events-none absolute left-[44%] top-[24%]">
+          <div
+            data-balina-hero-float
+            className="opacity-20 blur-[2px]"
+            style={{ animation: 'balina-hero-float 9s ease-in-out infinite', animationDelay: '-1.5s' }}
+          >
+            <IntegrationTile item={item} size="sm" />
+          </div>
+        </div>
+        {/* Merkez logo — beyaz kutu yok, doğrudan; yumuşak gölge. */}
+        <div className="relative drop-shadow-[0_20px_40px_rgba(0,0,0,0.18)]">
+          <IntegrationTile item={item} size="hero" />
+        </div>
+      </div>
+      {/* Bilgi şeridi — bağlıysa 3 kolon, değilse tek "Bağlı değil" durumu.
+          backdrop-blur parent'ın rounded clip'ini bozduğu için alt radius'u
+          şeride ayrıca veriyoruz. */}
+      <div className="relative grid grid-cols-3 gap-3 rounded-b-[1.5rem] border-t border-white/50 bg-white/45 px-5 py-4 backdrop-blur-md">
+        {connected ? (
+          <>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-xs text-muted">Bağlandı</span>
+              <span className="truncate text-sm font-medium text-foreground">{label}</span>
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-xs text-muted">Tarih</span>
+              <span className="truncate text-sm font-medium text-foreground">{dateText}</span>
+            </div>
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-xs text-muted">Durum</span>
+              <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-[#16a34a]' : 'bg-[var(--balina-icon-muted)]'}`}
+                />
+                {active ? 'Aktif' : 'Pasif'}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="col-span-3 flex min-w-0 flex-col gap-0.5">
+            <span className="text-xs text-muted">Durum</span>
+            <span className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--balina-icon-muted)]" />
+              Bağlı değil
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const FAL_IMAGE_MODELS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'image').map((m) => ({ value: m.id, label: m.label }));
 const FAL_VIDEO_MODELS = FAL_MODEL_CATALOG.filter((m) => m.kind === 'video').map((m) => ({ value: m.id, label: m.label }));
 const ASPECT_OPTS = [
@@ -140,6 +301,38 @@ const DURATION_OPTS = [
   { value: '10', label: '10 saniye' },
 ];
 
+/** Bağlama adımının key'ine göre anlamlı ikon — tüm entegrasyonlar için ortak. */
+function stepKeyIcon(key: string): React.ReactNode {
+  const cls = 'h-4 w-4';
+  switch (key) {
+    case 'name':
+      return <Tag className={cls} />;
+    case 'url':
+    case 'shopDomain':
+      return <Globe className={cls} />;
+    case 'accessToken':
+    case 'apiKey':
+    case 'apiSecret':
+    case 'token':
+    case 'clientSecret':
+    case 'password':
+    case 'hbPassword':
+      return <Key className={cls} />;
+    case 'username':
+    case 'hbUsername':
+      return <At className={cls} />;
+    case 'sellerId':
+    case 'merchantId':
+    case 'firmId':
+    case 'clientId':
+    case 'parasutCompanyId':
+    case 'customerNumber':
+      return <Hashtag className={cls} />;
+    default:
+      return <Pencil className={cls} />;
+  }
+}
+
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4">
@@ -159,7 +352,7 @@ function AiManageAccordion({
 }) {
   const updateIntegration = useAiStore((s) => s.updateIntegration);
   const fetchIntegrations = useAiStore((s) => s.fetchIntegrations);
-  const [open, setOpen] = useState<'account' | 'image' | 'video' | null>('account');
+  const [open, setOpen] = useState<'account' | 'image' | 'poses' | 'video' | null>('account');
   const [saving, setSaving] = useState(false);
   const [active, setActive] = useState(integration.isActive);
   const [showKey, setShowKey] = useState(false);
@@ -175,7 +368,49 @@ function AiManageAccordion({
     model: integration.videoModel ?? '',
     aspect: integration.videoAspectRatio ?? '9:16',
     duration: integration.videoDuration ?? '10',
+    poseId: integration.videoPoseId ?? '',
   });
+  // ===== Poz şablonları =====
+  const [poses, setPoses] = useState<ImagePose[]>(integration.imagePoses ?? []);
+  const [posesSaving, setPosesSaving] = useState(false);
+  const [poseZoom, setPoseZoom] = useState<string | null>(null);
+  const [poseToDelete, setPoseToDelete] = useState<ImagePose | null>(null);
+  const poseFileRef = useRef<HTMLInputElement>(null);
+
+  const handleAddPoses = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const added: ImagePose[] = [];
+    for (const file of imgs) {
+      const url = await resizeImageToDataUrl(file, 1024, 0.9).catch(() => '');
+      if (url) {
+        added.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          name: '',
+          referenceImageUrl: url,
+        });
+      }
+    }
+    if (added.length) setPoses((p) => [...p, ...added]);
+    if (poseFileRef.current) poseFileRef.current.value = '';
+  };
+
+  const savePoses = async () => {
+    setPosesSaving(true);
+    try {
+      // Boş adları sıra numarasıyla doldur (backend de güvence sağlar).
+      const clean = poses
+        .filter((p) => p.referenceImageUrl)
+        .map((p, i) => ({ ...p, name: p.name?.trim() || `Poz ${i + 1}` }));
+      await updateIntegration(companyId, integration.id, { imagePoses: clean });
+      toast.success('Poz ayarları kaydedildi');
+      await fetchIntegrations(companyId);
+    } catch {
+      toast.danger('Pozlar kaydedilemedi');
+    } finally {
+      setPosesSaving(false);
+    }
+  };
 
   const save = async (args: Record<string, string>, msg: string) => {
     setSaving(true);
@@ -218,15 +453,17 @@ function AiManageAccordion({
   };
 
   const sections: Array<{
-    key: 'account' | 'image' | 'video';
+    key: 'account' | 'image' | 'poses' | 'video';
     title: string;
     desc: string;
+    icon: React.ReactNode;
     body: React.ReactNode;
   }> = [
     {
       key: 'account',
       title: 'Hesap Ayarları',
       desc: 'Durum ve API anahtarı',
+      icon: <Key className="h-4 w-4" />,
       body: (
         <div className="flex flex-col gap-3">
           <FieldRow label="Durum">
@@ -268,6 +505,7 @@ function AiManageAccordion({
       key: 'image' as const,
       title: 'Görsel ayarları',
       desc: 'Model, mod, oran ve çözünürlük',
+      icon: <Picture className="h-4 w-4" />,
       body: (
         <div className="flex flex-col gap-3">
           <FieldRow label="Model">
@@ -291,9 +529,91 @@ function AiManageAccordion({
       ),
     },
     {
+      key: 'poses' as const,
+      title: 'Poz ayarları',
+      desc: 'Üretilen görseli farklı pozlarda çoğalt',
+      icon: <Person className="h-4 w-4" />,
+      body: (
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted">
+            Her poz için bir referans görsel ekleyin. AI’da bir görsel ürettiğinizde,
+            seçtiğiniz görselin aynısı buradaki her poz için yeniden üretilir.
+          </p>
+          {poses.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-black/[0.12] px-4 py-6 text-center text-sm text-muted">
+              Henüz poz eklenmedi.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {poses.map((pose, i) => (
+                <div key={pose.id} className="flex items-center gap-3 rounded-xl border border-black/[0.06] p-2">
+                  {/* Tıklayınca tam ekran büyür. */}
+                  <button
+                    type="button"
+                    onClick={() => setPoseZoom(pose.referenceImageUrl)}
+                    aria-label={`${pose.name || `Poz ${i + 1}`} görselini büyüt`}
+                    className="group relative h-14 w-14 shrink-0 overflow-hidden rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={pose.referenceImageUrl}
+                      alt={pose.name || `Poz ${i + 1}`}
+                      className="h-full w-full object-cover"
+                    />
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/35 group-hover:opacity-100">
+                      <MagnifierPlus className="h-4 w-4" />
+                    </span>
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <BalinaTextField
+                      value={pose.name ?? ''}
+                      onChange={(v) =>
+                        setPoses((arr) => arr.map((p) => (p.id === pose.id ? { ...p, name: v } : p)))
+                      }
+                      placeholder={`Poz ${i + 1} (örn. Önden)`}
+                    />
+                  </div>
+                  <BalinaButton
+                    size="small"
+                    variant="ghost"
+                    aria-label="Pozu sil"
+                    leftIcon={<TrashBin className="h-4 w-4" />}
+                    className="[&>svg]:!text-[var(--accent-red)] hover:enabled:!bg-[color-mix(in_oklch,var(--accent-red)_12%,transparent)]"
+                    onClick={() => setPoseToDelete(pose)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+          <input
+            ref={poseFileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => handleAddPoses(e.target.files)}
+          />
+          <div className="flex items-center justify-between">
+            <BalinaButton
+              size="small"
+              variant="soft"
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => poseFileRef.current?.click()}
+            >
+              Poz ekle
+            </BalinaButton>
+            <BalinaButton size="small" disabled={posesSaving} onClick={savePoses}>
+              {posesSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Kaydet'}
+            </BalinaButton>
+          </div>
+        </div>
+      ),
+    },
+    {
       key: 'video' as const,
       title: 'Video ayarları',
       desc: 'Model, oran ve süre',
+      icon: <Video className="h-4 w-4" />,
       body: (
         <div className="flex flex-col gap-3">
           <FieldRow label="Model">
@@ -305,8 +625,16 @@ function AiManageAccordion({
           <FieldRow label="Süre">
             <BalinaSelect options={DURATION_OPTS} value={vid.duration} onValueChange={(v) => setVid((s) => ({ ...s, duration: v }))} />
           </FieldRow>
+          <FieldRow label="Video pozu">
+            <BalinaSelect
+              options={poses.map((p, i) => ({ value: p.id, label: p.name || `Poz ${i + 1}` }))}
+              value={vid.poseId}
+              onValueChange={(v) => setVid((s) => ({ ...s, poseId: v }))}
+              placeholder="Poz seçin"
+            />
+          </FieldRow>
           <div className="flex justify-end">
-            <BalinaButton size="small" disabled={saving} onClick={() => save({ videoModel: vid.model, videoAspectRatio: vid.aspect, videoDuration: vid.duration }, 'Video ayarları kaydedildi')}>
+            <BalinaButton size="small" disabled={saving} onClick={() => save({ videoModel: vid.model, videoAspectRatio: vid.aspect, videoDuration: vid.duration, videoPoseId: vid.poseId }, 'Video ayarları kaydedildi')}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Kaydet'}
             </BalinaButton>
           </div>
@@ -317,7 +645,8 @@ function AiManageAccordion({
   ];
 
   return (
-    <div className="w-full divide-y divide-black/[0.06] rounded-2xl bg-white shadow-[0_0_0_0.5px_rgba(0,0,0,0.06)]">
+    <>
+      <div className="w-full divide-y divide-black/[0.06] rounded-2xl bg-white shadow-[0_0_0_0.5px_rgba(0,0,0,0.06)]">
       {sections.map((sec) => {
         const isOpen = open === sec.key;
         return (
@@ -328,7 +657,7 @@ function AiManageAccordion({
               className="flex items-center gap-3 px-4 py-3.5 text-left outline-none"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] text-[var(--balina-icon-muted)]">
-                <BalinaIntegrationIcon className="h-4 w-4" />
+                {sec.icon}
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-sm font-medium text-[var(--balina-text-loud)]">{sec.title}</span>
@@ -340,7 +669,28 @@ function AiManageAccordion({
           </div>
         );
       })}
-    </div>
+      </div>
+      {poseZoom && (
+        <ImageZoomOverlay src={poseZoom} onClose={() => setPoseZoom(null)} />
+      )}
+      <BalinaConfirmDialog
+        open={!!poseToDelete}
+        onOpenChange={(o) => {
+          if (!o) setPoseToDelete(null);
+        }}
+        title="Pozu sil"
+        description="Bu pozu silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
+        confirmLabel="Sil"
+        cancelLabel="Vazgeç"
+        danger
+        onConfirm={() => {
+          if (poseToDelete) {
+            setPoses((arr) => arr.filter((p) => p.id !== poseToDelete.id));
+          }
+          setPoseToDelete(null);
+        }}
+      />
+    </>
   );
 }
 
@@ -459,11 +809,12 @@ function StoreManageAccordion({
     }
   };
 
-  const sections: Array<{ key: 'sync' | 'fees' | 'trendyol' | 'wcsc'; title: string; desc: string; body: React.ReactNode }> = [
+  const sections: Array<{ key: 'sync' | 'fees' | 'trendyol' | 'wcsc'; title: string; desc: string; icon: React.ReactNode; body: React.ReactNode }> = [
     {
       key: 'sync',
       title: 'Senkronizasyon',
       desc: 'Sipariş ve ürünleri güncelle',
+      icon: <Loader2 className="h-4 w-4" />,
       body: (
         <div className="flex flex-col gap-3">
           <p className="text-xs text-muted">Mağazadaki sipariş ve ürünleri şimdi içe aktar.</p>
@@ -481,6 +832,7 @@ function StoreManageAccordion({
             key: 'trendyol' as const,
             title: 'Webhook & Sipariş',
             desc: 'Webhook aboneliği ve son siparişler',
+            icon: <BalinaIntegrationIcon className="h-4 w-4" />,
             body: (
               <div className="flex flex-col gap-3">
                 <p className="text-xs text-muted">
@@ -505,6 +857,7 @@ function StoreManageAccordion({
             key: 'wcsc' as const,
             title: 'Stok Bağlayıcı (WCSC)',
             desc: 'WooCommerce stok senkronizasyonu',
+            icon: <Key className="h-4 w-4" />,
             body: (
               <div className="flex flex-col gap-3">
                 <FieldRow label="API Key">
@@ -543,6 +896,7 @@ function StoreManageAccordion({
       key: 'fees',
       title: 'Komisyon & Kargo',
       desc: 'Kâr hesabı için oranlar',
+      icon: <BalinaIntegrationIcon className="h-4 w-4" />,
       body: (
         <div className="flex flex-col gap-3">
           <FieldRow label="Komisyon (%)">
@@ -573,7 +927,7 @@ function StoreManageAccordion({
               className="flex items-center gap-3 px-4 py-3.5 text-left outline-none"
             >
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] text-[var(--balina-icon-muted)]">
-                <BalinaIntegrationIcon className="h-4 w-4" />
+                {sec.icon}
               </div>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-sm font-medium text-[var(--balina-text-loud)]">{sec.title}</span>
@@ -829,6 +1183,24 @@ export default function IntegrationConnectPage() {
     : undefined;
   const isConnected =
     !!connectedStore || !!connectedAi || !!connectedInvoice || !!connectedCargo;
+
+  // Sosyal (Instagram/TikTok) bağlı durumu — herhangi bir mağaza hesabı bağlıysa.
+  const socialConfigs =
+    social === 'instagram' ? igStore.configs : social === 'tiktok' ? ttStore.configs : null;
+  const socialConnectedCfg = socialConfigs
+    ? Object.values(socialConfigs).find((c) => c?.connected)
+    : undefined;
+  const socialConnected = !!socialConnectedCfg;
+
+  // Hero meta — sosyalde kendi bağlı durumu, diğerlerinde mağaza/AI/fatura/kargo.
+  const heroConnected = social ? socialConnected : isConnected;
+  const connLabel = social
+    ? socialConnectedCfg?.username
+      ? `@${socialConnectedCfg.username}`
+      : item.name
+    : connectedAi?.name || connectedStore?.name || item.name;
+  const connDate = connectedAi?.createdAt ?? connectedStore?.createdAt ?? null;
+  const connActive = connectedAi ? connectedAi.isActive : true;
 
   const handleRemove = async () => {
     if (!currentCompany?.id) return;
@@ -1152,35 +1524,37 @@ export default function IntegrationConnectPage() {
       />
       <div className="scrollbar-none flex-1 overflow-y-auto">
         <div className="mx-auto flex w-full max-w-[720px] flex-col gap-8 px-6 py-8">
-          {/* Başlık — logo + ad + kısa açıklama. */}
-          <div className="flex flex-col gap-3">
-            <IntegrationTile item={item} size="header" />
-            <div className="flex flex-col gap-1">
-              <h1 className="text-2xl font-medium text-[var(--balina-text-loud)]">{item.name}</h1>
-              {item.description && <p className="text-sm text-muted">{item.description}</p>}
-            </div>
-          </div>
-
-          {/* Gradient hero + pill. */}
-          <div className="relative overflow-hidden rounded-[1.25rem]">
-            <div className="absolute inset-0 bg-[radial-gradient(80%_110%_at_12%_10%,#cfe0ff_0%,transparent_55%),radial-gradient(70%_100%_at_92%_88%,#ffe0cf_0%,transparent_55%),radial-gradient(60%_90%_at_55%_50%,#efe6fb_0%,transparent_60%),linear-gradient(135deg,#eef3ff_0%,#f4f1fb_50%,#f6f4f1_100%)]" />
-            <div className="relative flex items-center justify-center px-6 py-14">
-              <div className="flex max-w-md items-center gap-2.5 rounded-2xl bg-white/60 px-3.5 py-2.5 backdrop-blur-md">
-                <IntegrationTile item={item} size="pill" />
-                <span className="shrink-0 text-sm font-medium text-foreground">{item.name}</span>
-                {item.description && (
-                  <span className="truncate text-sm text-[var(--balina-text-muted)]">{item.description}</span>
-                )}
+          {/* Başlık — logo + ad + açıklama; sağda (bağlıysa) kaldır butonu. */}
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-3">
+              <IntegrationTile item={item} size="header" />
+              <div className="flex flex-col gap-1">
+                <h1 className="text-2xl font-medium text-[var(--balina-text-loud)]">{item.name}</h1>
+                {item.description && <p className="text-sm text-muted">{item.description}</p>}
               </div>
             </div>
+            {isConnected && !social && (
+              <BalinaButton
+                variant="danger"
+                onClick={handleRemove}
+                disabled={isSubmitting}
+                className="shrink-0"
+              >
+                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Entegrasyonu kaldır'}
+              </BalinaButton>
+            )}
           </div>
 
-          {/* Uzun açıklama. */}
-          {(item.overview ?? item.description) && (
-            <p className="text-base leading-relaxed text-foreground">{item.overview ?? item.description}</p>
-          )}
+          {/* Tüm entegrasyonlarda (sosyal dahil) hero — kendi bağlı/bağlı-değil durumuna göre. */}
+          <ConnectedHero
+            item={item}
+            label={connLabel}
+            date={connDate}
+            active={connActive}
+            connected={heroConnected}
+          />
 
-          {/* Yapılandırma — bağlı değilse aşama aşama bağlama, bağlıysa durum + kaldır. */}
+          {/* Yapılandırma — bağlı değilse aşama aşama bağlama, bağlıysa yönet ayarları. */}
           <section className="flex flex-col gap-4">
             <h2 className="text-lg font-medium text-foreground">Yapılandırma</h2>
             {social ? (
@@ -1195,28 +1569,9 @@ export default function IntegrationConnectPage() {
                 disconnect={social === 'instagram' ? igStore.disconnect : ttStore.disconnect}
               />
             ) : isConnected ? (
-              <div className="flex flex-col items-center gap-4">
-                {/* Bağlı durum — beyaz card, gradient yok, noktalar animasyonlu. */}
-                <div className="flex w-full items-center justify-center gap-3 rounded-2xl bg-white py-12 shadow-[0_0_0_0.5px_rgba(0,0,0,0.06)]">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--balina-background-dark-faint)]">
-                    <BalinaOsMark className="h-7 w-7" />
-                  </div>
-                  <span className="flex gap-1.5">
-                    {[0, 1, 2].map((d) => (
-                      <span
-                        key={d}
-                        className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--balina-icon-muted)]"
-                        style={{ animationDelay: `${d * 0.2}s` }}
-                      />
-                    ))}
-                  </span>
-                  <IntegrationTile item={item} size="header" />
-                </div>
-                <p className="text-sm font-medium text-foreground">Entegrasyon yapıldı</p>
-                <BalinaButton variant="danger" onClick={handleRemove} disabled={isSubmitting}>
-                  {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Entegrasyonu kaldır'}
-                </BalinaButton>
-                {/* Yönet ayarları — accordion. */}
+              <div className="flex flex-col gap-4">
+                {/* Bağlantı görseli + durum artık üstteki hero'da. Burada
+                    yönet ayarları ve kaldırma kaldı. */}
                 {connectedAi && currentCompany?.id && (
                   <AiManageAccordion key={connectedAi.id} companyId={currentCompany.id} integration={connectedAi} />
                 )}
@@ -1236,7 +1591,7 @@ export default function IntegrationConnectPage() {
                         {isCompleted ? (
                           <Check className="h-4 w-4 text-[var(--balina-icon-strong)]" />
                         ) : (
-                          <BalinaIntegrationIcon className="h-4 w-4" />
+                          stepKeyIcon(step.key)
                         )}
                       </div>
                       <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -1285,7 +1640,7 @@ export default function IntegrationConnectPage() {
                 {/* Son aşama — OAuth yönlendirme / test + bağla. */}
                 <div className="flex items-start gap-3 px-4 py-3.5">
                   <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-black/[0.08] text-[var(--balina-icon-muted)]">
-                    <BalinaIntegrationIcon className="h-4 w-4" />
+                    <Link className="h-4 w-4" />
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col gap-3">
                     <div className="flex items-center justify-between gap-3">

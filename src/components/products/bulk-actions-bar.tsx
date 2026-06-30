@@ -37,7 +37,7 @@ export function BulkActionsBar({
   return (
     <div className="pointer-events-none fixed bottom-6 left-20 right-1 z-30 flex justify-center">
       <div
-        className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-surface/60 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-xl bar-blur-in"
+        className="pointer-events-auto inline-flex items-center gap-1 rounded-xl bg-white/90 p-2 shadow-[var(--shadow-elevated)] backdrop-blur-md bar-blur-in"
         role="toolbar"
         aria-label={`${count} ürün için işlemler`}
       >
@@ -65,9 +65,9 @@ export function BulkActionsBar({
           variant="danger"
           onClick={onDelete}
           aria-label="Seçili ürünleri sil"
-        >
-          <TrashBin className="h-4 w-4" />
-        </BalinaButton>
+          leftIcon={<TrashBin className="h-4 w-4" />}
+          className="aspect-square justify-center"
+        />
       </div>
     </div>
   );

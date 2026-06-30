@@ -412,7 +412,7 @@ export function BalinaSidebar({
               </button>
             );
             return accountMenu ? (
-              <BalinaDropdown trigger={userButton} side="top" align="start" size="large">
+              <BalinaDropdown trigger={userButton} side="top" align="end" size="small">
                 {accountMenu}
               </BalinaDropdown>
             ) : (

@@ -10,7 +10,9 @@ import {
   ArrowRight,
   Check,
   FileText,
+  MagnifierPlus,
   Paperclip,
+  Pencil,
   Picture,
   Play,
   Sparkles,
@@ -19,6 +21,8 @@ import {
 
 import {
   BalinaButton,
+  BalinaChatQuickAction,
+  BalinaRegenerateIcon,
   BalinaDropdown,
   BalinaDropdownItem,
   toast,
@@ -73,7 +77,8 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     setSelectedImageModelId,
     setSelectedVideoModelId,
     fetchIntegrations,
-    generateImageRaw,
+    generateImagesRaw,
+    generatePoseVariantsRaw,
     generateVideoRaw,
     generateText: generateTextRaw,
   } = useAiStore();
@@ -88,6 +93,7 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     productCode,
     start,
     appendMessage,
+    updateMessage,
     removeMessage,
     setMode,
     addAttachedImage,
@@ -104,6 +110,11 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   const [composerText, setComposerText] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Son görsel/video üretim girdisi — "Tekrar dene" (aynı bilgilerle yeniden)
+  // ve "Prompt düzenle" (girdiyi composer'a geri yükle) için saklanır.
+  const [lastGen, setLastGen] = useState<
+    { mode: 'image' | 'video'; prompt: string; files: string[] } | null
+  >(null);
   // textarea focus iken chroma sweep durur (kullanıcı odakta yazıyor,
   // çevredeki animasyon dikkat dağıtmasın). Blur olunca tekrar açılır.
   const [isComposerFocused, setIsComposerFocused] = useState(false);
@@ -212,7 +223,12 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
   useEffect(() => {
     if (!sessionId || !currentCompany?.id) return;
     const meaningful = messages.some(
-      (m) => m.kind === 'user-text' || m.kind === 'bot-image' || m.kind === 'bot-video',
+      (m) =>
+        m.kind === 'user-text' ||
+        m.kind === 'bot-image' ||
+        m.kind === 'bot-image-set' ||
+        m.kind === 'bot-pose-set' ||
+        m.kind === 'bot-video',
     );
     if (!meaningful) return;
     const snapshotState = {
@@ -307,6 +323,19 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
     const promptForRequest = promptText;
     setComposerText('');
     clearAttachedImages();
+
+    await executeGeneration(resolvedMode, promptForRequest, filesForRequest);
+  };
+
+  // Görsel/video üretimini çalıştır (pending mesajı + run + sonuç). Hem handleSend
+  // hem "Tekrar dene" kullanır. Girdiyi lastGen'e yazar.
+  const executeGeneration = async (
+    resolvedMode: 'image' | 'video',
+    promptForRequest: string,
+    filesForRequest: string[],
+  ) => {
+    if (!currentCompany?.id || isGenerating) return;
+    setLastGen({ mode: resolvedMode, prompt: promptForRequest, files: filesForRequest });
     setIsGenerating(true);
 
     const pendingId = `pending-${Date.now()}`;
@@ -330,6 +359,21 @@ export function GuidedAiChatPanel({ variant, onClose }: Props) {
       removeMessage(pendingId);
       setIsGenerating(false);
     }
+  };
+
+  // Tekrar dene — son üretimi aynı bilgilerle (prompt + görseller) yeniden çalıştır.
+  const handleRetryGeneration = () => {
+    if (!lastGen || isGenerating) return;
+    void executeGeneration(lastGen.mode, lastGen.prompt, lastGen.files);
+  };
+
+  // Prompt düzenle — son üretimin prompt'unu + görsellerini composer'a geri yükle.
+  const handleEditPrompt = () => {
+    if (!lastGen) return;
+    setComposerText(lastGen.prompt);
+    clearAttachedImages();
+    lastGen.files.forEach((url) => addAttachedImage(url));
+    textareaRef.current?.focus();
   };
 
   const runTextGeneration = async (promptText: string) => {
@@ -439,22 +483,68 @@ KURALLAR:
     }
     const prompt =
       promptText || 'Bu referans görsel(ler)den yüksek kaliteli bir ürün görseli üret.';
-    const result = await generateImageRaw(currentCompany.id, {
-      prompt,
-      model: selectedImageModel,
-      imageUrls: files,
-    });
-    if (!result.url) {
+    // Aynı prompt'tan 3 varyant — kullanıcı birini seçip pozları uygulayabilsin.
+    const result = await generateImagesRaw(
+      currentCompany.id,
+      {
+        prompt,
+        model: selectedImageModel,
+        imageUrls: files,
+      },
+      3,
+    );
+    if (result.urls.length === 0) {
       pushBotError(`Üretim başarısız: ${result.error ?? 'bilinmeyen hata'}`);
       return;
     }
-    // SKU'yu görsele yazma özelliği kaldırıldı — üretilen görsel doğrudan gösterilir.
     appendMessage({
       id: '',
-      kind: 'bot-image',
-      url: result.url,
+      kind: 'bot-image-set',
+      urls: result.urls,
       createdAt: Date.now(),
     });
+  };
+
+  // Seçilen varyantın aynısını, entegrasyonda kayıtlı her poz için üret.
+  const handleApplyPoses = async (sourceUrl: string) => {
+    if (!currentCompany?.id || isGenerating) return;
+    if (!imageIntegration) {
+      redirectToIntegration('FAL_AI', 'Fal.ai');
+      return;
+    }
+    if (!imageIntegration.imagePoses || imageIntegration.imagePoses.length === 0) {
+      toast.warning(
+        'Kayıtlı poz yok — entegrasyon ayarlarından "Poz ayarları" bölümüne poz ekleyin.',
+      );
+      return;
+    }
+    setIsGenerating(true);
+    const pendingId = `pending-poses-${Date.now()}`;
+    appendMessage({
+      id: pendingId,
+      kind: 'pending',
+      label: 'Pozlar uygulanıyor (her poz için ayrı görsel)…',
+      mode: 'image',
+    });
+    try {
+      const { results, error } = await generatePoseVariantsRaw(currentCompany.id, {
+        sourceImageUrl: sourceUrl,
+        prompt: lastGen?.prompt,
+      });
+      if (results.length === 0) {
+        pushBotError(`Poz üretimi başarısız: ${error ?? 'bilinmeyen hata'}`);
+        return;
+      }
+      appendMessage({
+        id: '',
+        kind: 'bot-pose-set',
+        items: results.map((r) => ({ poseName: r.poseName, url: r.url })),
+        createdAt: Date.now(),
+      });
+    } finally {
+      removeMessage(pendingId);
+      setIsGenerating(false);
+    }
   };
 
   const runVideoGeneration = async (promptText: string, files: string[]) => {
@@ -617,9 +707,46 @@ KURALLAR:
           <ul className="flex flex-col gap-4">
             {messages.map((m) => (
               <li key={m.id} className="flex flex-col">
-                <MessageView message={m} onOpenPreview={setMediaPreview} />
+                <MessageView
+                  message={m}
+                  onOpenPreview={setMediaPreview}
+                  onSelectVariant={(index) =>
+                    updateMessage(m.id, { selectedIndex: index })
+                  }
+                  onApplyPoses={handleApplyPoses}
+                  onResolvePoses={() => updateMessage(m.id, { posesResolved: true })}
+                  poseCount={imageIntegration?.imagePoses?.length ?? 0}
+                  isBusy={isGenerating}
+                />
               </li>
             ))}
+            {/* Son görsel/video sonucu için aksiyonlar: aynı bilgilerle tekrar
+                dene + prompt düzenle (chat quick-action butonları). */}
+            {(() => {
+              const last = messages[messages.length - 1];
+              const isResult =
+                !!last &&
+                (last.kind === 'bot-image' ||
+                  last.kind === 'bot-image-set' ||
+                  last.kind === 'bot-video');
+              if (!lastGen || isGenerating || !isResult) return null;
+              return (
+                <li className="flex items-center gap-1 self-start">
+                  <BalinaChatQuickAction
+                    icon={<BalinaRegenerateIcon className="h-4 w-4" />}
+                    onClick={handleRetryGeneration}
+                  >
+                    Tekrar dene
+                  </BalinaChatQuickAction>
+                  <BalinaChatQuickAction
+                    icon={<Pencil className="h-4 w-4" />}
+                    onClick={handleEditPrompt}
+                  >
+                    Prompt düzenle
+                  </BalinaChatQuickAction>
+                </li>
+              );
+            })()}
           </ul>
         </div>
       </div>
@@ -1269,9 +1396,19 @@ function ToolsButton({
 function MessageView({
   message,
   onOpenPreview,
+  onSelectVariant,
+  onApplyPoses,
+  onResolvePoses,
+  poseCount,
+  isBusy,
 }: {
   message: GuidedMessageWithKind;
   onOpenPreview: (item: AiMediaPreviewItem) => void;
+  onSelectVariant: (index: number) => void;
+  onApplyPoses: (sourceUrl: string) => void;
+  onResolvePoses: () => void;
+  poseCount: number;
+  isBusy: boolean;
 }) {
   const m = message;
   switch (m.kind) {
@@ -1279,6 +1416,33 @@ function MessageView({
       return <BotBubble>{m.text}</BotBubble>;
     case 'user-text':
       return <UserBubble>{m.text}</UserBubble>;
+    case 'bot-image-set':
+      return (
+        <div className="self-start">
+          <AiImageSetCard
+            urls={m.urls}
+            selectedIndex={m.selectedIndex}
+            createdAt={m.createdAt}
+            poseCount={poseCount}
+            isBusy={isBusy}
+            posesResolved={m.posesResolved}
+            onOpenPreview={onOpenPreview}
+            onSelectVariant={onSelectVariant}
+            onApplyPoses={onApplyPoses}
+            onResolvePoses={onResolvePoses}
+          />
+        </div>
+      );
+    case 'bot-pose-set':
+      return (
+        <div className="self-start">
+          <AiPoseSetCard
+            items={m.items}
+            createdAt={m.createdAt}
+            onOpenPreview={onOpenPreview}
+          />
+        </div>
+      );
     case 'bot-image':
       return (
         <div className="self-start">
@@ -1669,6 +1833,166 @@ function AiMediaCard({
         >
           İndir
         </BalinaButton>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- 3-varyant kartı (seç + pozları uygula) ----------------
+ *
+ * Aynı prompt'tan üretilen varyantları yan yana gösterir. Kullanıcı bir varyant
+ * seçer (ring + check), büyüteç ile büyütüp bakabilir; "Pozları uygula" seçili
+ * varyantın aynısını kayıtlı her poz için yeniden üretir.
+ */
+function AiImageSetCard({
+  urls,
+  selectedIndex,
+  createdAt,
+  poseCount,
+  isBusy,
+  posesResolved,
+  onOpenPreview,
+  onSelectVariant,
+  onApplyPoses,
+  onResolvePoses,
+}: {
+  urls: string[];
+  selectedIndex?: number;
+  createdAt?: number;
+  poseCount: number;
+  isBusy: boolean;
+  posesResolved?: boolean;
+  onOpenPreview: (item: AiMediaPreviewItem) => void;
+  onSelectVariant: (index: number) => void;
+  onApplyPoses: (sourceUrl: string) => void;
+  onResolvePoses: () => void;
+}) {
+  const subtitle = `${urls.length} varyant${
+    createdAt ? ` • ${formatRelativeTime(createdAt)}` : ''
+  }`;
+  const hasSelection = typeof selectedIndex === 'number' && !!urls[selectedIndex];
+  return (
+    <div className="flex w-full max-w-[420px] flex-col gap-2 rounded-3xl p-3">
+      <div className="grid grid-cols-3 gap-2">
+        {urls.map((url, i) => {
+          const isSel = selectedIndex === i;
+          return (
+            <div key={i} className="relative">
+              <button
+                type="button"
+                onClick={() => onSelectVariant(i)}
+                className={`group relative block aspect-[3/4] w-full overflow-hidden rounded-xl transition-all focus:outline-none ${
+                  isSel
+                    ? 'ring-2 ring-accent ring-offset-1'
+                    : 'ring-1 ring-black/[0.06] hover:ring-black/20'
+                }`}
+                aria-label={`Varyant ${i + 1} seç`}
+                aria-pressed={isSel}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt={`Varyant ${i + 1}`} className="h-full w-full object-cover" />
+                {isSel && (
+                  <span className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-accent-foreground">
+                    <Check className="h-3.5 w-3.5" />
+                  </span>
+                )}
+              </button>
+              {/* Büyüteç — büyütüp bakmak için (tıkla-aç). */}
+              <button
+                type="button"
+                onClick={() => onOpenPreview({ url, type: 'image', createdAt })}
+                className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-black/45 text-white opacity-0 transition-opacity hover:bg-black/65 focus:outline-none group-hover:opacity-100 md:opacity-0"
+                aria-label={`Varyant ${i + 1} büyüt`}
+              >
+                <MagnifierPlus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+      <span className="px-1 text-xs text-muted">{subtitle}</span>
+      {/* Poz sorusu — varyant üretildikten sonra her zaman görünür. */}
+      {!posesResolved && (
+        <div className="flex flex-col gap-2 rounded-2xl bg-[var(--balina-background-dark-faint)] p-3">
+          <span className="text-sm text-foreground">
+            {hasSelection
+              ? `Seçili görselin diğer pozlarını da oluşturayım mı?${poseCount > 0 ? ` (${poseCount} poz)` : ''}`
+              : 'Bir varyant seçin, diğer pozlarını da oluşturayım mı?'}
+          </span>
+          <div className="flex items-center gap-2">
+            <BalinaButton
+              variant="primary"
+              size="small"
+              disabled={!hasSelection || isBusy}
+              rightIcon={<ArrowRight className="h-3.5 w-3.5" />}
+              onClick={() => {
+                if (hasSelection) {
+                  onApplyPoses(urls[selectedIndex as number]);
+                  if (poseCount > 0) onResolvePoses();
+                }
+              }}
+            >
+              Evet, oluştur
+            </BalinaButton>
+            <BalinaButton
+              variant="soft"
+              size="small"
+              disabled={isBusy}
+              onClick={onResolvePoses}
+            >
+              Hayır
+            </BalinaButton>
+          </div>
+          {poseCount === 0 && (
+            <span className="text-xs text-muted">
+              Henüz poz eklemediniz — entegrasyon ayarlarından “Poz ayarları”na ekleyin.
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- Poz sonuç kartı ---------------- */
+function AiPoseSetCard({
+  items,
+  createdAt,
+  onOpenPreview,
+}: {
+  items: { poseName: string; url: string }[];
+  createdAt?: number;
+  onOpenPreview: (item: AiMediaPreviewItem) => void;
+}) {
+  return (
+    <div className="flex w-full max-w-[420px] flex-col gap-2 rounded-3xl p-3">
+      <span className="px-1 text-xs text-muted">
+        {`${items.length} poz${createdAt ? ` • ${formatRelativeTime(createdAt)}` : ''}`}
+      </span>
+      <div className="grid grid-cols-3 gap-2">
+        {items.map((it, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <button
+              type="button"
+              onClick={() => onOpenPreview({ url: it.url, type: 'image', createdAt })}
+              className="group relative block aspect-[3/4] w-full overflow-hidden rounded-xl ring-1 ring-black/[0.06] transition-all hover:ring-black/20 focus:outline-none"
+              aria-label={`${it.poseName || `Poz ${i + 1}`} büyüt`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={it.url}
+                alt={it.poseName || `Poz ${i + 1}`}
+                className="h-full w-full object-cover"
+              />
+              <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-lg bg-black/45 text-white opacity-0 transition-opacity group-hover:opacity-100">
+                <MagnifierPlus className="h-3.5 w-3.5" />
+              </span>
+            </button>
+            <span className="truncate px-0.5 text-center text-xs text-foreground">
+              {it.poseName || `Poz ${i + 1}`}
+            </span>
+          </div>
+        ))}
       </div>
     </div>
   );

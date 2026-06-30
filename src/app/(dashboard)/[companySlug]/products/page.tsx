@@ -8,6 +8,7 @@ import {
   Plus,
   ArrowDown,
   ChevronDown,
+  BarsDescendingAlignCenter,
   Pencil,
   Copy,
   TrashBin,
@@ -565,20 +566,37 @@ export default function InventoryPage() {
         title="Ürünler"
         icon={<Box className="h-4 w-4" />}
         action={
-          !isStockist ? (
-            // Yeni ürün ekleme şimdilik deaktif — backend hazır olduğunda
-            // tekrar aktif edilecek. Link'i kaldırdık, disabled görünüm.
-            <BalinaButton
-              variant="soft"
-              size="small"
-              disabled
-              leftIcon={<Plus className="h-3.5 w-3.5" />}
-              className="h-8 px-3 text-xs"
-              aria-label="Yeni ürün ekleme şimdilik deaktif"
-            >
-              Yeni ürün
-            </BalinaButton>
-          ) : null
+          <div className="flex items-center gap-2">
+            {/* Filtrele — design system buton; submenu'lü FilterPopover. */}
+            <FilterPopover
+              filters={filterDefs}
+              trigger={
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  leftIcon={<BarsDescendingAlignCenter className="h-3.5 w-3.5" />}
+                  className="h-8 px-3 text-xs"
+                >
+                  Filtrele
+                </BalinaButton>
+              }
+              triggerAriaLabel="Filtrele"
+            />
+            {!isStockist && (
+              // Yeni ürün ekleme şimdilik deaktif — backend hazır olduğunda
+              // tekrar aktif edilecek.
+              <BalinaButton
+                variant="soft"
+                size="small"
+                disabled
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                className="h-8 px-3 text-xs"
+                aria-label="Yeni ürün ekleme şimdilik deaktif"
+              >
+                Yeni ürün
+              </BalinaButton>
+            )}
+          </div>
         }
       />
 
@@ -617,7 +635,6 @@ export default function InventoryPage() {
                 />
               ))}
             </div>
-            <FilterPopover filters={filterDefs} />
           </div>
           {/* Aktif filtre alanı — Linear-style segmented chip + Vazgeç/Kaydet.
               Sadece en az bir filtre aktif İVE aktif saved tab ile payload'lar
@@ -634,8 +651,8 @@ export default function InventoryPage() {
           />
         </div>
 
-        {/* ============== Header + rows (p-2.5 gap-2.5) ============== */}
-        <div className="flex flex-col gap-2.5 p-2.5">
+        {/* ============== Header + rows ============== */}
+        <div className="flex flex-col gap-2.5 px-6 py-2.5">
           {/* Column header — left half: name, right half: 5 cols. Tüm
               kolonlar SortHeaderButton — hover'da pill+arrow gösterir;
               tıklayınca sıralama uygulanır (backend `sortBy` string olarak
@@ -651,7 +668,7 @@ export default function InventoryPage() {
                 Ürün adı
               </SortHeaderButton>
             </div>
-            <div className="flex flex-1 items-center gap-20">
+            <div className="flex flex-[1.4] items-center gap-6">
               {!hideListPrice ? (
                 <div className="flex flex-1 items-center gap-2">
                   <SortHeaderButton
@@ -682,12 +699,22 @@ export default function InventoryPage() {
               )}
               <div className="flex flex-1 items-center gap-2">
                 <SortHeaderButton
+                  field="stockQuantity"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
+                  onSort={handleSort}
+                >
+                  Envanter
+                </SortHeaderButton>
+              </div>
+              <div className="flex flex-1 items-center gap-2">
+                <SortHeaderButton
                   field="storeName"
                   currentField={sortField}
                   currentOrder={sortOrder}
                   onSort={handleSort}
                 >
-                  Mağazalar
+                  Satış Kanalları
                 </SortHeaderButton>
               </div>
               <div className="flex flex-1 items-center gap-2">
@@ -698,16 +725,6 @@ export default function InventoryPage() {
                   onSort={handleSort}
                 >
                   Eşleştirme
-                </SortHeaderButton>
-              </div>
-              <div className="flex flex-1 items-center gap-2">
-                <SortHeaderButton
-                  field="isActive"
-                  currentField={sortField}
-                  currentOrder={sortOrder}
-                  onSort={handleSort}
-                >
-                  Durum
                 </SortHeaderButton>
               </div>
             </div>
@@ -754,13 +771,15 @@ export default function InventoryPage() {
                     ].join(' ')}
                   >
                     {/* LEFT half — checkbox + image + name */}
-                    <div className="flex flex-1 items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       {/* Checkbox click/keydown row'a sızmasın — Space/Enter
-                          navigation tetiklemesin */}
+                          navigation tetiklemesin. Sabit boyutlu sarmalayıcı:
+                          işaretli/işaretsiz fark etmeksizin yeri kaymaz. */}
                       <div
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                         aria-label={`${product.name} seç`}
+                        className="flex h-[1.125rem] w-[1.125rem] shrink-0 items-center justify-center"
                       >
                         <BalinaCheckbox
                           checked={isChecked}
@@ -774,7 +793,7 @@ export default function InventoryPage() {
                           }}
                         />
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default">
                           {product.imageUrl ? (
                             <Image
@@ -794,21 +813,37 @@ export default function InventoryPage() {
                             />
                           )}
                         </div>
-                        <span className="truncate text-sm font-medium leading-5 text-foreground">
-                          {product.name}
-                        </span>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="truncate text-sm font-medium leading-5 text-foreground">
+                            {product.name}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* RIGHT half — 5 cells, each flex-1, gap-20 */}
-                    <div className="flex flex-1 items-center gap-20">
-                      {/* Satış Fiyatı — pazaryeri başına farklı fiyat varsa hover popover */}
+                    {/* RIGHT half — 5 cells, each flex-1, gap-6 */}
+                    <div className="flex flex-[1.4] items-center gap-6">
+                      {/* Satış Fiyatı — varyant fiyat aralığı (₺min ~ ₺max) ya da tek
+                          fiyat. Varyantlı üründe DAİMA varyasyon fiyatını göster
+                          (parent.price varyasyonlarla uyuşmayabilir). */}
                       <CellWrap>
                         {!hideListPrice ? (
-                          <PriceChip
-                            value={product.price}
-                            marketplacePrices={product.marketplacePrices}
-                          />
+                          product.minPrice != null &&
+                          product.maxPrice != null &&
+                          product.maxPrice > product.minPrice ? (
+                            <span className="whitespace-nowrap text-xs font-medium leading-4 text-foreground">
+                              ₺{formatPrice(product.minPrice)} ~ ₺{formatPrice(product.maxPrice)}
+                            </span>
+                          ) : product.variationCount > 0 && product.minPrice != null ? (
+                            <span className="whitespace-nowrap text-xs font-medium leading-4 text-foreground">
+                              ₺{formatPrice(product.minPrice)}
+                            </span>
+                          ) : (
+                            <PriceChip
+                              value={product.price}
+                              marketplacePrices={product.marketplacePrices}
+                            />
+                          )
                         ) : null}
                       </CellWrap>
 
@@ -829,13 +864,35 @@ export default function InventoryPage() {
                         ) : null}
                       </CellWrap>
 
-                      {/* Mağazalar */}
+                      {/* Envanter — toplam stok + (varsa) varyant sayısı */}
                       <CellWrap>
-                        <IntegrationFavicons
-                          stores={stores
-                            .filter((s) => s.id === product.storeId)
-                            .map((s) => ({ id: s.id, name: s.name, url: s.url }))}
-                        />
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-sm leading-5 text-foreground">
+                            {product.stockQuantity} adet
+                          </span>
+                          {product.variationCount > 0 && (
+                            <span className="text-xs leading-4 text-muted">
+                              {product.variationCount} varyant
+                            </span>
+                          )}
+                        </div>
+                      </CellWrap>
+
+                      {/* Satış Kanalları — bağlı kanal sayısı */}
+                      <CellWrap>
+                        {(() => {
+                          const channelCount =
+                            product.marketplacePrices?.length ??
+                            (product.storeId ? 1 : 0);
+                          return channelCount > 0 ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium leading-4 text-foreground">
+                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
+                              {channelCount} Satış Kanalı
+                            </span>
+                          ) : (
+                            <span className="text-xs text-muted">—</span>
+                          );
+                        })()}
                       </CellWrap>
 
                       {/* Eşleştirme */}
@@ -845,22 +902,6 @@ export default function InventoryPage() {
                         ) : (
                           <StatusChip variant="xmark">Eşleştirme yok</StatusChip>
                         )}
-                      </CellWrap>
-
-                      {/* Durum — chip trigger + dropdown ile aktif/pasif seç */}
-                      <CellWrap>
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          onKeyDown={(e) => e.stopPropagation()}
-                        >
-                          <StatusPopover
-                            isActive={product.isActive}
-                            isDisabled={isStockist}
-                            onSelect={(next) =>
-                              saveProduct(product.id, { isActive: next })
-                            }
-                          />
-                        </div>
                       </CellWrap>
                     </div>
                   </div>
@@ -1079,7 +1120,7 @@ function CellWrap({ children }: { children: React.ReactNode }) {
   // içerik genişliğinde kalır. Cell'ler farklı genişlikte olabilir (en uzun
   // chip kadar) ama wrap olmaz.
   return (
-    <div className="inline-flex min-w-fit flex-1 flex-col items-start justify-start gap-2.5">
+    <div className="flex min-w-0 flex-1 flex-col items-start justify-center gap-0.5">
       {children}
     </div>
   );
@@ -1352,7 +1393,7 @@ function SortHeaderButton({
     <button
       type="button"
       onClick={() => onSort(field)}
-      className="group inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
+      className="group -mx-2 inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium leading-4 text-muted transition-colors hover:bg-foreground/[0.06] hover:text-foreground"
     >
       {children}
       <ArrowDown

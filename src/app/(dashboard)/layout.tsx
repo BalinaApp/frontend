@@ -20,15 +20,30 @@ import {
   BalinaVideoIcon,
   BalinaImageIcon,
   BalinaSummarizeIcon,
+  BalinaButton,
   BalinaChat,
   BalinaChatQuickAction,
   BalinaChatUserMessage,
   BalinaChatStatus,
   BalinaChatMedia,
+  BalinaSearchIcon,
+  BalinaTextField,
   toast,
   type BalinaChatInputHandle,
   type BalinaChatMode,
 } from '@/components/balina';
+import {
+  ArrowDownToLine,
+  ArrowsRotateRight,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Xmark,
+} from '@gravity-ui/icons';
+import { stampCodeOnImage, makeCodePillPng, trSlug } from '@/lib/stamp-code';
+import { downloadImagesZip } from '@/lib/download-zip';
+import { ResultSetStack } from '@/components/ai/result-set-stack';
 import { AiContextPicker, AiFileChip } from '@/components/ai/ai-context-picker';
 import { type Product } from '@/stores/inventoryStore';
 import { resizeImageToDataUrl } from '@/lib/image-resize';
@@ -46,7 +61,201 @@ type AiMsg =
   | { id: string; role: 'assistant'; kind: 'text'; text: string }
   | { id: string; role: 'assistant'; kind: 'error'; text: string }
   | { id: string; role: 'assistant'; kind: 'image'; url: string; name?: string }
-  | { id: string; role: 'assistant'; kind: 'video'; url: string };
+  | {
+      id: string;
+      role: 'assistant';
+      kind: 'image-set';
+      urls: string[];
+      selectedIndex?: number;
+      posesResolved?: boolean;
+    }
+  | {
+      id: string;
+      role: 'assistant';
+      kind: 'pose-set';
+      items: { poseName: string; url: string; poseId?: string }[];
+      /** Pozların üretildiği kaynak görsel — yeniden oluşturma için. */
+      sourceUrl?: string;
+    }
+  | {
+      id: string;
+      role: 'assistant';
+      kind: 'result-set';
+      label: string;
+      items: {
+        poseName?: string;
+        url: string;
+        name?: string;
+        /** Recolor kaynağı (orijinal poz görseli) — yeniden üretim için. */
+        sourceUrl?: string;
+        poseId?: string;
+      }[];
+      /** Bu setin renk referansı (varsa) — yeniden recolor için. */
+      colorRef?: string;
+    }
+  | { id: string; role: 'assistant'; kind: 'video'; url: string; label?: string; name?: string };
+
+/** Poz varyasyonları sonrası rehberli akış: renk → kod → video. Tek seferde
+ *  bir akış aktif olur; sorular geçici UI, sonuçlar kalıcı mesajdır. */
+type AiFlow = {
+  step: 'colors' | 'code' | 'video';
+  poses: { poseName: string; url: string; poseId?: string }[];
+  colorRefs: string[];
+  /** Nihai setler — renk uygulandıysa renk setleri, yoksa tek "Orijinal". */
+  finalSets: {
+    label: string;
+    items: { poseName: string; url: string; poseId?: string }[];
+  }[];
+  /** Uygulanan kod (girilmişse) — dosya adlarında kullanılır. */
+  code?: string;
+};
+
+/** Grup lightbox — sağ/sol gezinme + (varsa) yeniden oluştur + indir. */
+function AiLightbox({
+  items,
+  index,
+  onIndex,
+  onClose,
+  onRegenerate,
+  regenBusy,
+}: {
+  items: { url: string; name?: string }[];
+  index: number;
+  onIndex: (i: number) => void;
+  onClose: () => void;
+  onRegenerate?: () => void;
+  regenBusy?: boolean;
+}) {
+  const n = items.length;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      else if (e.key === 'ArrowLeft') onIndex((index - 1 + n) % n);
+      else if (e.key === 'ArrowRight') onIndex((index + 1) % n);
+    };
+    window.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [index, n, onClose, onIndex]);
+
+  if (typeof document === 'undefined') return null;
+  const cur = items[index];
+  if (!cur) return null;
+
+  // Koyu overlay üzerinde görünür "glassy" buton stili (design-system buton + dark uyarlama).
+  const glass =
+    '!bg-white/15 !text-white [&>svg]:!text-white ring-1 ring-white/25 hover:!bg-white/25';
+
+  const download = () => {
+    const a = document.createElement('a');
+    a.href = cur.url;
+    a.download = `${cur.name || 'gorsel'}.png`;
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-6 backdrop-blur-xl sm:p-12"
+    >
+      <BalinaButton
+        variant="soft"
+        size="large"
+        aria-label="Kapat"
+        onClick={onClose}
+        className={`absolute right-4 top-4 z-10 ${glass}`}
+        leftIcon={<Xmark className="h-4 w-4" />}
+      />
+      {n > 1 && (
+        <>
+          <BalinaButton
+            variant="soft"
+            size="large"
+            aria-label="Önceki"
+            onClick={(e) => {
+              e.stopPropagation();
+              onIndex((index - 1 + n) % n);
+            }}
+            className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${glass}`}
+            leftIcon={<ChevronLeft className="h-5 w-5" />}
+          />
+          <BalinaButton
+            variant="soft"
+            size="large"
+            aria-label="Sonraki"
+            onClick={(e) => {
+              e.stopPropagation();
+              onIndex((index + 1) % n);
+            }}
+            className={`absolute right-3 top-1/2 z-10 -translate-y-1/2 ${glass}`}
+            leftIcon={<ChevronRight className="h-5 w-5" />}
+          />
+        </>
+      )}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex max-h-full flex-col items-center gap-3"
+      >
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={cur.url}
+            alt=""
+            className={`max-h-[78vh] max-w-full rounded-lg object-contain transition-opacity ${
+              regenBusy ? 'opacity-40' : 'opacity-100'
+            }`}
+          />
+          {regenBusy && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <ArrowsRotateRight className="h-8 w-8 animate-spin text-white" />
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {n > 1 && (
+            <span className="text-sm text-white/80">
+              {index + 1} / {n}
+            </span>
+          )}
+          {onRegenerate && (
+            <BalinaButton
+              variant="soft"
+              size="small"
+              disabled={regenBusy}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRegenerate();
+              }}
+              className={glass}
+              leftIcon={<ArrowsRotateRight className="h-3.5 w-3.5" />}
+            >
+              {regenBusy ? 'Oluşturuluyor…' : 'Yeniden oluştur'}
+            </BalinaButton>
+          )}
+          <BalinaButton
+            variant="soft"
+            size="small"
+            onClick={(e) => {
+              e.stopPropagation();
+              download();
+            }}
+            className={glass}
+            leftIcon={<ArrowDownToLine className="h-3.5 w-3.5" />}
+          >
+            İndir
+          </BalinaButton>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 /**
  * Side panel kartı — açılırken Linear-style fade + blur + translate
@@ -364,8 +573,10 @@ function DashboardLayoutInner({
   // Seçilen ürün, composer'a satır içi chip olarak eklenir (insertProduct).
   const aiCompanyId = useCompanyStore((s) => s.currentCompany?.id);
   const aiIntegrations = useAiStore((s) => s.integrations);
-  const generateImageRaw = useAiStore((s) => s.generateImageRaw);
+  const generateImagesRaw = useAiStore((s) => s.generateImagesRaw);
+  const generatePoseVariantsRaw = useAiStore((s) => s.generatePoseVariantsRaw);
   const generateVideoRaw = useAiStore((s) => s.generateVideoRaw);
+  const stampVideoCodeRaw = useAiStore((s) => s.stampVideoCodeRaw);
   const generateTextStream = useAiStore((s) => s.generateTextStream);
   const selectedTextModelId = useAiStore((s) => s.selectedTextModelId);
 
@@ -379,6 +590,23 @@ function DashboardLayoutInner({
   const [aiMode, setAiMode] = useState<BalinaChatMode>('chat');
   const [aiMessages, setAiMessages] = useState<AiMsg[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
+  // Çalışırken gösterilecek durum metni (video/renk/görsel ayrımı için).
+  const [aiStatusText, setAiStatusText] = useState<string | null>(null);
+  // Varyant/poz görsellerini tam ekran büyütme (indirme dosya adıyla).
+  // Grup lightbox — açık mesajın id'si + aktif index (sağ/sol gezinme).
+  const [aiLightbox, setAiLightbox] = useState<{ msgId: string; index: number } | null>(null);
+  // Aktif olarak yeniden üretilen tek öğe (spinner sadece bunda dönsün).
+  const [regenTarget, setRegenTarget] = useState<{ msgId: string; index: number } | null>(null);
+  // ZIP hazırlanan result-set mesajının id'si (indir butonu loading).
+  const [zipBusyId, setZipBusyId] = useState<string | null>(null);
+  // Rehberli akış (renk → kod → video) — aktif değilse null.
+  const [aiFlow, setAiFlow] = useState<AiFlow | null>(null);
+  const [aiCodeInput, setAiCodeInput] = useState('');
+  const colorFileRef = useRef<HTMLInputElement>(null);
+  // Son görsel üretim girdisi — "Yeniden oluştur" için.
+  const [lastImageGen, setLastImageGen] = useState<{ prompt: string; imageUrls: string[] } | null>(null);
+  // Her varyant seti için "yeniden oluştur" metin alanı (msgId → metin).
+  const [aiRegenText, setAiRegenText] = useState<Record<string, string>>({});
   const aiMsgId = useRef(0);
   // Silinme animasyonu için "kaldırılıyor" işaretli dosyalar (File referansı).
   const [removingFiles, setRemovingFiles] = useState<Set<File>>(new Set());
@@ -444,6 +672,407 @@ function DashboardLayoutInner({
     setAiMode((prev) => (prev === 'chat' ? 'image' : prev));
   };
 
+  // Aktif Fal entegrasyonu — poz sayısı + video pozu ayarı.
+  const aiFalIntegration = aiIntegrations.find(
+    (i) => i.provider === 'fal' && i.isActive,
+  );
+  const aiPoseCount = aiFalIntegration?.imagePoses?.length ?? 0;
+  const aiVideoPoseId = aiFalIntegration?.videoPoseId || '';
+
+  const updateAiMsg = (
+    id: string,
+    patch: { selectedIndex?: number; posesResolved?: boolean },
+  ) =>
+    setAiMessages((prev) =>
+      prev.map((m) => (m.id === id ? ({ ...m, ...patch } as AiMsg) : m)),
+    );
+
+  // Seçilen varyantın aynısını, entegrasyonda kayıtlı her poz için üret.
+  const handleAiApplyPoses = async (msgId: string, sourceUrl: string) => {
+    if (!aiCompanyId || aiBusy) return;
+    if (aiPoseCount === 0) {
+      toast.error(
+        'Kayıtlı poz yok — entegrasyon ayarlarından "Poz ayarları"na ekleyin.',
+      );
+      return;
+    }
+    updateAiMsg(msgId, { posesResolved: true });
+    setAiBusy(true);
+    try {
+      const { results, error } = await generatePoseVariantsRaw(aiCompanyId, {
+        sourceImageUrl: sourceUrl,
+      });
+      setAiMessages((prev) => [
+        ...prev,
+        results.length
+          ? {
+              id: `a${++aiMsgId.current}`,
+              role: 'assistant',
+              kind: 'pose-set',
+              items: results.map((r) => ({
+                poseName: r.poseName,
+                url: r.url,
+                poseId: r.poseId,
+              })),
+              sourceUrl,
+            }
+          : {
+              id: `a${++aiMsgId.current}`,
+              role: 'assistant',
+              kind: 'error',
+              text: `Poz üretimi başarısız: ${error ?? 'bilinmeyen hata'}`,
+            },
+      ]);
+      // Varyasyonlar oluştu → rehberli akışı başlat (renk → kod → video).
+      if (results.length) {
+        const poses = results.map((r) => ({
+          poseName: r.poseName,
+          url: r.url,
+          poseId: r.poseId,
+        }));
+        setAiCodeInput('');
+        setAiFlow({
+          step: 'colors',
+          poses,
+          colorRefs: [],
+          finalSets: [{ label: '', items: poses }],
+        });
+      }
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  // Poz varyasyonlarını yeniden oluştur — poseIds verilirse sadece o pozları
+  // (tek varyasyon), boşsa tümünü. Sonuçları mesaj içinde yerinde değiştirir.
+  const handleRegeneratePoses = async (
+    msg: Extract<AiMsg, { kind: 'pose-set' }>,
+    poseIds?: string[],
+  ) => {
+    if (!aiCompanyId || aiBusy || !msg.sourceUrl) return;
+    setAiBusy(true);
+    setAiStatusText('Varyasyonlar yeniden oluşturuluyor…');
+    try {
+      const { results, error } = await generatePoseVariantsRaw(aiCompanyId, {
+        sourceImageUrl: msg.sourceUrl,
+        poseIds,
+      });
+      if (!results.length) {
+        toast.error(error ?? 'Yeniden oluşturulamadı');
+        return;
+      }
+      const byId = new Map(results.map((r) => [r.poseId, r]));
+      setAiMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== msg.id || m.role !== 'assistant' || m.kind !== 'pose-set')
+            return m;
+          const items = m.items.map((it) => {
+            const r = it.poseId ? byId.get(it.poseId) : undefined;
+            return r ? { ...it, url: r.url } : it;
+          });
+          return { ...m, items };
+        }),
+      );
+    } finally {
+      setAiBusy(false);
+      setAiStatusText(null);
+    }
+  };
+
+  /* ---------------- Rehberli akış: renk → kod → video ---------------- */
+
+  const RECOLOR_PROMPT =
+    'The FIRST image is the SOURCE and is authoritative for EVERYTHING — keep its exact garment design, cut, collar, sleeves, length, buttons, zipper, pockets, embroidery/pattern, the same person, face, hijab, pose, body, background, framing and composition completely UNCHANGED. ' +
+    'The SECOND image is ONLY a COLOR SWATCH: take from it ONLY the garment color. Do NOT copy its design, cut, shape, collar, buttons, pattern, length or anything else — ignore everything in the second image except the color. ' +
+    'Recolor the garment in the first image to that color and change NOTHING else. ' +
+    'Preserve the original photographic SHARPNESS, detail and lighting; do NOT blur or soften; keep neutral true-to-source white balance with no added red/warm color cast.';
+
+  const pushAiMsg = (m: AiMsg) => setAiMessages((prev) => [...prev, m]);
+
+  // "Kol Aşağıda" pozunu bul (yoksa son öğe).
+  const findKolAsagida = <T extends { poseName?: string }>(items: T[]): T | undefined =>
+    items.find((it) => /a[şs]a[ğg][ıi]da/i.test(it.poseName ?? '')) ??
+    items[items.length - 1];
+
+  const handleAddColorRefs = async (files: FileList | null) => {
+    if (!files || !aiFlow) return;
+    const imgs = Array.from(files).filter((f) => f.type.startsWith('image/'));
+    const urls = (
+      await Promise.all(imgs.map((f) => resizeImageToDataUrl(f, 2048, 0.92).catch(() => '')))
+    ).filter(Boolean);
+    if (urls.length) setAiFlow((prev) => (prev ? { ...prev, colorRefs: [...prev.colorRefs, ...urls] } : prev));
+    if (colorFileRef.current) colorFileRef.current.value = '';
+  };
+
+  const handleApplyColors = async () => {
+    if (!aiCompanyId || !aiFlow || aiBusy) return;
+    if (aiFlow.colorRefs.length === 0) {
+      toast.error('En az bir renk görseli ekleyin');
+      return;
+    }
+    const flow = aiFlow;
+    setAiBusy(true);
+    setAiStatusText('Renk varyantları oluşturuluyor…');
+    try {
+      // Ana renk (orijinal) — önce göster (stacked kart + indir) ve nihai
+      // setlere ekle ki kodu/videosu da oluşsun.
+      const original = {
+        label: 'Ana Renk',
+        items: flow.poses.map((p) => ({
+          poseName: p.poseName,
+          url: p.url,
+          poseId: p.poseId,
+          name: `${trSlug(p.poseName)}-ana-renk`,
+        })),
+      };
+      pushAiMsg({
+        id: `a${++aiMsgId.current}`,
+        role: 'assistant',
+        kind: 'result-set',
+        label: 'Ana Renk',
+        items: original.items,
+      });
+      const colorSets: AiFlow['finalSets'] = [];
+      for (let c = 0; c < flow.colorRefs.length; c++) {
+        const ref = flow.colorRefs[c];
+        const label = `Renk ${c + 1}`;
+        const items = await Promise.all(
+          flow.poses.map(async (p) => {
+            const recolor = () =>
+              generateImagesRaw(
+                aiCompanyId,
+                { prompt: RECOLOR_PROMPT, model: 'fal-ai/nano-banana-pro', imageUrls: [p.url, ref] },
+                1,
+              );
+            // Recolor başarısızsa bir kez daha dene; yine olmazsa orijinale düşer
+            // (kullanıcı pop-up'tan tek tek yeniden oluşturabilir).
+            let r = await recolor();
+            if (!r.urls[0]) r = await recolor();
+            return {
+              poseName: p.poseName,
+              url: r.urls[0] ?? p.url,
+              poseId: p.poseId,
+              sourceUrl: p.url,
+              name: `${trSlug(p.poseName)}-${trSlug(label)}`,
+            };
+          }),
+        );
+        colorSets.push({ label, items });
+        pushAiMsg({
+          id: `a${++aiMsgId.current}`,
+          role: 'assistant',
+          kind: 'result-set',
+          label,
+          items,
+          colorRef: ref,
+        });
+      }
+      setAiFlow({ ...flow, finalSets: [original, ...colorSets], step: 'code' });
+    } finally {
+      setAiBusy(false);
+      setAiStatusText(null);
+    }
+  };
+
+  const handleSkipColors = () => setAiFlow((prev) => (prev ? { ...prev, step: 'code' } : prev));
+
+  const handleApplyCode = async () => {
+    if (!aiFlow || aiBusy) return;
+    const code = aiCodeInput.trim();
+    if (!code) {
+      toast.error('Kod girin');
+      return;
+    }
+    const flow = aiFlow;
+    setAiBusy(true);
+    setAiStatusText('Görsellere kod ekleniyor…');
+    try {
+      // Görsellere kod canvas ile gömülür (görüntü/indirme). finalSets KODSUZ
+      // kalır — video kodsuz görselden üretilir, kod video'ya ffmpeg ile eklenir.
+      for (const set of flow.finalSets) {
+        const items = await Promise.all(
+          set.items.map(async (it) => ({
+            poseName: it.poseName,
+            url: await stampCodeOnImage(it.url, code),
+            // Dosya adı: KOD-poz-renk (renk yoksa KOD-poz).
+            name: [trSlug(code), trSlug(it.poseName), set.label ? trSlug(set.label) : '']
+              .filter(Boolean)
+              .join('-'),
+          })),
+        );
+        pushAiMsg({
+          id: `a${++aiMsgId.current}`,
+          role: 'assistant',
+          kind: 'result-set',
+          label: set.label ? `${set.label} • Kod: ${code}` : `Kod: ${code}`,
+          items,
+        });
+      }
+      setAiFlow({ ...flow, step: 'video', code });
+    } finally {
+      setAiBusy(false);
+      setAiStatusText(null);
+    }
+  };
+
+  const handleSkipCode = () => setAiFlow((prev) => (prev ? { ...prev, step: 'video' } : prev));
+
+  const handleMakeVideos = async () => {
+    if (!aiCompanyId || !aiFlow || aiBusy) return;
+    const flow = aiFlow;
+    setAiBusy(true);
+    setAiStatusText('Video oluşturuluyor…');
+    try {
+      // Kod video'ya ffmpeg ile sabit basılacaksa pill PNG'i bir kez hazırla.
+      const pillPng = flow.code ? makeCodePillPng(flow.code) : '';
+      for (const set of flow.finalSets) {
+        // Entegrasyonda video pozu ayarlıysa onu kullan; yoksa otomatik (Kol Aşağıda).
+        const chosen = aiVideoPoseId
+          ? set.items.find((it) => it.poseId === aiVideoPoseId)
+          : undefined;
+        const kol = chosen ?? findKolAsagida(set.items);
+        if (!kol) continue;
+        // Video KODSUZ görselden üretilir (kod animasyonla oynamasın).
+        let r = await generateVideoRaw(aiCompanyId, { prompt: '', imageUrl: kol.url });
+        if (!r.url) {
+          r = await generateVideoRaw(aiCompanyId, { prompt: '', imageUrl: kol.url });
+        }
+        let videoUrl = r.url;
+        // Kod varsa videonun üzerine ffmpeg ile sabit bas.
+        if (videoUrl && pillPng) {
+          const stamped = await stampVideoCodeRaw(aiCompanyId, { videoUrl, pillPng });
+          videoUrl = stamped.url;
+        }
+        const name = [flow.code ? trSlug(flow.code) : '', set.label ? trSlug(set.label) : '']
+          .filter(Boolean)
+          .join('-') || 'video';
+        if (videoUrl)
+          pushAiMsg({
+            id: `a${++aiMsgId.current}`,
+            role: 'assistant',
+            kind: 'video',
+            url: videoUrl,
+            label: set.label || undefined,
+            name,
+          });
+        else
+          pushAiMsg({
+            id: `a${++aiMsgId.current}`,
+            role: 'assistant',
+            kind: 'error',
+            text: `Video oluşturulamadı${set.label ? ` (${set.label})` : ''}: ${r.error ?? ''}`,
+          });
+      }
+    } finally {
+      setAiBusy(false);
+      setAiStatusText(null);
+      setAiFlow(null);
+    }
+  };
+
+  const handleSkipVideos = () => setAiFlow(null);
+
+  // Renk setindeki tek bir görseli yeniden recolor et (bazen aynı renk çıkıyor).
+  const handleRegenColorItem = async (
+    msg: Extract<AiMsg, { kind: 'result-set' }>,
+    index: number,
+  ) => {
+    if (!aiCompanyId || aiBusy) return;
+    const it = msg.items[index];
+    if (!it?.sourceUrl || !msg.colorRef) {
+      toast.error('Bu görsel yeniden üretilemiyor');
+      return;
+    }
+    setAiBusy(true);
+    setAiStatusText('Renk yeniden oluşturuluyor…');
+    try {
+      const r = await generateImagesRaw(
+        aiCompanyId,
+        {
+          prompt: RECOLOR_PROMPT,
+          model: 'fal-ai/nano-banana-pro',
+          imageUrls: [it.sourceUrl, msg.colorRef],
+        },
+        1,
+      );
+      const newUrl = r.urls[0];
+      if (!newUrl) {
+        toast.error('Yeniden oluşturulamadı');
+        return;
+      }
+      setAiMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== msg.id || m.role !== 'assistant' || m.kind !== 'result-set')
+            return m;
+          const items = m.items.map((x, i) => (i === index ? { ...x, url: newUrl } : x));
+          return { ...m, items };
+        }),
+      );
+    } finally {
+      setAiBusy(false);
+      setAiStatusText(null);
+    }
+  };
+
+  // Varyantları yeniden oluştur. Seçim + metin varsa seçili görseli o talimata
+  // göre düzenler (image-to-image); yoksa orijinal girdiyle baştan üretir.
+  const handleRegenerate = async (
+    msg: Extract<AiMsg, { kind: 'image-set' }>,
+    extraText: string,
+  ) => {
+    if (!aiCompanyId || aiBusy) return;
+    const text = extraText.trim();
+    const selectedUrl =
+      typeof msg.selectedIndex === 'number' ? msg.urls[msg.selectedIndex] : null;
+    let prompt: string;
+    let imageUrls: string[];
+    let model: string | undefined;
+    if (selectedUrl && text) {
+      prompt = text;
+      imageUrls = [selectedUrl];
+      model = 'fal-ai/nano-banana-pro';
+    } else {
+      prompt = [lastImageGen?.prompt, text].filter(Boolean).join(' ').trim();
+      imageUrls = lastImageGen?.imageUrls ?? (selectedUrl ? [selectedUrl] : []);
+    }
+    if (imageUrls.length === 0) {
+      toast.error('Yeniden oluşturmak için referans görsel gerekli');
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const r = await generateImagesRaw(aiCompanyId, { prompt, imageUrls, model }, 3);
+      pushAiMsg(
+        r.urls.length
+          ? { id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'image-set', urls: r.urls }
+          : {
+              id: `a${++aiMsgId.current}`,
+              role: 'assistant',
+              kind: 'error',
+              text: r.error ?? 'Görsel oluşturulamadı',
+            },
+      );
+    } finally {
+      setAiBusy(false);
+      setAiRegenText((prev) => ({ ...prev, [msg.id]: '' }));
+    }
+  };
+
+  // Bir result-set'in tüm görsellerini ZIP olarak indir.
+  const handleDownloadSet = async (m: Extract<AiMsg, { kind: 'result-set' }>) => {
+    if (zipBusyId) return;
+    setZipBusyId(m.id);
+    try {
+      const files = m.items.map((it, i) => ({
+        url: it.url,
+        name: it.name || trSlug(it.poseName || `gorsel-${i + 1}`),
+      }));
+      await downloadImagesZip(files, trSlug(m.label) || 'gorseller');
+    } finally {
+      setZipBusyId(null);
+    }
+  };
+
   const handleAiSend = async (prompt: string, forceMode?: BalinaChatMode) => {
     if (!aiCompanyId || aiBusy) return;
     // Search "Ask AI" gibi dış tetikleyiciler modu zorlayabilir (her zaman metin).
@@ -484,11 +1113,17 @@ function DashboardLayoutInner({
     setAiBusy(true);
     try {
       if (mode === 'image') {
-        // Görsel doğrudan üretilir (FASHN sanal deneme: imageUrls[0]=kişi,
-        // imageUrls[1]=kıyafet). Model + üretim modu backend'de entegrasyon
-        // ayarından (seçili agent) gelir.
-        const r = await generateImageRaw(aiCompanyId, { prompt, imageUrls });
-        if (r.url) push({ id: `a${++aiMsgId.current}`, role: 'assistant', kind: 'image', url: r.url });
+        // Aynı prompt'tan 3 varyant üret — kullanıcı birini seçip diğer
+        // pozlarını da oluşturabilsin. (FASHN: imageUrls[0]=kişi, [1]=kıyafet)
+        setLastImageGen({ prompt, imageUrls });
+        const r = await generateImagesRaw(aiCompanyId, { prompt, imageUrls }, 3);
+        if (r.urls.length)
+          push({
+            id: `a${++aiMsgId.current}`,
+            role: 'assistant',
+            kind: 'image-set',
+            urls: r.urls,
+          });
         else fail(r.error ?? 'Görsel oluşturulamadı');
       } else if (mode === 'video') {
         const r = await generateVideoRaw(aiCompanyId, {
@@ -602,9 +1237,175 @@ function DashboardLayoutInner({
           <div key={m.id} className="flex px-2 py-1">
             <BalinaChatMedia url={m.url} type="image" name={m.name} />
           </div>
+        ) : m.kind === 'image-set' ? (
+          <div key={m.id} className="flex flex-col gap-2 px-2 py-1">
+            <div className="grid grid-cols-3 gap-1.5">
+              {m.urls.map((url, i) => {
+                const isSel = m.selectedIndex === i;
+                return (
+                  <div key={i} className="relative">
+                    <button
+                      type="button"
+                      disabled={aiBusy}
+                      onClick={() => updateAiMsg(m.id, { selectedIndex: i })}
+                      aria-label={`Varyant ${i + 1} seç`}
+                      aria-pressed={isSel}
+                      className={`block aspect-[3/4] w-full overflow-hidden rounded-xl transition-all focus:outline-none disabled:cursor-not-allowed ${
+                        isSel
+                          ? 'ring-2 ring-black ring-offset-1'
+                          : 'ring-1 ring-black/[0.10] hover:ring-black/30'
+                      }`}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Varyant ${i + 1}`} className="h-full w-full object-cover" />
+                      {isSel && (
+                        <span className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black text-white">
+                          <Check className="h-3.5 w-3.5" />
+                        </span>
+                      )}
+                    </button>
+                    {/* Büyüteç — design-system buton; görseli tam ekran büyütür. */}
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      aria-label={`Varyant ${i + 1} büyüt`}
+                      onClick={() => setAiLightbox({ msgId: m.id, index: i })}
+                      className="absolute right-1.5 top-1.5 !bg-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.25)] hover:!bg-white"
+                      leftIcon={<BalinaSearchIcon className="h-4 w-4" />}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Yeniden oluştur — seçim + metin varsa seçili görseli düzenler. */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <BalinaTextField
+                  value={aiRegenText[m.id] ?? ''}
+                  onChange={(v) => setAiRegenText((prev) => ({ ...prev, [m.id]: v }))}
+                  placeholder={
+                    typeof m.selectedIndex === 'number'
+                      ? 'Seçili görselde değişiklik yaz (opsiyonel)'
+                      : 'Değişiklik yaz (opsiyonel)'
+                  }
+                />
+              </div>
+              <BalinaButton
+                variant="soft"
+                size="small"
+                disabled={aiBusy}
+                onClick={() => void handleRegenerate(m, aiRegenText[m.id] ?? '')}
+              >
+                Yeniden oluştur
+              </BalinaButton>
+            </div>
+            {!m.posesResolved && (
+              <div className="flex flex-col gap-2 rounded-2xl bg-[var(--balina-background-dark-faint)] p-3">
+                <span className="text-body-small-medium text-[var(--balina-text-strong)]">
+                  {typeof m.selectedIndex === 'number'
+                    ? `Seçili görselin diğer pozlarını da oluşturayım mı?${aiPoseCount > 0 ? ` (${aiPoseCount} poz)` : ''}`
+                    : 'Bir varyant seçin, diğer pozlarını da oluşturayım mı?'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <BalinaButton
+                    variant="primary"
+                    size="small"
+                    disabled={typeof m.selectedIndex !== 'number' || aiBusy}
+                    onClick={() => {
+                      if (typeof m.selectedIndex === 'number')
+                        void handleAiApplyPoses(m.id, m.urls[m.selectedIndex]);
+                    }}
+                  >
+                    Evet, oluştur
+                  </BalinaButton>
+                  <BalinaButton
+                    variant="soft"
+                    size="small"
+                    disabled={aiBusy}
+                    onClick={() => updateAiMsg(m.id, { posesResolved: true })}
+                  >
+                    Hayır
+                  </BalinaButton>
+                </div>
+                {aiPoseCount === 0 && (
+                  <span className="text-body-tiny-regular text-[var(--balina-text-muted)]">
+                    Henüz poz eklemediniz — entegrasyon ayarlarından “Poz ayarları”na ekleyin.
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        ) : m.kind === 'pose-set' ? (
+          <div key={m.id} className="flex flex-col gap-1.5 px-2 py-1">
+            <span className="px-1 text-body-small-medium text-[var(--balina-text-strong)]">
+              Varyasyonlarınız oluştu
+            </span>
+            <div className="grid grid-cols-3 gap-1.5">
+              {m.items.map((it, i) => (
+                <div key={i} className="flex flex-col items-center gap-1">
+                  <div className="relative aspect-[3/4] w-full overflow-hidden rounded-xl ring-1 ring-black/[0.10]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={it.url} alt={it.poseName} className="h-full w-full object-cover" />
+                    <BalinaButton
+                      variant="soft"
+                      size="small"
+                      aria-label={`${it.poseName || `Poz ${i + 1}`} büyüt`}
+                      onClick={() => setAiLightbox({ msgId: m.id, index: i })}
+                      className="absolute right-1.5 top-1.5 !bg-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.25)] hover:!bg-white"
+                      leftIcon={<BalinaSearchIcon className="h-4 w-4" />}
+                    />
+                    {/* Bu pozu tek başına yeniden oluştur. */}
+                    {m.sourceUrl && (
+                      <BalinaButton
+                        variant="soft"
+                        size="small"
+                        disabled={aiBusy}
+                        aria-label={`${it.poseName || `Poz ${i + 1}`} yeniden oluştur`}
+                        onClick={() =>
+                          void handleRegeneratePoses(m, it.poseId ? [it.poseId] : undefined)
+                        }
+                        className="absolute left-1.5 top-1.5 !bg-white/95 shadow-[0_2px_8px_rgba(0,0,0,0.25)] hover:!bg-white"
+                        leftIcon={<ArrowsRotateRight className="h-4 w-4" />}
+                      />
+                    )}
+                  </div>
+                  <span className="max-w-full truncate text-body-tiny-regular text-[var(--balina-text-muted)]">
+                    {it.poseName || `Poz ${i + 1}`}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {m.sourceUrl && (
+              <div className="flex justify-center">
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  disabled={aiBusy}
+                  onClick={() => void handleRegeneratePoses(m)}
+                  leftIcon={<ArrowsRotateRight className="h-3.5 w-3.5" />}
+                >
+                  Tümünü yeniden oluştur
+                </BalinaButton>
+              </div>
+            )}
+          </div>
+        ) : m.kind === 'result-set' ? (
+          <ResultSetStack
+            key={m.id}
+            items={m.items}
+            label={m.label}
+            busy={zipBusyId === m.id}
+            onZoom={(index) => setAiLightbox({ msgId: m.id, index })}
+            onDownload={() => void handleDownloadSet(m)}
+          />
         ) : m.kind === 'video' ? (
-          <div key={m.id} className="flex px-2 py-1">
-            <BalinaChatMedia url={m.url} type="video" />
+          <div key={m.id} className="flex flex-col gap-1 px-2 py-1">
+            <BalinaChatMedia url={m.url} type="video" name={m.name} />
+            {m.label && (
+              <span className="px-1 text-body-tiny-regular text-[var(--balina-text-muted)]">
+                {m.label}
+              </span>
+            )}
           </div>
         ) : m.kind === 'error' ? (
           <div key={m.id} className="px-3 py-2 text-body-default-regular text-red-500">
@@ -621,12 +1422,185 @@ function DashboardLayoutInner({
       )}
       {aiBusy && (
         <BalinaChatStatus variant="thinking">
-          {aiMode === 'video'
-            ? 'Video oluşturuluyor…'
-            : aiMode === 'image'
-              ? 'Görsel oluşturuluyor…'
-              : 'Yanıt hazırlanıyor…'}
+          {aiStatusText ??
+            (aiMode === 'video'
+              ? 'Video oluşturuluyor…'
+              : aiMode === 'image'
+                ? 'Görsel oluşturuluyor…'
+                : 'Yanıt hazırlanıyor…')}
         </BalinaChatStatus>
+      )}
+      {(() => {
+        if (!aiLightbox) return null;
+        const m = aiMessages.find((x) => x.id === aiLightbox.msgId);
+        if (!m || m.role !== 'assistant') return null;
+        let items: { url: string; name?: string }[] = [];
+        const idxRaw = aiLightbox.index;
+        // Tek bir öğeyi yeniden üretip regenTarget'ı set/temizleyen sarmalayıcı.
+        const wrapRegen = (run: () => Promise<unknown>) => () => {
+          setRegenTarget({ msgId: m.id, index: idxRaw });
+          void run().finally(() => setRegenTarget(null));
+        };
+        let onRegenerate: (() => void) | undefined;
+        if (m.kind === 'image-set') {
+          items = m.urls.map((url, i) => ({ url, name: `varyant-${i + 1}` }));
+        } else if (m.kind === 'pose-set') {
+          items = m.items.map((it, i) => ({
+            url: it.url,
+            name: trSlug(it.poseName || `poz-${i + 1}`),
+          }));
+          if (m.sourceUrl) {
+            const it = m.items[idxRaw];
+            onRegenerate = wrapRegen(() =>
+              handleRegeneratePoses(m, it?.poseId ? [it.poseId] : undefined),
+            );
+          }
+        } else if (m.kind === 'result-set') {
+          items = m.items.map((it, i) => ({
+            url: it.url,
+            name: it.name ?? trSlug(it.poseName || `gorsel-${i + 1}`),
+          }));
+          if (m.colorRef) {
+            onRegenerate = wrapRegen(() => handleRegenColorItem(m, idxRaw));
+          }
+        } else {
+          return null;
+        }
+        if (items.length === 0) return null;
+        const idx = Math.min(idxRaw, items.length - 1);
+        // Spinner yalnızca aktif olarak yeniden üretilen bu öğede dönsün.
+        const thisBusy =
+          !!regenTarget && regenTarget.msgId === m.id && regenTarget.index === idx;
+        return (
+          <AiLightbox
+            items={items}
+            index={idx}
+            regenBusy={thisBusy}
+            onRegenerate={onRegenerate}
+            onIndex={(i) => setAiLightbox({ msgId: m.id, index: i })}
+            onClose={() => setAiLightbox(null)}
+          />
+        );
+      })()}
+      {/* Rehberli akış soruları (renk → kod → video) — sonuçlar mesaj olarak akar. */}
+      {aiFlow && !aiBusy && (
+        <div className="mx-2 my-1 flex flex-col gap-2 rounded-2xl bg-[var(--balina-background-dark-faint)] p-3">
+          {aiFlow.step === 'colors' && (
+            <>
+              <span className="text-body-small-medium text-[var(--balina-text-strong)]">
+                Farklı renklerini de oluşturayım mı? Renk görsel(ler)ini ekleyin —
+                yalnızca renk değişir, kalan her şey aynı kalır.
+              </span>
+              {aiFlow.colorRefs.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {aiFlow.colorRefs.map((u, i) => (
+                    <div key={i} className="group relative h-16 w-16">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={u}
+                        alt=""
+                        className="h-16 w-16 rounded-lg object-cover ring-1 ring-black/10"
+                      />
+                      {/* Sil — mobilde her zaman, masaüstünde hover'da; ortada. */}
+                      <button
+                        type="button"
+                        aria-label="Rengi kaldır"
+                        onClick={() =>
+                          setAiFlow((prev) =>
+                            prev
+                              ? { ...prev, colorRefs: prev.colorRefs.filter((_, idx) => idx !== i) }
+                              : prev,
+                          )
+                        }
+                        className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/30 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+                      >
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-white shadow-sm">
+                          <Xmark className="h-4 w-4" />
+                        </span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <input
+                ref={colorFileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => void handleAddColorRefs(e.target.files)}
+              />
+              <div className="flex flex-wrap items-center gap-2">
+                <BalinaButton
+                  variant="soft"
+                  size="small"
+                  leftIcon={<Plus className="h-4 w-4" />}
+                  onClick={() => colorFileRef.current?.click()}
+                >
+                  Renk görseli ekle
+                </BalinaButton>
+                <BalinaButton
+                  variant="primary"
+                  size="small"
+                  disabled={aiFlow.colorRefs.length === 0}
+                  onClick={() => void handleApplyColors()}
+                >
+                  Evet, oluştur
+                </BalinaButton>
+                <BalinaButton variant="soft" size="small" onClick={handleSkipColors}>
+                  Hayır
+                </BalinaButton>
+              </div>
+            </>
+          )}
+          {aiFlow.step === 'code' && (
+            <>
+              <span className="text-body-small-medium text-[var(--balina-text-strong)]">
+                Görsellere kod eklensin mi?
+              </span>
+              <BalinaTextField
+                value={aiCodeInput}
+                onChange={setAiCodeInput}
+                placeholder="Örn. KZ-1234"
+              />
+              <div className="flex items-center gap-2">
+                <BalinaButton
+                  variant="primary"
+                  size="small"
+                  disabled={!aiCodeInput.trim()}
+                  onClick={() => void handleApplyCode()}
+                >
+                  Evet, uygula
+                </BalinaButton>
+                <BalinaButton variant="soft" size="small" onClick={handleSkipCode}>
+                  Hayır
+                </BalinaButton>
+              </div>
+            </>
+          )}
+          {aiFlow.step === 'video' && (
+            <>
+              <span className="text-body-small-medium text-[var(--balina-text-strong)]">
+                Videoları oluşturayım mı? (her renk için{' '}
+                {aiFalIntegration?.imagePoses?.find((p) => p.id === aiVideoPoseId)?.name ||
+                  'Kol Aşağıda'}{' '}
+                pozundan)
+              </span>
+              <div className="flex items-center gap-2">
+                <BalinaButton
+                  variant="primary"
+                  size="small"
+                  onClick={() => void handleMakeVideos()}
+                >
+                  Evet, oluştur
+                </BalinaButton>
+                <BalinaButton variant="soft" size="small" onClick={handleSkipVideos}>
+                  Hayır
+                </BalinaButton>
+              </div>
+            </>
+          )}
+        </div>
       )}
     </>
   );

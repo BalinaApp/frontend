@@ -82,6 +82,9 @@ export interface Product {
   productType: string;
   stockQuantity: number;
   price: number;
+  /** Varyant fiyat aralığı (Satış F. → ₺min ~ ₺max). Varyantı yoksa min=max=price. */
+  minPrice?: number;
+  maxPrice?: number;
   purchasePrice: number | null;
   vatRate: number | null;
   storeId: string;
@@ -129,6 +132,10 @@ export interface ProductMappingStore {
   wcProductId: bigint;
   isSource: boolean;
   stockQuantity: number;
+  /** O mağazadaki ürünün satış fiyatı (per-pazaryeri düzenleme için). */
+  price?: number;
+  /** 'variable' ise fiyat varyasyonlarda → satır düzenlemesi kapalı. */
+  productType?: string;
 }
 
 export interface ProductMappingInfo {
@@ -212,7 +219,11 @@ interface InventoryState {
   fetchProduct: (companyId: string, productId: string) => Promise<void>;
   updateProductStock: (companyId: string, productId: string, stockQuantity: number) => Promise<boolean>;
   updateVariationStock: (companyId: string, variationId: string, stockQuantity: number) => Promise<boolean>;
+  /** Varyasyon satış fiyatını güncelle + (mümkünse) canlı pazaryerine push. */
+  updateVariationPrice: (companyId: string, variationId: string, price: number) => Promise<boolean>;
   updateProductPurchasePrice: (companyId: string, productId: string, purchasePrice: number | null) => Promise<boolean>;
+  /** Satış fiyatını güncelle + (mümkünse) canlı pazaryerine push. Per-pazaryeri düzenleme. */
+  updateStoreProductPrice: (companyId: string, productId: string, price: number) => Promise<{ pushed: boolean; pushError?: string } | null>;
   updateVariationPurchasePrice: (companyId: string, variationId: string, purchasePrice: number) => Promise<boolean>;
   /** Multi-field PATCH — inline cell editor + edit sayfası için.
    *  Backend: name, isActive, vatRate, sku, description, price, imageUrls[]. */
@@ -410,6 +421,79 @@ export const useInventoryStore = create<InventoryState>((set, get) => ({
         isUpdating: false,
       });
       return false;
+    }
+  },
+
+  updateVariationPrice: async (companyId: string, variationId: string, price: number) => {
+    set({ isUpdating: true, error: null });
+    try {
+      await api.patch(`/company/${companyId}/inventory/variations/${variationId}/price`, {
+        price,
+      });
+      // Update local state
+      const { selectedProduct } = get();
+      if (selectedProduct) {
+        const updatedVariations = selectedProduct.variations.map((v) =>
+          v.id === variationId ? { ...v, price } : v
+        );
+        set({
+          selectedProduct: {
+            ...selectedProduct,
+            variations: updatedVariations,
+          },
+          isUpdating: false,
+        });
+      } else {
+        set({ isUpdating: false });
+      }
+      return true;
+    } catch (error: any) {
+      set({
+        error: error.response?.data?.message || 'Varyasyon fiyatı güncellenemedi',
+        isUpdating: false,
+      });
+      return false;
+    }
+  },
+
+  updateStoreProductPrice: async (companyId: string, productId: string, price: number) => {
+    set({ isUpdating: true, error: null });
+    try {
+      const res = await api.patch(
+        `/company/${companyId}/inventory/products/${productId}/price`,
+        { price },
+      );
+      // Lokal state: mapping.stores içindeki ilgili mağaza fiyatını + (kaynak
+      // ürünse) selectedProduct.price'ı güncelle.
+      const { selectedProduct } = get();
+      if (selectedProduct?.mapping) {
+        set({
+          selectedProduct: {
+            ...selectedProduct,
+            price:
+              selectedProduct.id === productId ? price : selectedProduct.price,
+            mapping: {
+              ...selectedProduct.mapping,
+              stores: selectedProduct.mapping.stores.map((s) =>
+                s.productId === productId ? { ...s, price } : s,
+              ),
+            },
+          },
+        });
+      } else if (selectedProduct?.id === productId) {
+        set({ selectedProduct: { ...selectedProduct, price } });
+      }
+      set({ isUpdating: false });
+      return {
+        pushed: !!res.data?.pushed,
+        pushError: res.data?.pushError as string | undefined,
+      };
+    } catch (error) {
+      set({
+        isUpdating: false,
+        error: error instanceof Error ? error.message : 'Fiyat güncellenemedi',
+      });
+      return null;
     }
   },
 

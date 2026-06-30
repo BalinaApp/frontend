@@ -17,6 +17,8 @@ export interface VariationRow {
   key: string;
   label: string;
   stock: number | string;
+  /** Fiyat — yeni ürün akışında henüz değer yok; opsiyonel. */
+  price?: number | string;
   imageUrl?: string | null;
 }
 
@@ -32,6 +34,8 @@ interface Props {
   onToggleSelect: (key: string) => void;
   onToggleGroupSelect: (group: VariationGroup) => void;
   onStockChange: (key: string, value: string) => void;
+  onPriceChange?: (key: string, value: string) => void;
+  onPriceCommit?: (key: string) => void;
   onImageAi?: (key: string) => void;
   onImageFile?: (key: string) => void;
 }
@@ -49,6 +53,8 @@ export function VariationsTable({
   onToggleSelect,
   onToggleGroupSelect,
   onStockChange,
+  onPriceChange,
+  onPriceCommit,
   onImageAi,
   onImageFile,
 }: Props) {
@@ -104,6 +110,22 @@ export function VariationsTable({
                   {row.label}
                 </span>
               </div>
+              {onPriceChange && (
+                <div className="w-[140px]">
+                  {/* Stok input'uyla aynı ghost stil. */}
+                  <BalinaTextField
+                    value={String(row.price ?? '')}
+                    onChange={(v) => onPriceChange(row.key, v)}
+                    onBlur={() => onPriceCommit?.(row.key)}
+                    aria-label={`${row.label} fiyatı`}
+                    variant="ghost"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Fiyat"
+                    className="placeholder:text-zinc-500"
+                  />
+                </div>
+              )}
               <div className="w-[180px]">
                 {/* Alış Fiyatı stiliyle aynı — base bg saydam, hover/focus'ta
                     hafif gri tonu. */}

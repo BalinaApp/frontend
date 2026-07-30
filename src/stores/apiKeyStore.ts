@@ -7,6 +7,13 @@ export interface ApiKeyPermissions {
   write: boolean;
 }
 
+/** Chatbot (balinaOS Agent) endpoint scope'u — generic read/write'tan bağımsız.
+ *  n8n'in chat-threads / store lookup / vision uçlarına erişmesi için gerekir. */
+export interface ChatbotScopes {
+  read: boolean;
+  write: boolean;
+}
+
 export interface ApiKey {
   id: string;
   name: string;
@@ -15,6 +22,8 @@ export interface ApiKey {
    *  was introduced. Older rows return `null` and fall back to the prefix. */
   keyPlain: string | null;
   permissions: ApiKeyPermissions;
+  /** Backend bu alanı listeye sonradan ekledi — eski yanıtlarda gelmeyebilir. */
+  chatbotScopes?: ChatbotScopes;
   lastUsedAt: string | null;
   expiresAt: string | null;
   isActive: boolean;
@@ -57,7 +66,8 @@ interface ApiKeyState {
   createApiKey: (
     name: string,
     permissions?: ApiKeyPermissions,
-    expiresAt?: string
+    expiresAt?: string,
+    chatbotScopes?: ChatbotScopes
   ) => Promise<ApiKeyWithSecret | null>;
   updateApiKey: (
     id: string,
@@ -95,12 +105,13 @@ export const useApiKeyStore = create<ApiKeyState>((set, get) => ({
   },
 
   // Create a new API key
-  createApiKey: async (name, permissions, expiresAt) => {
+  createApiKey: async (name, permissions, expiresAt, chatbotScopes) => {
     set({ isCreating: true, error: null });
     try {
       const response = await api.post('/settings/api-keys', {
         name,
         permissions: permissions || { read: true, write: false },
+        chatbotScopes: chatbotScopes || { read: false, write: false },
         expiresAt,
       });
 

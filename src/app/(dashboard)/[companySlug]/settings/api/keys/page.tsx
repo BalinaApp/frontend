@@ -62,6 +62,7 @@ export default function ApiKeysListPage() {
   const [newKeyName, setNewKeyName] = useState('');
   const [isUpgradeOpen, setIsUpgradeOpen] = useState(false);
   const [newKeyWrite, setNewKeyWrite] = useState(false);
+  const [newKeyChatbot, setNewKeyChatbot] = useState(false);
   const [showSecret, setShowSecret] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
 
@@ -78,10 +79,14 @@ export default function ApiKeysListPage() {
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) return;
-    await createApiKey(newKeyName.trim(), {
-      read: true,
-      write: newKeyWrite,
-    });
+    await createApiKey(
+      newKeyName.trim(),
+      { read: true, write: newKeyWrite },
+      undefined,
+      // Chatbot uçları read+write'ı birlikte ister (mesaj kaydetme, session
+      // güncelleme yazma scope'una girer) — tek anahtarla ikisini de veriyoruz.
+      { read: newKeyChatbot, write: newKeyChatbot }
+    );
   };
 
   const handleCloseCreate = () => {
@@ -89,6 +94,7 @@ export default function ApiKeysListPage() {
     clearNewKeySecret();
     setNewKeyName('');
     setNewKeyWrite(false);
+    setNewKeyChatbot(false);
     setShowSecret(false);
     setCopiedSecret(false);
   };
@@ -283,6 +289,21 @@ export default function ApiKeysListPage() {
                   onCheckedChange={setNewKeyWrite}
                 />
               </div>
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-body-small-one-liner-medium px-1 text-[var(--balina-text-strong)]">
+                    Chatbot erişimi
+                  </label>
+                  <p className="text-xs text-muted">
+                    Instagram AI botu (n8n) için gerekli. Sohbet, ürün ve
+                    görsel analiz uçlarını açar.
+                  </p>
+                </div>
+                <BalinaSwitch
+                  checked={newKeyChatbot}
+                  onCheckedChange={setNewKeyChatbot}
+                />
+              </div>
             </>
           )}
         </div>
@@ -332,6 +353,17 @@ function ApiKeyRow({
       >
         {apiKey.name}
       </span>
+
+      {/* Chatbot scope — yalnızca açıksa göster (oluştururken belirlenir) */}
+      {apiKey.chatbotScopes?.read && (
+        <span
+          className={`shrink-0 rounded-md bg-black/[0.06] px-1.5 py-0.5 text-xs font-medium transition-colors ${
+            apiKey.isActive ? 'text-foreground/70' : 'text-foreground/35'
+          }`}
+        >
+          Chatbot
+        </span>
+      )}
 
       {/* Permission label — read-only text (set at creation time) */}
       <span

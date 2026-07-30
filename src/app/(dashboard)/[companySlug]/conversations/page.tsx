@@ -123,6 +123,89 @@ export default function ConversationsPage() {
     fetchThreadDetail(currentCompany.id, selectedId);
   }, [currentCompany?.id, selectedId, fetchThreadDetail, clearSelected]);
 
+  // Canlı akış (SSE). Backend şirket geneli event yayınlıyor; yeni mesaj
+  // geldiğinde listeyi ve (açıksa) seçili sohbeti anında tazeliyoruz.
+  // EventSource header gönderemediği için fetch + ReadableStream kullanıyoruz —
+  // token'ı URL'e koymak zorunda kalmıyoruz.
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
+
+  // Tazeleme mantığını ref'te tutuyoruz: aksi halde arama kutusuna yazdıkça
+  // refreshList kimliği değişir ve stream her tuşta yeniden kurulurdu.
+  const onEventRef = useRef<() => void>(() => {});
+  onEventRef.current = () => {
+    refreshList();
+    const openThread = selectedIdRef.current;
+    if (openThread && currentCompany?.id) {
+      refreshMessages(currentCompany.id, openThread);
+    }
+  };
+
+  useEffect(() => {
+    const companyId = currentCompany?.id;
+    if (!companyId) return;
+
+    const controller = new AbortController();
+    let cancelled = false;
+    let retryTimer: number | undefined;
+
+    const onEvent = () => onEventRef.current();
+
+    const connect = async () => {
+      let token: string | null = null;
+      try {
+        const raw = localStorage.getItem('auth-storage');
+        token = raw ? (JSON.parse(raw)?.state?.accessToken ?? null) : null;
+      } catch {
+        token = null;
+      }
+      const base =
+        process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3003/api';
+      try {
+        const res = await fetch(`${base}/company/${companyId}/chat-stream`, {
+          headers: {
+            Accept: 'text/event-stream',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) throw new Error(`stream ${res.status}`);
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // SSE paketleri boş satırla ayrılır; 'ping' dışındakiler tazeleme tetikler.
+          const packets = buffer.split('\n\n');
+          buffer = packets.pop() ?? '';
+          for (const packet of packets) {
+            if (!packet.includes('data:')) continue;
+            if (/^event:\s*ping/m.test(packet)) continue;
+            onEvent();
+          }
+        }
+        throw new Error('stream kapandı');
+      } catch (err) {
+        if (cancelled || controller.signal.aborted) return;
+        void err;
+        // Bağlantı koparsa (deploy, uyku, ağ) 5 sn sonra yeniden dene.
+        retryTimer = window.setTimeout(connect, 5_000);
+      }
+    };
+
+    void connect();
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (retryTimer) window.clearTimeout(retryTimer);
+    };
+    // Yalnızca şirket değişince yeniden bağlan.
+  }, [currentCompany?.id]);
+
+  // SSE koparsa sessizce geride kalmayalım — seyrek bir emniyet ağı.
   useEffect(() => {
     if (!currentCompany?.id || !selectedId) return;
     const interval = window.setInterval(() => {
@@ -262,6 +345,7 @@ export default function ConversationsPage() {
             messages={selectedMessages}
             status={selectedThread.status}
             customerName={selectedThread.instagramUsername ?? 'İsimsiz'}
+            customerAvatar={selectedThread.instagramProfilePic}
             customerHandle={
               selectedThread.instagramUsername
                 ? `@${selectedThread.instagramUsername}`
@@ -328,7 +412,11 @@ function ThreadCard({
           : 'border-transparent hover:bg-surface-secondary/60',
       ].join(' ')}
     >
-      <UserAvatar seed={thread.instagramUsername ?? thread.id} fallback={initials} />
+      <UserAvatar
+        seed={thread.instagramUsername ?? thread.id}
+        fallback={initials}
+        src={thread.instagramProfilePic}
+      />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
@@ -384,6 +472,7 @@ function ThreadDetailPanel({
   messages,
   status,
   customerName,
+  customerAvatar,
   customerHandle,
   storeName,
   isStarred,
@@ -398,6 +487,7 @@ function ThreadDetailPanel({
   messages: ChatMessage[];
   status: ThreadStatus;
   customerName: string;
+  customerAvatar?: string | null;
   customerHandle: string;
   storeName: string;
   isStarred: boolean;
@@ -475,7 +565,12 @@ function ThreadDetailPanel({
 
         {/* Customer header */}
         <div className="mb-6 flex items-start gap-3">
-          <UserAvatar seed={customerName} fallback={customerName.slice(0, 2)} size="md" />
+          <UserAvatar
+            seed={customerName}
+            fallback={customerName.slice(0, 2)}
+            size="md"
+            src={customerAvatar}
+          />
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <div className="min-w-0">
@@ -741,10 +836,14 @@ function UserAvatar({
   seed,
   fallback,
   size = 'sm',
+  src,
 }: {
   seed: string;
   fallback: string;
   size?: 'sm' | 'md';
+  /** Instagram profil fotoğrafı. Meta CDN linki süreli olduğu için
+   *  yüklenemezse renkli baş harf rozetine düşüyoruz. */
+  src?: string | null;
 }) {
   const gradients = [
     'linear-gradient(135deg,#86efac 0%,#34d399 100%)', // green
@@ -761,6 +860,19 @@ function UserAvatar({
   }
   const bg = gradients[hash % gradients.length];
   const dim = size === 'md' ? 'h-10 w-10' : 'h-9 w-9';
+  const [imgFailed, setImgFailed] = useState(false);
+
+  if (src && !imgFailed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={fallback}
+        onError={() => setImgFailed(true)}
+        className={`${dim} shrink-0 rounded-full border border-white/40 object-cover shadow-sm`}
+      />
+    );
+  }
   return (
     <div
       className={`${dim} shrink-0 rounded-full border border-white/40 shadow-sm`}

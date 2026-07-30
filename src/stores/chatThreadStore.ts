@@ -46,6 +46,7 @@ export interface ChatThreadListItem {
   storeId: string;
   storeName: string;
   instagramUsername: string | null;
+  instagramProfilePic: string | null;
   status: ThreadStatus;
   lastMessageAt: string | null;
   messageCount: number;
@@ -58,6 +59,7 @@ export interface ChatThreadDetail {
   storeName?: string;
   instagramUserId: string;
   instagramUsername: string | null;
+  instagramProfilePic: string | null;
   status: ThreadStatus;
   takenOverBy: string | null;
   takenOverAt: string | null;

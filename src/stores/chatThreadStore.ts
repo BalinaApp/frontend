@@ -24,6 +24,8 @@ export interface ChatMedia {
   url: string;
   type: 'image' | 'video' | string;
   mediaId?: string;
+  /** Gönderi paylaşımlarında (ig_post/ig_reel) caption — ürün kodu genelde burada. */
+  title?: string;
 }
 
 export interface ChatMessage {

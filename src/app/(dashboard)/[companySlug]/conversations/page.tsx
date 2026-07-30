@@ -33,6 +33,18 @@ import {
 
 const POLL_INTERVAL_MS = 45_000;
 
+/** Meta'nın görsel içeren mesaj tipleri. Gönderi/story/reel paylaşımları da
+ *  resim URL'i taşır; yalnızca 'image' kontrol edilirse panelde link olarak
+ *  görünür ve admin müşterinin ne gönderdiğini göremez. */
+const VISUAL_MEDIA_TYPES = [
+  'image',
+  'ig_post',
+  'ig_story',
+  'story_reply',
+  'reel',
+  'share',
+];
+
 const STATUS_LABEL: Record<ThreadStatus, string> = {
   ai: 'AI',
   observing: 'Gözlem',
@@ -654,14 +666,22 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         {message.mediaUrls.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {message.mediaUrls.map((m, i) =>
-              m.type === 'image' ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={m.url}
-                  alt=""
-                  className="max-h-40 rounded-md object-cover"
-                />
+              // Paylaşılan gönderi/story/reel de görsel olarak gelir — hepsini
+              // önizle, yoksa müşterinin ne gönderdiği panelde görünmüyor.
+              VISUAL_MEDIA_TYPES.includes(m.type) ? (
+                <figure key={i} className="flex flex-col gap-1">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={m.url}
+                    alt={m.title ?? ''}
+                    className="max-h-40 rounded-md object-cover"
+                  />
+                  {m.title && (
+                    <figcaption className="max-w-40 whitespace-pre-wrap text-[11px] opacity-70">
+                      {m.title.length > 140 ? `${m.title.slice(0, 140)}…` : m.title}
+                    </figcaption>
+                  )}
+                </figure>
               ) : (
                 <a
                   key={i}

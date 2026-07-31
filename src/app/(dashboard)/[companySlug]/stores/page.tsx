@@ -1589,9 +1589,9 @@ function ChatbotSettingsModal({
   const [iban, setIban] = useState(config.iban ?? '');
   const [accountName, setAccountName] = useState(config.accountName ?? '');
   const [dhlCode, setDhlCode] = useState(config.dhlCode ?? '');
-  const [defaultModel, setDefaultModel] = useState(
-    config.defaultModel ?? 'gpt-4o',
-  );
+  // Boş = sistem varsayılanı. Sağlayıcıya özel bir model adını (ör. 'gpt-4o')
+  // buraya sabitlemek, backend başka bir sağlayıcıya geçince 404 üretiyor.
+  const [defaultModel, setDefaultModel] = useState(config.defaultModel ?? '');
   const [showPrompt, setShowPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -1740,7 +1740,13 @@ function ChatbotSettingsModal({
 
                 <div className="grid grid-cols-2 gap-2">
                   <BalinaTextField label="DHL kodu" value={dhlCode} onChange={setDhlCode} placeholder="915737309" />
-                  <BalinaTextField label="Varsayılan model" value={defaultModel} onChange={setDefaultModel} placeholder="gpt-4o" />
+                  <BalinaTextField
+                    label="Varsayılan model"
+                    value={defaultModel}
+                    onChange={setDefaultModel}
+                    placeholder="Sistem varsayılanı"
+                    description="Boş bırakırsan sistemdeki AI modeli kullanılır."
+                  />
                 </div>
 
                 <div className="flex items-center justify-between">

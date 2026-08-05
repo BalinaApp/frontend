@@ -1267,7 +1267,13 @@ export default function OrdersPage() {
                 // kullanıcı önce "Adres hatalı" rozetine basıp düzeltmeli,
                 // aksi halde bulk akış CreateOrder'da patlar.
                 const cargoRef = toMngReferenceId(order.orderNumber);
-                const addressInvalid = cargoValidByRef[cargoRef] === false;
+                // Tamamlanmış siparişte adres uyarısı anlamsız: kargo çoktan
+                // gitmiş, adresi düzeltmenin bir karşılığı yok. Uyarı yalnızca
+                // "etiket basılacak" siparişler için var.
+                const addressCheckRelevant =
+                  isShippable && order.status !== 'completed';
+                const addressInvalid =
+                  addressCheckRelevant && cargoValidByRef[cargoRef] === false;
                 const canSelect = isShippable && !addressInvalid;
                 return (
                   <div
@@ -1333,9 +1339,7 @@ export default function OrdersPage() {
                               ? ` · ${order.customerEmail}`
                               : ''}
                           </span>
-                          {isShippable &&
-                          cargoValidByRef[toMngReferenceId(order.orderNumber)] ===
-                            false ? (
+                          {addressInvalid ? (
                             <button
                               type="button"
                               onClick={(e) => {

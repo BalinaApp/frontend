@@ -71,6 +71,16 @@ const statusMeta: Record<
   'on-hold': { label: 'Bekletiliyor', tone: 'warning', Icon: Clock },
 };
 
+// Chatbot'un açtığı siparişler WooCommerce order attribution meta'sında
+// "instagram-ai-chatbot" taşıyor. Panelde bunları ayırt edebilmek için rozet:
+// hangi satışın bottan geldiği tek bakışta görülsün.
+const AI_ORDER_SOURCES = new Set(['instagram-ai-chatbot', 'instagram-exchange']);
+
+function isAiOrder(source?: string | null): boolean {
+  const s = (source ?? '').trim().toLowerCase();
+  return AI_ORDER_SOURCES.has(s) || s.includes('ai-chatbot');
+}
+
 // Kargo durumları — Shipment.status (poller MNG'den günceller). Liste eskiden
 // yalnızca "kargo kaydı var mı?" diye bakıp hepsine "Kargoda" diyordu; teslim
 // edilmiş gönderi de öyle görünüyordu.
@@ -1339,6 +1349,14 @@ export default function OrdersPage() {
                               ? ` · ${order.customerEmail}`
                               : ''}
                           </span>
+                          {isAiOrder(order.source) ? (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium leading-3 text-accent"
+                              title="Bu sipariş Instagram AI chatbot üzerinden oluşturuldu"
+                            >
+                              AI
+                            </span>
+                          ) : null}
                           {addressInvalid ? (
                             <button
                               type="button"

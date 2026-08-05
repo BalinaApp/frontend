@@ -82,6 +82,9 @@ export interface Order {
     id: string;
     name: string;
   };
+  /** Siparişin geldiği kanal (WooCommerce order attribution utm_source).
+   *  Chatbot siparişlerinde "instagram-ai-chatbot" — panelde AI rozeti. */
+  source?: string | null;
   /** Bu siparişe ait yerel Shipment kaydı sayısı (>=1 ise kargoya verilmiş). */
   shipmentCount?: number;
   /** En güncel satış gönderisinin durumu: created / in_transit /

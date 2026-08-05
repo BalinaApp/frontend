@@ -71,6 +71,21 @@ const statusMeta: Record<
   'on-hold': { label: 'Bekletiliyor', tone: 'warning', Icon: Clock },
 };
 
+// Kargo durumları — Shipment.status (poller MNG'den günceller). Liste eskiden
+// yalnızca "kargo kaydı var mı?" diye bakıp hepsine "Kargoda" diyordu; teslim
+// edilmiş gönderi de öyle görünüyordu.
+const cargoStatusMeta: Record<
+  string,
+  { label: string; tone: StatusTone; Icon: React.ComponentType<React.SVGProps<SVGSVGElement>> }
+> = {
+  created: { label: 'Kargoya Verildi', tone: 'accent', Icon: Printer },
+  in_transit: { label: 'Kargoda', tone: 'accent', Icon: Printer },
+  out_for_delivery: { label: 'Dağıtımda', tone: 'warning', Icon: Clock },
+  delivered: { label: 'Teslim Edildi', tone: 'success', Icon: Check },
+  failed: { label: 'Teslim Edilemedi', tone: 'danger', Icon: TriangleExclamation },
+  cancelled: { label: 'Kargo İptal', tone: 'muted', Icon: CircleXmark },
+};
+
 const toneClass: Record<StatusTone, string> = {
   success: 'text-success',
   accent: 'text-accent',
@@ -1344,6 +1359,8 @@ export default function OrdersPage() {
                         <OrderStatusChip
                           status={order.status}
                           shipped={(order.shipmentCount ?? 0) > 0}
+                          shipmentStatus={order.shipmentStatus}
+                          shipmentStatusText={order.shipmentStatusText}
                         />
                       </CellWrap>
                       <CellWrap className="w-28">
@@ -2361,17 +2378,29 @@ function CellWrap({
 function OrderStatusChip({
   status,
   shipped,
+  shipmentStatus,
+  shipmentStatusText,
 }: {
   status: string;
   shipped?: boolean;
+  shipmentStatus?: string | null;
+  shipmentStatusText?: string | null;
 }) {
-  // Kargoya verilmişse status'un yerine "Kargoya Verildi" göster — depo
+  // Kargoya verilmişse status'un yerine kargo durumunu göster — depo
   // operasyonunda en kritik bilgi bu, processing/completed ikinci planda.
+  // Durum bilinmiyorsa (eski kayıt / poller henüz çalışmamış) "Kargoya
+  // Verildi"ye düşüyoruz; tooltip'te kargo firmasının ham metni var.
   if (shipped) {
+    const meta =
+      cargoStatusMeta[shipmentStatus ?? ''] ?? cargoStatusMeta.created;
+    const CargoIcon = meta.Icon;
     return (
-      <span className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground">
-        <Printer className={['h-3 w-3', toneClass.success].join(' ')} />
-        Kargoda
+      <span
+        className="inline-flex h-5 items-center justify-center gap-1 rounded-xl px-1 py-0.5 text-xs font-medium leading-4 text-foreground"
+        title={shipmentStatusText ?? undefined}
+      >
+        <CargoIcon className={['h-3 w-3', toneClass[meta.tone]].join(' ')} />
+        {meta.label}
       </span>
     );
   }

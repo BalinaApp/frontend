@@ -82,8 +82,15 @@ export interface Order {
     id: string;
     name: string;
   };
-  /** Bu siparişe ait yerel Shipment kaydı sayısı (>=1 ise "Kargoya Verildi"). */
+  /** Bu siparişe ait yerel Shipment kaydı sayısı (>=1 ise kargoya verilmiş). */
   shipmentCount?: number;
+  /** En güncel satış gönderisinin durumu: created / in_transit /
+   *  out_for_delivery / delivered / failed. Poller MNG'den güncelliyor.
+   *  Liste bunu kullanmadan önce teslim edilmiş kargolar da "Kargoda"
+   *  görünüyordu. */
+  shipmentStatus?: string | null;
+  /** Kargo firmasının ham durum metni ("Dağıtımda", "Teslim Edildi"). */
+  shipmentStatusText?: string | null;
 }
 
 export interface OrdersResponse {

@@ -1206,8 +1206,8 @@ export default function OrdersPage() {
 
         {/* ============== Header + rows ==============
             Telefonda tablo sabit genişlikte kalır ve yatay kayar (sütunlar sıkışmaz). */}
-        <div className="max-md:overflow-x-auto">
-        <div className="flex flex-col gap-2.5 p-2.5 max-md:min-w-[900px]">
+        <div className="max-lg:overflow-x-auto">
+        <div className="flex flex-col gap-2.5 p-2.5 max-lg:min-w-[980px]">
           {/* Column header — left half: order, right half: 4 cols
               (Durum/Mağaza/Tutar/Tarih hepsi sıralanabilir, products pattern'i). */}
           <div className="flex items-center justify-between">

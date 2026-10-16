@@ -653,8 +653,8 @@ export default function InventoryPage() {
 
         {/* ============== Header + rows ==============
             Telefonda tablo sabit genişlikte kalır ve yatay kayar (sütunlar sıkışmaz). */}
-        <div className="max-md:overflow-x-auto">
-        <div className="flex flex-col gap-2.5 px-6 py-2.5 max-md:min-w-[760px] max-md:px-3">
+        <div className="max-lg:overflow-x-auto">
+        <div className="flex flex-col gap-2.5 px-6 py-2.5 max-lg:min-w-[1100px] max-md:px-3">
           {/* Column header — left half: name, right half: 5 cols. Tüm
               kolonlar SortHeaderButton — hover'da pill+arrow gösterir;
               tıklayınca sıralama uygulanır (backend `sortBy` string olarak
@@ -887,7 +887,7 @@ export default function InventoryPage() {
                             product.marketplacePrices?.length ??
                             (product.storeId ? 1 : 0);
                           return channelCount > 0 ? (
-                            <span className="inline-flex items-center gap-1.5 text-xs font-medium leading-4 text-foreground">
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium leading-4 text-foreground">
                               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-success" />
                               {channelCount} Satış Kanalı
                             </span>

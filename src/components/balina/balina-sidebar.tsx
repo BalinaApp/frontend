@@ -22,6 +22,10 @@ import {
  * İçerik (nav) `children` ile verilir; e-posta'ya özgü klasör/carousel YOK. */
 
 export interface BalinaSidebarProps {
+  /** Telefonda (md altı) çekmece açık mı; kapalıyken sidebar ekran dışında durur. */
+  mobileOpen?: boolean;
+  /** Telefonda arka plana dokununca çekmeceyi kapatır. */
+  onMobileClose?: () => void;
   name?: string;
   avatarSrc?: string;
   avatarFallback?: React.ReactNode;
@@ -168,6 +172,8 @@ export function BalinaSidebar({
   minWidth = 224,
   maxWidth = 400,
   className,
+  mobileOpen = false,
+  onMobileClose,
 }: BalinaSidebarProps) {
   const scrollRef = useBalinaScrollbar<HTMLDivElement>();
   const [width, setWidth] = React.useState(defaultWidth);
@@ -240,13 +246,27 @@ export function BalinaSidebar({
           className="fixed left-0 top-0 z-[45] h-full w-2.5"
         />
       )}
+      {/* Telefonda açık çekmecenin arka planı: dokununca kapanır. */}
+      {mobileOpen && (
+        <div
+          aria-hidden
+          onClick={onMobileClose}
+          className="fixed inset-0 z-[65] bg-black/40 md:hidden"
+        />
+      )}
       <aside
-        style={resizable && !collapsed ? { width: `${width}px` } : undefined}
         className={cn(
           'sticky top-[var(--gap)] z-[40] flex h-[calc(100svh-calc(var(--gap)*2))] shrink-0 flex-row',
           collapsed ? 'w-0' : !resizable && 'w-64',
+          // Telefon: soldan kayan çekmece (yerleşimden çıkar, içerik tam genişlik kalır).
+          'max-md:fixed max-md:left-0 max-md:top-0 max-md:z-[70] max-md:h-svh max-md:!w-[min(85vw,300px)] max-md:p-2 max-md:transition-transform max-md:duration-200',
+          mobileOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
           className,
         )}
+        style={{
+          ...(resizable && !collapsed ? { width: `${width}px` } : {}),
+          ...(mobileOpen ? { backgroundImage: 'var(--balina-panel-surface)' } : {}),
+        }}
       >
         <div
           onMouseLeave={collapsed ? () => setRevealed(false) : undefined}

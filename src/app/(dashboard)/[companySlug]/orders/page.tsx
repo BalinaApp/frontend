@@ -1204,20 +1204,22 @@ export default function OrdersPage() {
           />
         </div>
 
-        {/* ============== Header + rows ============== */}
-        <div className="flex flex-col gap-2.5 p-2.5">
+        {/* ============== Header + rows ==============
+            Telefonda tablo sabit genişlikte kalır ve yatay kayar (sütunlar sıkışmaz). */}
+        <div className="max-md:overflow-x-auto">
+        <div className="flex flex-col gap-2.5 p-2.5 max-md:min-w-[900px]">
           {/* Column header — left half: order, right half: 4 cols
               (Durum/Mağaza/Tutar/Tarih hepsi sıralanabilir, products pattern'i). */}
           <div className="flex items-center justify-between">
-            <div className="flex flex-1 items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <div className="px-1">
                 <span className="text-xs font-medium leading-4 text-muted">
                   Sipariş / Müşteri
                 </span>
               </div>
             </div>
-            <div className="flex flex-1 items-center justify-between">
-              <div className="w-20">
+            <div className="flex shrink-0 items-center gap-4">
+              <div className="w-36 shrink-0">
                 <SortHeaderButton
                   field="status"
                   currentField={sortField}
@@ -1227,7 +1229,7 @@ export default function OrdersPage() {
                   Durum
                 </SortHeaderButton>
               </div>
-              <div className="w-28">
+              <div className="w-32 shrink-0">
                 <SortHeaderButton
                   field="storeName"
                   currentField={sortField}
@@ -1237,7 +1239,7 @@ export default function OrdersPage() {
                   Mağaza
                 </SortHeaderButton>
               </div>
-              <div className="w-24">
+              <div className="w-24 shrink-0">
                 <SortHeaderButton
                   field="total"
                   currentField={sortField}
@@ -1247,7 +1249,7 @@ export default function OrdersPage() {
                   Tutar
                 </SortHeaderButton>
               </div>
-              <div className="w-32">
+              <div className="w-32 shrink-0">
                 <SortHeaderButton
                   field="orderDate"
                   currentField={sortField}
@@ -1305,7 +1307,7 @@ export default function OrdersPage() {
                     ].join(' ')}
                   >
                     {/* LEFT half — checkbox + icon + order/customer */}
-                    <div className="flex flex-1 items-center gap-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
                       <div
                         onClick={(e) => e.stopPropagation()}
                         aria-label={
@@ -1376,8 +1378,8 @@ export default function OrdersPage() {
                     </div>
 
                     {/* RIGHT half — 4 cells */}
-                    <div className="flex flex-1 items-center justify-between">
-                      <CellWrap className="w-20">
+                    <div className="flex shrink-0 items-center gap-4">
+                      <CellWrap className="w-36 shrink-0 whitespace-nowrap">
                         <OrderStatusChip
                           status={order.status}
                           shipped={(order.shipmentCount ?? 0) > 0}
@@ -1385,18 +1387,18 @@ export default function OrdersPage() {
                           shipmentStatusText={order.shipmentStatusText}
                         />
                       </CellWrap>
-                      <CellWrap className="w-28">
+                      <CellWrap className="w-32 shrink-0 whitespace-nowrap">
                         <StoreSourceChip
                           store={stores.find((s) => s.id === order.store?.id)}
                           fallbackName={order.store?.name}
                         />
                       </CellWrap>
-                      <CellWrap className="w-24">
+                      <CellWrap className="w-24 shrink-0">
                         <span className="text-xs font-medium leading-4 text-foreground">
                           {formatCurrency(order.total)}
                         </span>
                       </CellWrap>
-                      <CellWrap className="w-32">
+                      <CellWrap className="w-32 shrink-0">
                         <span className="text-xs font-medium leading-4 text-muted">
                           {formatDate(order.orderDate)}
                         </span>
@@ -1470,6 +1472,7 @@ export default function OrdersPage() {
               </div>
             </div>
           )}
+        </div>
         </div>
         {/* Order detail panel artık layout seviyesinde render ediliyor —
             useSidePanel useEffect'i selectedOrder değişiminde push ediyor.

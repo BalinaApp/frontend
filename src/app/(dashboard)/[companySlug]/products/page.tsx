@@ -651,8 +651,10 @@ export default function InventoryPage() {
           />
         </div>
 
-        {/* ============== Header + rows ============== */}
-        <div className="flex flex-col gap-2.5 px-6 py-2.5">
+        {/* ============== Header + rows ==============
+            Telefonda tablo sabit genişlikte kalır ve yatay kayar (sütunlar sıkışmaz). */}
+        <div className="max-md:overflow-x-auto">
+        <div className="flex flex-col gap-2.5 px-6 py-2.5 max-md:min-w-[760px] max-md:px-3">
           {/* Column header — left half: name, right half: 5 cols. Tüm
               kolonlar SortHeaderButton — hover'da pill+arrow gösterir;
               tıklayınca sıralama uygulanır (backend `sortBy` string olarak
@@ -985,6 +987,7 @@ export default function InventoryPage() {
               setBulkDeleteOpen(true);
             }}
           />
+        </div>
         </div>
       </div>
     </>

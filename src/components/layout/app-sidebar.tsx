@@ -64,6 +64,20 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
   // Sol menü daraltma: AI paneli açıkken otomatik daralır (genişlik yönetimi);
   // ayrıca kullanıcı elle daraltıp açabilir.
   const [manualCollapsed, setManualCollapsed] = React.useState(false);
+  // Telefon (md altı): sidebar çekmecedir; daraltma kullanılmaz, sayfa değişince kapanır.
+  const isMobileSidebarOpen = useUIStore((s) => s.isMobileSidebarOpen);
+  const setMobileSidebarOpen = useUIStore((s) => s.setMobileSidebarOpen);
+  const [isMobile, setIsMobile] = React.useState(false);
+  React.useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const update = () => setIsMobile(query.matches);
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  React.useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [pathname, setMobileSidebarOpen]);
   const themeColor = useThemeStore((s) => s.themeColor);
   const setThemeColor = useThemeStore((s) => s.setThemeColor);
   // Tema rengi sürükleme sırasında çok sık değişir — backend kaydını debounce et.
@@ -449,7 +463,9 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
           <BalinaThemePopover value={themeColor ?? undefined} onChange={handleThemeChange} />
         }
         aiActive={isBalinaAiOpen}
-        collapsed={isBalinaAiOpen || manualCollapsed}
+        collapsed={!isMobile && (isBalinaAiOpen || manualCollapsed)}
+        mobileOpen={isMobile && isMobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
         onToggleSidebar={() => setManualCollapsed((c) => !c)}
         onAi={toggleBalinaAi}
         onSearch={() => setSearchOpen(true)}

@@ -13,6 +13,7 @@ import { useAiStore, maxImagesForModel, DEFAULT_IMAGE_MODEL_ID } from '@/stores/
 import { useCompanyStore } from '@/stores/companyStore';
 import {
   SidePanelProvider,
+  useSidePanel,
   useSidePanelContent,
 } from '@/components/providers/SidePanel';
 import { SidebarPanelProvider } from '@/components/providers/SidebarPanel';
@@ -277,7 +278,7 @@ function SidePanelCard({
   return (
     <aside
       key={id}
-      className="shadow-panel-surface flex shrink-0 flex-col overflow-hidden rounded-[0.625rem]"
+      className="shadow-panel-surface flex shrink-0 flex-col overflow-hidden rounded-[0.625rem] max-md:!w-full"
       style={{
         width: `${width}px`,
         backgroundImage: 'var(--balina-panel-surface)',
@@ -411,6 +412,7 @@ function DashboardLayoutInner({
   // sibling'i olarak translucent card içinde render edilir; null ise
   // panel slot tamamen gizlenir.
   const sidePanel = useSidePanelContent();
+  const { setSidePanel } = useSidePanel();
   const isBalinaAiOpen = useUIStore((s) => s.isBalinaAiOpen);
   const setBalinaAiOpen = useUIStore((s) => s.setBalinaAiOpen);
   const isBalinaAiFloating = useUIStore((s) => s.isBalinaAiFloating);
@@ -1682,7 +1684,16 @@ function DashboardLayoutInner({
               <WorkspaceTabs>{children}</WorkspaceTabs>
             </div>
             {sidePanel && (
-              <div className="flex shrink-0">
+              // Telefonda panel içeriğin üstünde tam ekran açılır; sağ üstten kapatılır.
+              <div className="flex shrink-0 max-md:fixed max-md:inset-0 max-md:z-[60] max-md:bg-black/30 max-md:p-2">
+                <button
+                  type="button"
+                  aria-label="Paneli kapat"
+                  onClick={() => setSidePanel(null)}
+                  className="absolute right-4 top-4 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/[0.06] text-foreground md:hidden"
+                >
+                  <Xmark className="h-4 w-4" />
+                </button>
                 {/* Resize handle — sol sidebar ile aynı; çizgi default görünmez,
                     hover/resize'da belirir. Çift tık varsayılan genişliğe döner. */}
                 <div
@@ -1701,7 +1712,7 @@ function DashboardLayoutInner({
                   role="separator"
                   aria-orientation="vertical"
                   aria-label="Paneli yeniden boyutlandır"
-                  className="group flex w-2.5 shrink-0 cursor-col-resize items-stretch justify-center"
+                  className="group flex w-2.5 shrink-0 cursor-col-resize items-stretch justify-center max-md:hidden"
                 >
                   <span
                     className={`w-1.5 rounded-[0.125rem] transition-colors ${

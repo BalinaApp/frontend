@@ -109,7 +109,12 @@ const etsy: Marketplace = {
   helpUrl: 'https://developers.etsy.com/documentation/',
 };
 
-export const integrationCategories: IntegrationCategory[] = [
+/** v1'de sunulmayan kategoriler: pazaryerleri, e-fatura, sosyal medya, yapay zekâ. */
+const HIDDEN_CATEGORIES = new Set(['marketplaces', 'invoicing', 'social', 'ai']);
+/** v1'de sunulmayan mağaza altyapıları (Shopify, ikas). */
+const HIDDEN_INTEGRATIONS = new Set(['SHOPIFY', 'IKAS', 'YURTICI', 'ARAS', 'SURAT']);
+
+const allCategories: IntegrationCategory[] = [
   {
     id: 'shops',
     title: 'Mağazalar',
@@ -222,6 +227,11 @@ export const integrationCategories: IntegrationCategory[] = [
     ],
   },
 ];
+
+export const integrationCategories: IntegrationCategory[] = allCategories
+  .filter((c) => !HIDDEN_CATEGORIES.has(c.id))
+  .map((c) => ({ ...c, items: c.items.filter((m) => !HIDDEN_INTEGRATIONS.has(m.id)) }))
+  .filter((c) => c.items.length > 0);
 
 /** Düz liste — id ile arama için. */
 export const allIntegrations: Marketplace[] = integrationCategories.flatMap(

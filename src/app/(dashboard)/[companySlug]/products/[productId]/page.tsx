@@ -270,6 +270,9 @@ function BalinaAiButton({
   );
 }
 
+/** v1'de yapay zekâ özellikleri (açıklama/görsel üretimi) kapalı. */
+const AI_ENABLED = false;
+
 export default function ProductEditPage() {
   usePageTitle('Ürün Düzenle');
 
@@ -711,6 +714,7 @@ export default function ProductEditPage() {
                   rows={3}
                   className="min-h-[88px] resize-none placeholder:text-zinc-500"
                 />
+                {AI_ENABLED && (
                 <div className="pointer-events-none flex flex-1 items-center justify-end mt-4">
                   <div className="pointer-events-auto">
                     <BalinaAiButton
@@ -721,6 +725,7 @@ export default function ProductEditPage() {
                     />
                   </div>
                 </div>
+                )}
               </div>
             </div>
           </Section>
@@ -750,10 +755,12 @@ export default function ProductEditPage() {
                     >
                       Yeni Yükle
                     </BalinaButton>
+                    {AI_ENABLED && (
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
                       label="balinaOS AI ile Üret"
                     />
+                    )}
                   </div>
                   <span className="text-center text-xs text-zinc-500">
                     {isDragActive
@@ -795,12 +802,14 @@ export default function ProductEditPage() {
                       </button>
                     }
                   >
+                    {AI_ENABLED && (
                     <BalinaDropdownItem
                       icon={<BalinaOsMark className="h-3.5 w-3.5 text-foreground" />}
                       onSelect={openAiImageModalOrRedirect}
                     >
                       AI ile üret
                     </BalinaDropdownItem>
+                    )}
                     <BalinaDropdownItem
                       icon={<Plus className="h-3.5 w-3.5 text-foreground/70" />}
                       onSelect={handleFilePick}

@@ -7,6 +7,14 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(__dirname),
   },
+  // v1'de yapay zekâ (AI Studio) ve sosyal medya sohbetleri kapalı: doğrudan adresle girilirse
+  // şirket anasayfasına dönülür.
+  async redirects() {
+    return [
+      { source: '/:company/ai-creator/:path*', destination: '/:company', permanent: false },
+      { source: '/:company/conversations/:path*', destination: '/:company', permanent: false },
+    ];
+  },
   images: {
     remotePatterns: [
       {

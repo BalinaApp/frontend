@@ -146,11 +146,12 @@ export function SearchModal({
                   placeholder={placeholder}
                   className="text-body-default-regular h-7 flex-1 bg-transparent text-[var(--balina-text-loud)] outline-none placeholder:text-[var(--balina-text-muted)]"
                 />
+                {onAskAi && (
                 <button
                   type="button"
                   onClick={() => {
                     const text = q.trim();
-                    if (text) onAskAi?.(text);
+                    if (text) onAskAi(text);
                   }}
                   disabled={!q.trim()}
                   className="flex h-7 shrink-0 items-center gap-1 rounded-lg bg-[var(--balina-background-dark-muted)] px-1.5 transition-colors hover:bg-[var(--balina-background-dark-default)] disabled:cursor-not-allowed disabled:opacity-50"
@@ -160,6 +161,7 @@ export function SearchModal({
                     balinaOS AI
                   </span>
                 </button>
+                )}
               </div>
 
               {/* divider */}

@@ -91,7 +91,7 @@ export function SetupGuide({
           id: 'store',
           title: 'İlk mağazanı bağla',
           description:
-            'WooCommerce, Shopify, Trendyol ya da Hepsiburada mağazanı bağlayarak verilerini içe aktar.',
+            'WooCommerce mağazanı bağlayarak verilerini içe aktar.',
           done: stores.length > 0,
           actionLabel: 'Mağaza bağla',
           onAction: () => router.push(`/${companySlug}/stores`),
@@ -106,15 +106,6 @@ export function SetupGuide({
           onAction: () => router.push(`/${companySlug}/products/new`),
           secondaryLabel: 'İçe aktar',
           onSecondary: () => router.push(`/${companySlug}/inventory`),
-        },
-        {
-          id: 'ai',
-          title: 'AI entegrasyonunu bağla',
-          description:
-            'Fal.ai ya da OpenAI hesabını bağla; görsel/video ve metin üretimini aç.',
-          done: fals.length > 0 || integrations.length > 0,
-          actionLabel: 'AI bağla',
-          onAction: () => router.push(`/${companySlug}/stores`),
         },
       ],
     },

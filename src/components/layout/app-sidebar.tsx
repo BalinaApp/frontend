@@ -126,14 +126,6 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
       roles: ['OWNER', 'ADMIN'],
       matchPaths: [`/${companySlug}/marketing`],
     },
-    {
-      title: 'Sohbetler',
-      url: `/${companySlug}/conversations`,
-      icon: BalinaCommentsIcon,
-      roles: ['OWNER', 'ADMIN'],
-      matchPaths: [`/${companySlug}/conversations`],
-      showIf: isSocialConnected,
-    },
   ];
 
   const visibleNavItems = navItems.filter(
@@ -467,7 +459,6 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
         mobileOpen={isMobile && isMobileSidebarOpen}
         onMobileClose={() => setMobileSidebarOpen(false)}
         onToggleSidebar={() => setManualCollapsed((c) => !c)}
-        onAi={toggleBalinaAi}
         onSearch={() => setSearchOpen(true)}
         footerExtra={belowNav}
         settingsMenu={secondaryMenu}
@@ -508,12 +499,6 @@ export function AppSidebar({ belowNav }: { belowNav?: React.ReactNode } = {}) {
         sections={searchSections}
         emptyText="Aramaya başlamak için yazın"
         onSaveSearch={handleSaveSearch}
-        onAskAi={(query) => {
-          // Yazılan metni balinaOS AI paneline aktar; panel açılınca otomatik gönderilir.
-          setAiPendingPrompt(query);
-          setBalinaAiOpen(true);
-          setSearchOpen(false);
-        }}
       />
     </>
   );

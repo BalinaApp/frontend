@@ -319,6 +319,9 @@ function BalinaAiButton({
   );
 }
 
+/** v1'de yapay zekâ özellikleri (açıklama/görsel üretimi) kapalı. */
+const AI_ENABLED = false;
+
 export default function NewProductPage() {
   usePageTitle('Yeni ürün');
 
@@ -794,6 +797,7 @@ export default function NewProductPage() {
                   rows={3}
                   className="min-h-[88px] resize-none placeholder:text-zinc-500"
                 />
+                {AI_ENABLED && (
                 <div className="pointer-events-none absolute bottom-2 right-2 z-10">
                   <div className="pointer-events-auto">
                     <BalinaAiButton
@@ -804,6 +808,7 @@ export default function NewProductPage() {
                     />
                   </div>
                 </div>
+                )}
               </div>
             </div>
             {errors.name && (
@@ -836,10 +841,12 @@ export default function NewProductPage() {
                     >
                       Yeni Yükle
                     </BalinaButton>
+                    {AI_ENABLED && (
                     <BalinaAiButton
                       onPress={openAiImageModalOrRedirect}
                       label="balinaOS AI ile Üret"
                     />
+                    )}
                   </div>
                   <span className="text-center text-xs text-zinc-500">
                     {isDragActive
@@ -881,12 +888,14 @@ export default function NewProductPage() {
                       </button>
                     }
                   >
+                    {AI_ENABLED && (
                     <BalinaDropdownItem
                       icon={<BalinaOsMark className="h-3.5 w-3.5 text-foreground" />}
                       onSelect={openAiImageModalOrRedirect}
                     >
                       AI ile üret
                     </BalinaDropdownItem>
+                    )}
                     <BalinaDropdownItem
                       icon={<Plus className="h-3.5 w-3.5 text-foreground/70" />}
                       onSelect={handleFilePick}

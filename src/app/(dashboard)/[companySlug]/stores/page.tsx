@@ -237,11 +237,8 @@ const siteFaviconUrl = (url: string): string | null => {
 // Hero banner örnek otomasyon pill'leri — sürekli dönerek (her birkaç saniyede
 // bir kayarak) entegrasyonların ne işe yaradığını gösterir.
 const HERO_PILLS: Array<{ mark: string; name: string; text: string }> = [
-  { mark: '/figma/integrations/shopify.png', name: 'Shopify', text: 'Siparişleri otomatik senkronize et' },
-  { mark: '/figma/integrations/trendyol.png', name: 'Trendyol', text: 'Stokları tüm mağazalarda eşitle' },
-  { mark: '/figma/integrations/openai.svg', name: 'OpenAI', text: 'Ürün açıklamalarını yapay zekâ ile yaz' },
-  { mark: '/figma/integrations/hepsiburada.png', name: 'Hepsiburada', text: 'Yeni siparişleri anında çek' },
   { mark: '/figma/integrations/woocommerce.png', name: 'WooCommerce', text: 'Ürünleri tek tıkla içe aktar' },
+  { mark: '/figma/integrations/woocommerce.png', name: 'WooCommerce', text: 'Siparişleri otomatik senkronize et' },
   { mark: '/figma/integrations/dhl.png', name: 'DHL', text: 'Kargo takip kodlarını otomatik ekle' },
 ];
 
@@ -793,10 +790,16 @@ export default function StoresPage() {
     (s) => matchesSearch(s.name) || matchesSearch(s.url)
   );
 
+  // v1'de yalnızca WooCommerce ve kargo sunulur: Shopify, ikas, pazaryerleri, e-fatura, sosyal
+  // medya ve yapay zekâ gizli.
+  const hiddenCategories = new Set(['marketplaces', 'invoicing', 'social', 'ai']);
+  // Kargolarda yalnızca DHL (diğerleri "yakında" kartları) gösterilir.
+  const hiddenIntegrations = new Set(['SHOPIFY', 'IKAS', 'YURTICI', 'ARAS', 'SURAT']);
   const visibleCategories = integrationCategories
+    .filter((cat) => !hiddenCategories.has(cat.id))
     .map((cat) => ({
       ...cat,
-      items: cat.items.filter((m) => matchesSearch(m.name)),
+      items: cat.items.filter((m) => !hiddenIntegrations.has(m.id) && matchesSearch(m.name)),
     }))
     .filter((cat) => cat.items.length > 0);
 

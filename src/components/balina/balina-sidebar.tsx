@@ -299,6 +299,7 @@ export function BalinaSidebar({
                   <IconButton label="Ara" onClick={onSearch}>
                     <BalinaSearchIcon className="h-4 w-4" />
                   </IconButton>
+                  {onAi && (
                   <IconButton label="balinaOS AI" onClick={onAi}>
                     {aiActive ? (
                       <BalinaAiFilledIcon className="h-4 w-4" />
@@ -306,6 +307,7 @@ export function BalinaSidebar({
                       <BalinaAiIcon className="h-4 w-4" />
                     )}
                   </IconButton>
+                  )}
                 </>
               )}
             </div>
